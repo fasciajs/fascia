@@ -1,0 +1,15 @@
+{
+  "name": "fascia",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
+  "workspaceFolder": "/workspaces/fascia",
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": ["biomejs.biome", "vitest.explorer"],
+      "settings": {
+        "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnSave": true
+      }
+    }
+  }
+}

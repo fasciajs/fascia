@@ -1,0 +1,30 @@
+{
+  "name": "fascia-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Workspace root. Publishes nothing. Every package lives under packages/.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fasciajs/fascia"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "npm run check:types && npm run check:lint && npm run check:unit",
+    "check:types": "tsc -p tsconfig.json",
+    "check:lint": "biome check .",
+    "check:unit": "vitest run",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@ark/attest": "^0.56.3",
+    "@biomejs/biome": "^2.5.6",
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}
