@@ -1,4 +1,4 @@
-import type { AdmittedValue, JsonValue, Node, Rest, Source } from '@fasciajs/core'
+import type { AdmittedValue, JsonValue, Node, ObjectProperty, Rest, Source } from '@fasciajs/core'
 import { UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
 import {
@@ -103,7 +103,9 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   }
 
   if (isZodType(schema, ['object'])) {
-    const properties = new Map(Object.entries(schema._zod.def.shape))
+    const properties = new Map(
+      Object.entries(schema._zod.def.shape).map(([key, value]) => [key, propertyOf(value)])
+    )
     return { kind: 'structural', of: 'object', properties, rest: restOf(schema._zod.def.catchall) }
   }
   if (isZodType(schema, ['array'])) {
@@ -165,6 +167,50 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
     schema,
     'this package classified the type and then read no case for it'
   )
+}
+
+/**
+ * One property of an object, with what the object says about the key lifted onto the edge.
+ *
+ * zod states both on the value: `.optional()` and `.default()` are schemas wrapping the schema at
+ * the key. Another validator states them on the edge and holds no schema for either, so the edge is
+ * where the question can be asked once. This walks the wrappers that decide whether a key may be
+ * absent and points `schema` at what is left.
+ *
+ * The outermost wrapper wins, which is why each answer is taken once: `.optional().nonoptional()` is
+ * required, and reading inwards without stopping would answer with the inner call.
+ *
+ * **A presence wrapper under a `.readonly()` or a `.catch()` is not lifted.** The walk stops at the
+ * first wrapper that is neither, because unwrapping one would drop it from the tree and there is
+ * nowhere else to put it. `z.string().optional().readonly()` therefore reads as a required key
+ * holding an optional value.
+ */
+function propertyOf(schema: core.$ZodType): ObjectProperty<core.$ZodType> {
+  let current = schema
+  let required: boolean | undefined
+  let replacement: JsonValue | undefined
+
+  for (;;) {
+    if (isZodType(current, ['optional'])) {
+      required ??= false
+      current = current._zod.def.innerType
+      continue
+    }
+    if (isZodType(current, ['default', 'prefault'])) {
+      required ??= false
+      replacement ??= asJsonValue(current._zod.def.defaultValue)
+      current = current._zod.def.innerType
+      continue
+    }
+    if (isZodType(current, ['nonoptional'])) {
+      required ??= true
+      current = current._zod.def.innerType
+      continue
+    }
+    break
+  }
+
+  return { schema: current, required: required ?? true, default: replacement }
 }
 
 /** What an object or a tuple accepts beyond the children it names. */

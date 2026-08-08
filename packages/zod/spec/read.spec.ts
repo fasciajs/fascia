@@ -141,6 +141,60 @@ describe('an object says what it accepts at a key it does not name', () => {
   })
 })
 
+describe('an object states on the edge what zod states on the value', () => {
+  /** The property an object states at a key. */
+  function propertyAt(schema: z.core.$ZodType, key: string): unknown {
+    const node = nodeOf(schema)
+    if (isError(node) || node.kind !== 'structural' || node.of !== 'object') {
+      throw new Error('the schema did not read as an object')
+    }
+    return node.properties.get(key)
+  }
+
+  it('reads a plain key as required, holding the schema itself', () => {
+    expect(propertyAt(z.object({ a: z.string() }), 'a')).toMatchObject({
+      required: true,
+      default: undefined
+    })
+  })
+
+  it('lifts optional onto the edge and points at what is left', () => {
+    const property = propertyAt(z.object({ a: z.string().optional() }), 'a')
+
+    expect(property).toMatchObject({ required: false, default: undefined })
+    // The wrapper is gone from the tree, so nothing downstream reads the question twice.
+    expect(groupOf((property as { schema: z.core.$ZodType }).schema)).toBe('scalar')
+  })
+
+  it('lifts a default onto the edge, and a default makes a key absent-able', () => {
+    expect(propertyAt(z.object({ a: z.string().default('x') }), 'a')).toMatchObject({
+      required: false,
+      default: 'x'
+    })
+  })
+
+  it('lets the outermost wrapper decide, so nonoptional over optional is required', () => {
+    expect(propertyAt(z.object({ a: z.string().optional().nonoptional() }), 'a')).toMatchObject({
+      required: true
+    })
+  })
+
+  it('leaves nullable on the value, because null is about the value and not about the key', () => {
+    const property = propertyAt(z.object({ a: z.string().nullable() }), 'a')
+
+    expect(property).toMatchObject({ required: true })
+    expect(groupOf((property as { schema: z.core.$ZodType }).schema)).toBe('wrapper')
+  })
+
+  it('does not lift a presence wrapper hidden under a readonly', () => {
+    // A stated limitation rather than a defect found late. Unwrapping the readonly would drop it
+    // from the tree, and the edge has nowhere to put it.
+    expect(propertyAt(z.object({ a: z.string().optional().readonly() }), 'a')).toMatchObject({
+      required: true
+    })
+  })
+})
+
 describe('the walk ends on a schema that holds itself', () => {
   it('reaches a revisit rather than running forever', () => {
     type Tree = { name: string; children: Tree[] }
@@ -154,7 +208,7 @@ describe('the walk ends on a schema that holds itself', () => {
       wrapper: (node, follow) => follow(node.inner),
       structural: (node, follow) =>
         node.of === 'object'
-          ? [...node.properties.values()].flatMap(follow)
+          ? [...node.properties.values()].flatMap((property) => follow(property.schema))
           : node.of === 'list'
             ? follow(node.items)
             : [],

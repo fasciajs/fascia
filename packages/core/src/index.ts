@@ -13,6 +13,7 @@ export type {
   NodeFold,
   NodeKind,
   NodeOf,
+  ObjectProperty,
   Rest,
   Scalar,
   ScalarName,

@@ -124,11 +124,27 @@ export type Rest<S> =
  * One group rather than four, because an algebra that does not read structure answers all four with
  * one case. An algebra that does read structure dispatches on `of`, which is a keyed sum of its own.
  */
+/**
+ * One property of an object, and what the object says about the key rather than about the value.
+ *
+ * Whether a key may be absent, and what stands in when the key is absent, belong here and not to the
+ * schema at the key. A validator may state either on the edge and hold no schema that means
+ * "optional number", so a reading of one has nothing to point a wrapper at.
+ *
+ * A frontend whose validator states them on the value lifts them to here, and points `schema` at
+ * what is left. So the question is asked once, in one place, whichever validator was read.
+ */
+export interface ObjectProperty<S> {
+  readonly schema: S
+  readonly required: boolean
+  readonly default: JsonValue | undefined
+}
+
 export type Structure<S> =
   | {
       readonly of: 'object'
       /** A map, so a key that collides with a prototype member is a key like any other. */
-      readonly properties: ReadonlyMap<string, S>
+      readonly properties: ReadonlyMap<string, ObjectProperty<S>>
       readonly rest: Rest<S>
     }
   | {

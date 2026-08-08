@@ -29,7 +29,9 @@ const reached: NodeFold<Named, string[]> = {
   values: (node) => node.admitted.map((value) => value.of),
   wrapper: (node, follow) => follow(node.inner),
   structural: (node, follow) =>
-    node.of === 'object' ? [...node.properties.values()].flatMap(follow) : [],
+    node.of === 'object'
+      ? [...node.properties.values()].flatMap((property) => follow(property.schema))
+      : [],
   combination: (node, follow) => node.members.flatMap(follow),
   conversion: (node, follow) => (node.how === 'codec' ? follow(node.wire) : []),
   deferred: (node, follow) => follow(node.resolve()),
@@ -44,12 +46,11 @@ describe('foldSource reaches every child a node holds', () => {
         kind: 'structural',
         of: 'object',
         properties: new Map([
-          ['title', 'optionalTitle'],
-          ['size', 'sizeOrLabel']
+          ['title', { schema: 'title', required: false, default: undefined }],
+          ['size', { schema: 'sizeOrLabel', required: true, default: undefined }]
         ]),
         rest: { allows: 'nothing' }
       },
-      optionalTitle: { kind: 'wrapper', how: 'optional', inner: 'title' },
       title: { kind: 'scalar', name: 'string', assertions: { minLength: 1 } },
       sizeOrLabel: {
         kind: 'combination',
