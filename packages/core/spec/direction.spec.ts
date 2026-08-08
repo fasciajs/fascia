@@ -1,6 +1,6 @@
 import { arktypeSource } from '@fasciajs/arktype'
-import type { Described, Io } from '@fasciajs/core'
-import { describe as description, isError } from '@fasciajs/core'
+import type { Ask, Described, Descriptions, Io } from '@fasciajs/core'
+import { describeAll, describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
 import { type } from 'arktype'
@@ -26,9 +26,8 @@ type ArkRoot = Parameters<typeof arktypeSource.read>[0]
  * The term, with a reference followed to what it names.
  *
  * A validator that names a schema makes a reference, and effect names plenty of its own: both sides
- * of `NumberFromString` are filed under that one name. Two sides claiming one name is harmless while
- * a description is about one side, and it is the naming question a document of two sides will have
- * to answer.
+ * of `NumberFromString` are filed under that name. One description is about one side, so the name
+ * stands for one thing here. The block at the end of this file is where both sides meet.
  */
 function termOf(describing: ReturnType<typeof description>): Described {
   if (isError(describing)) {
@@ -166,5 +165,109 @@ describe('a key with a default may be left out of what is sent and is always in 
 
     expect(requires(fromZod(schema, 'input'), 'a')).toBe(false)
     expect(requires(fromZod(schema, 'output'), 'a')).toBe(false)
+  })
+})
+
+describe('a document holds both sides, and a name states one shape', () => {
+  function bothSides(schema: z.core.$ZodType): Descriptions {
+    const asks: readonly Ask<z.core.$ZodType>[] = [
+      { schema, io: 'input' },
+      { schema, io: 'output' }
+    ]
+
+    const described = describeAll(asks, zodSource)
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+    return described
+  }
+
+  it('keeps one name where the two sides say the same thing', () => {
+    // The common case, and the reason a side is not simply part of every name. A shape with no
+    // conversion and no default under it describes identically from both directions, and a document
+    // naming it twice would state the same thing twice.
+    const User = z.object({ id: z.string() }).meta({ id: 'User' })
+    const described = bothSides(User)
+
+    expect([...described.definitions.keys()]).toEqual(['User'])
+    expect(described.terms).toEqual([
+      { kind: 'ref', name: 'User', admitsNull: false },
+      { kind: 'ref', name: 'User', admitsNull: false }
+    ])
+  })
+
+  it('gives each side its own name where a default makes them differ', () => {
+    const User = z
+      .object({ id: z.string(), role: z.string().default('reader') })
+      .meta({ id: 'User' })
+    const described = bothSides(User)
+
+    expect([...described.definitions.keys()].sort()).toEqual(['UserInput', 'UserOutput'])
+    expect(described.terms).toEqual([
+      { kind: 'ref', name: 'UserInput', admitsNull: false },
+      { kind: 'ref', name: 'UserOutput', admitsNull: false }
+    ])
+  })
+
+  it('splits what refers to a split name, whose own two sides are alike', () => {
+    // The reason this is a closure rather than a comparison. Both sides of the envelope hold the
+    // same term, `ref User`, so nothing about the envelope differs until the reference is written.
+    // Then one says UserInput and the other UserOutput, and one definition cannot say both.
+    const User = z.object({ role: z.string().default('reader') }).meta({ id: 'User' })
+    const Envelope = z.object({ user: User }).meta({ id: 'Envelope' })
+
+    const described = bothSides(Envelope)
+
+    expect([...described.definitions.keys()].sort()).toEqual([
+      'EnvelopeInput',
+      'EnvelopeOutput',
+      'UserInput',
+      'UserOutput'
+    ])
+    expect(described.definitions.get('EnvelopeInput')).toMatchObject({
+      assertions: {
+        properties: new Map([
+          [
+            'user',
+            expect.objectContaining({ term: { kind: 'ref', name: 'UserInput', admitsNull: false } })
+          ]
+        ])
+      }
+    })
+  })
+
+  it('refuses to take a name a schema already has', () => {
+    const User = z.object({ role: z.string().default('reader') }).meta({ id: 'User' })
+    const UserInput = z.object({ other: z.string() }).meta({ id: 'UserInput' })
+
+    const described = describeAll(
+      [
+        { schema: User, io: 'input' },
+        { schema: User, io: 'output' },
+        { schema: UserInput, io: 'input' }
+      ],
+      zodSource
+    )
+
+    expect(isError(described) ? described.message : 'described').toContain('UserInput is taken')
+  })
+
+  it('still refuses two different schemas sharing a name, one on each side', () => {
+    // A split is for two sides of one schema. Two schemas are the error they always were, and
+    // reaching them from different sides must not read as a side to split.
+    const first = z.object({ a: z.string() }).meta({ id: 'Thing' })
+    const second = z.object({ b: z.number() }).meta({ id: 'Thing' })
+
+    const described = describeAll(
+      [
+        { schema: first, io: 'input' },
+        { schema: second, io: 'output' }
+      ],
+      zodSource
+    )
+
+    expect(isError(described) ? described.message : 'described').toContain(
+      'two different schemas are named Thing'
+    )
   })
 })

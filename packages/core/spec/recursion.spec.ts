@@ -180,7 +180,13 @@ describe('a name is scoped to one description, and holds across every root in it
   it('describes one named schema once across two roots', () => {
     const User = z.object({ id: z.string() }).meta({ id: 'User' })
 
-    const described = describeAll([z.object({ author: User }), z.array(User)], zodSource, 'input')
+    const described = describeAll(
+      [
+        { schema: z.object({ author: User }), io: 'input' },
+        { schema: z.array(User), io: 'input' }
+      ],
+      zodSource
+    )
     if (isError(described)) {
       throw new Error(described.message)
     }
@@ -195,7 +201,13 @@ describe('a name is scoped to one description, and holds across every root in it
     const A = z.object({ a: z.string() }).meta({ id: 'Thing' })
     const B = z.object({ b: z.number() }).meta({ id: 'Thing' })
 
-    const described = describeAll([A, B], zodSource, 'input')
+    const described = describeAll(
+      [
+        { schema: A, io: 'input' },
+        { schema: B, io: 'input' }
+      ],
+      zodSource
+    )
 
     expect(isError(described) ? described.message : 'described').toContain(
       'two different schemas are named Thing'

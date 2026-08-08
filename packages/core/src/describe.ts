@@ -1,4 +1,4 @@
-import type { Described, DescribedProperty, DescribedRest } from './described.js'
+import type { Described, DescribedOf, DescribedProperty, DescribedRest } from './described.js'
 import type { Node, ObjectProperty, Rest, Source } from './node.js'
 import { FasciaError, isError } from './result.js'
 
@@ -26,6 +26,18 @@ import { FasciaError, isError } from './result.js'
  */
 export type Io = 'input' | 'output'
 
+/** Both sides, in a fixed order, so nothing downstream depends on which was described first. */
+const SIDES: readonly Io[] = ['input', 'output']
+
+/** A schema to describe, and the side of it this position is about. */
+export interface Ask<S> {
+  readonly schema: S
+  readonly io: Io
+}
+
+/** One thing per side. */
+type PerSide<T> = Record<Io, T>
+
 /** A schema that cannot be described, because nothing true of it can be written down. */
 export class UndescribableSchema extends FasciaError<{ schema: unknown }> {
   constructor(schema: unknown, reason: string) {
@@ -48,19 +60,22 @@ export interface Description {
 export type Describing = Description | UndescribableSchema
 
 interface Naming<S> {
-  readonly definitions: Map<string, Described>
-  /** Names bound and not yet described. A schema meeting its own name is a cycle, and that is the point. */
-  readonly binding: Set<string>
   /**
-   * A schema being described that turned out to have a name, and the name to file it under.
+   * What each name stands for, on each side.
    *
-   * A validator may name the thunk rather than the schema, so the name is found on the way down and
-   * points back at something already being described. arktype does this: a recursive type is reached
-   * through an alias carrying the name, and the alias resolves to the schema the walk began at.
+   * Two sides of one schema are two bodies, because a conversion and a default each say different
+   * things about what is sent and what comes back. They are kept apart while the walk runs and are
+   * given their final names once, when every body is known.
    */
-  readonly pending: Map<S, string>
+  readonly definitions: PerSide<Map<string, Described>>
+  /** Names bound and not yet described. A schema meeting its own name is a cycle, and that is the point. */
+  readonly binding: PerSide<Set<string>>
   /**
    * Which schema claimed each name.
+   *
+   * Keyed by the name alone rather than by the name and the side, because a name states one thing
+   * whichever side asks for it. Two sides of one schema share a claim; two schemas do not, and that
+   * is still the error it always was.
    *
    * Without it, the second schema to claim a name is silently described as the first: both become a
    * reference to one definition, and the document states one shape where the schema states two.
@@ -72,14 +87,25 @@ interface Naming<S> {
 /**
  * What the walk carries the whole way down.
  *
- * The three travel together at every step, so they travel as one thing. `io` joined them and made
- * that plain: a fifth parameter threaded through six functions is the same state with more places to
+ * These travel together at every step, so they travel as one thing. `io` joined them and made that
+ * plain: a fifth parameter threaded through six functions is the same state with more places to
  * forget it.
  */
 interface Walk<S> {
   readonly source: Source<S>
   readonly io: Io
   readonly naming: Naming<S>
+  /**
+   * A schema being described that turned out to have a name, and the name to file it under.
+   *
+   * A validator may name the thunk rather than the schema, so the name is found on the way down and
+   * points back at something already being described. arktype does this: a recursive type is reached
+   * through an alias carrying the name, and the alias resolves to the schema the walk began at.
+   *
+   * Per walk rather than shared, because it holds where the walk currently is. Shared, an entry left
+   * by one side would file the next side's body under a name it never met.
+   */
+  readonly pending: Map<S, string>
 }
 
 /** Several schemas described together, sharing one set of names. */
@@ -101,31 +127,27 @@ export interface Descriptions {
  * may share one is a fact about a document.
  */
 export function describeAll<S>(
-  schemas: readonly S[],
-  source: Source<S>,
-  io: Io
+  asks: readonly Ask<S>[],
+  source: Source<S>
 ): Descriptions | UndescribableSchema {
-  const walk: Walk<S> = {
-    source,
-    io,
-    naming: {
-      definitions: new Map(),
-      binding: new Set(),
-      pending: new Map(),
-      claimedBy: new Map()
-    }
+  const naming: Naming<S> = {
+    definitions: { input: new Map(), output: new Map() },
+    binding: { input: new Set(), output: new Set() },
+    claimedBy: new Map()
   }
 
-  const terms: Described[] = []
-  for (const schema of schemas) {
-    const term = at(schema, walk, new Set())
+  const described: { term: Described; io: Io }[] = []
+  for (const ask of asks) {
+    const walk: Walk<S> = { source, io: ask.io, naming, pending: new Map() }
+
+    const term = at(ask.schema, walk, new Set())
     if (isError(term)) {
       return term
     }
-    terms.push(term)
+    described.push({ term, io: ask.io })
   }
 
-  return { terms, definitions: walk.naming.definitions }
+  return settle(naming, described)
 }
 
 /**
@@ -137,7 +159,7 @@ export function describeAll<S>(
  * it has to be bound.
  */
 export function describe<S>(schema: S, source: Source<S>, io: Io): Describing {
-  const described = describeAll([schema], source, io)
+  const described = describeAll([{ schema, io }], source)
   if (isError(described)) {
     return described
   }
@@ -160,7 +182,7 @@ function at<S>(
   walk: Walk<S>,
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
-  const { source, naming } = walk
+  const { source, naming, io } = walk
   const name = source.nameOf(schema)
 
   if (name === undefined) {
@@ -169,29 +191,37 @@ function at<S>(
 
   const claimed = naming.claimedBy.get(name)
   if (claimed !== undefined) {
-    return isSameSchema(claimed, schema, source)
-      ? { kind: 'ref', name, admitsNull: false }
-      : sameThing(name, schema, walk, ancestors)
+    if (!isSameSchema(claimed, schema, source)) {
+      return sameThing(name, schema, walk, ancestors)
+    }
+
+    // The same schema, met again on a side that already holds it or is describing it now.
+    if (naming.definitions[io].has(name) || naming.binding[io].has(name)) {
+      return { kind: 'ref', name, admitsNull: false }
+    }
+
+    // The same schema, met for the first time on this side. Its other side is described and this one
+    // is not, so this one is described too and the two are compared when the names are settled.
   }
 
   // The name points back at something already being described, so the name belongs to that and the
   // walk has simply met it from below. It is filed under this name when it finishes.
   const target = resolved(schema, source)
   if (target !== undefined && ancestors.has(target)) {
-    naming.pending.set(target, name)
+    walk.pending.set(target, name)
     return { kind: 'ref', name, admitsNull: false }
   }
 
-  naming.binding.add(name)
+  naming.binding[io].add(name)
   naming.claimedBy.set(name, schema)
   const described = body(schema, walk, ancestors)
-  naming.binding.delete(name)
+  naming.binding[io].delete(name)
 
   if (isError(described)) {
     return described
   }
 
-  naming.definitions.set(name, described)
+  naming.definitions[io].set(name, described)
   return { kind: 'ref', name, admitsNull: false }
 }
 
@@ -225,7 +255,9 @@ function sameThing<S>(
   walk: Walk<S>,
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
-  const already = walk.naming.definitions.get(name)
+  // Whichever side already holds it. A schema written twice may be met from either.
+  const already =
+    walk.naming.definitions[walk.io].get(name) ?? walk.naming.definitions[other(walk.io)].get(name)
 
   if (already === undefined) {
     // The first is still being described, so there is nothing to compare against. A different schema
@@ -249,6 +281,188 @@ function sameThing<S>(
     schema,
     `two different schemas are named ${name}. A document states one shape under a name, so the second would be written as the first. Give one of them another name`
   )
+}
+
+/** The other side. */
+function other(io: Io): Io {
+  return io === 'input' ? 'output' : 'input'
+}
+
+/** What a name is called on one side, where the two sides could not share it. */
+function sideName(name: string, io: Io): string {
+  return io === 'input' ? `${name}Input` : `${name}Output`
+}
+
+/**
+ * The names, once every body is known.
+ *
+ * **A name is one name where both sides say the same thing, and two where they do not.** A schema
+ * with no conversion and no default under it describes identically on both sides, which is the
+ * common case, and a document naming that shape twice would say the same thing twice.
+ *
+ * Settled here rather than as the walk runs, because whether the sides differ is not known until
+ * both are described. Nothing depends on which side was asked for first.
+ */
+function settle<S>(
+  naming: Naming<S>,
+  described: readonly { readonly term: Described; readonly io: Io }[]
+): Descriptions | UndescribableSchema {
+  const names = new Set([...naming.definitions.input.keys(), ...naming.definitions.output.keys()])
+  const split = splitting(naming.definitions, names)
+
+  for (const name of split) {
+    for (const io of SIDES) {
+      if (names.has(sideName(name, io))) {
+        return new UndescribableSchema(
+          name,
+          `the two sides of ${name} differ, so each needs a name of its own, and ${sideName(name, io)} is taken. Give one of them another name`
+        )
+      }
+    }
+  }
+
+  const named = (name: string, io: Io): string => (split.has(name) ? sideName(name, io) : name)
+
+  const definitions = new Map<string, Described>()
+  for (const io of SIDES) {
+    for (const [name, term] of naming.definitions[io]) {
+      definitions.set(
+        named(name, io),
+        mapRefs(term, (to) => named(to, io))
+      )
+    }
+  }
+
+  return {
+    terms: described.map(({ term, io }) => mapRefs(term, (to) => named(to, io))),
+    definitions
+  }
+}
+
+/**
+ * The names whose two sides cannot be one definition.
+ *
+ * Two reasons, and the second is why this is a closure rather than a comparison. A name splits where
+ * its bodies differ. A name also splits where its bodies agree and both refer to a name that split:
+ * the two are alike only until the reference is written, and then one says `AddressInput` and the
+ * other `AddressOutput`.
+ *
+ * Only a name described on both sides can split. One described on a single side has one body, and
+ * its references are written for the side it was described on.
+ */
+function splitting(
+  definitions: PerSide<Map<string, Described>>,
+  names: ReadonlySet<string>
+): ReadonlySet<string> {
+  const bothSides = [...names].filter(
+    (name) => definitions.input.has(name) && definitions.output.has(name)
+  )
+  const split = new Set<string>()
+
+  for (const name of bothSides) {
+    const input = definitions.input.get(name)
+    const output = definitions.output.get(name)
+    if (input !== undefined && output !== undefined && canonical(input) !== canonical(output)) {
+      split.add(name)
+    }
+  }
+
+  for (let growing = true; growing; ) {
+    growing = false
+    for (const name of bothSides) {
+      const body = definitions.input.get(name)
+      if (split.has(name) || body === undefined) {
+        continue
+      }
+      if ([...refsIn(body)].some((to) => split.has(to))) {
+        split.add(name)
+        growing = true
+      }
+    }
+  }
+
+  return split
+}
+
+/** Every name a term refers to. */
+function refsIn(term: Described): ReadonlySet<string> {
+  const seen = new Set<string>()
+  mapRefs(term, (name) => {
+    seen.add(name)
+    return name
+  })
+  return seen
+}
+
+/**
+ * A term with every name it refers to rewritten.
+ *
+ * One total function over the term, so a case added to the term is a compile error here. A name is
+ * settled after the body that carries it was described, and nothing else in this file rewrites a
+ * term, so this is the whole of what a rename touches.
+ */
+function mapRefs(term: Described, rename: (name: string) => string): Described {
+  switch (term.kind) {
+    case 'ref':
+      return { ...term, name: rename(term.name) }
+    case 'typed':
+      return typedRefs(term, rename)
+    case 'some':
+    case 'exactlyOne':
+    case 'every':
+      return { ...term, members: memberRefs(term.members, rename) }
+    case 'tuple':
+      return {
+        ...term,
+        positions: term.positions.map((position) => mapRefs(position, rename)),
+        rest: restRefs(term.rest, rename)
+      }
+    case 'values':
+    case 'untyped':
+      return term
+    default:
+      term satisfies never
+      throw new Error('a term of no case reached the naming')
+  }
+}
+
+function typedRefs(term: DescribedOf<'typed'>, rename: (name: string) => string): Described {
+  if (term.name === 'object') {
+    const properties = new Map<string, DescribedProperty>()
+    for (const [key, property] of term.assertions.properties) {
+      properties.set(key, { ...property, term: mapRefs(property.term, rename) })
+    }
+
+    return {
+      ...term,
+      assertions: { properties, rest: restRefs(term.assertions.rest, rename) }
+    }
+  }
+
+  if (term.name === 'array') {
+    return {
+      ...term,
+      assertions: { ...term.assertions, items: mapRefs(term.assertions.items, rename) }
+    }
+  }
+
+  return term
+}
+
+function memberRefs(
+  members: readonly [Described, Described, ...Described[]],
+  rename: (name: string) => string
+): readonly [Described, Described, ...Described[]] {
+  const [first, second, ...rest] = members
+  return [
+    mapRefs(first, rename),
+    mapRefs(second, rename),
+    ...rest.map((member) => mapRefs(member, rename))
+  ]
+}
+
+function restRefs(rest: DescribedRest, rename: (name: string) => string): DescribedRest {
+  return rest.allows === 'term' ? { allows: 'term', term: mapRefs(rest.term, rename) } : rest
 }
 
 /**
@@ -332,12 +546,12 @@ function body<S>(
 
       // Something below named this while it was being described, so it is filed under that name and
       // what stands here is a reference to it.
-      const name = naming.pending.get(entered) ?? naming.pending.get(current)
+      const name = walk.pending.get(entered) ?? walk.pending.get(current)
       if (name === undefined) {
         return term
       }
 
-      naming.definitions.set(name, term)
+      naming.definitions[walk.io].set(name, term)
       return { kind: 'ref', name, admitsNull: false }
     }
 
