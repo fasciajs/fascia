@@ -38,6 +38,18 @@ export interface Ask<S> {
 /** One thing per side. */
 type PerSide<T> = Record<Io, T>
 
+/**
+ * What a name is called on each side, where the two sides could not share one.
+ *
+ * **Stated by the caller, with nothing supplied here.** `Input` and `Output` are one generator's
+ * convention, and this library holds no target's vocabulary anywhere else. A caller wanting
+ * `NewUser` and `User`, or a prefix, or a dot, states it and nothing here has an opinion.
+ *
+ * One function per side rather than one taking the side. A caller cannot answer for a side it forgot
+ * to think about, and two sides given one name is refused rather than written.
+ */
+export type SideNames = PerSide<(name: string) => string>
+
 /** A schema that cannot be described, because nothing true of it can be written down. */
 export class UndescribableSchema extends FasciaError<{ schema: unknown }> {
   constructor(schema: unknown, reason: string) {
@@ -128,7 +140,8 @@ export interface Descriptions {
  */
 export function describeAll<S>(
   asks: readonly Ask<S>[],
-  source: Source<S>
+  source: Source<S>,
+  names: SideNames
 ): Descriptions | UndescribableSchema {
   const naming: Naming<S> = {
     definitions: { input: new Map(), output: new Map() },
@@ -147,8 +160,16 @@ export function describeAll<S>(
     described.push({ term, io: ask.io })
   }
 
-  return settle(naming, described)
+  return settle(naming, described, names)
 }
+
+/**
+ * A name unchanged on either side.
+ *
+ * For one schema on one side, where no name can hold two bodies and nothing can be renamed. A split
+ * needs a name described on both sides, and one ask populates one side.
+ */
+const oneSide: SideNames = { input: (name) => name, output: (name) => name }
 
 /**
  * One schema, described.
@@ -159,7 +180,7 @@ export function describeAll<S>(
  * it has to be bound.
  */
 export function describe<S>(schema: S, source: Source<S>, io: Io): Describing {
-  const described = describeAll([{ schema, io }], source)
+  const described = describeAll([{ schema, io }], source, oneSide)
   if (isError(described)) {
     return described
   }
@@ -288,11 +309,6 @@ function other(io: Io): Io {
   return io === 'input' ? 'output' : 'input'
 }
 
-/** What a name is called on one side, where the two sides could not share it. */
-function sideName(name: string, io: Io): string {
-  return io === 'input' ? `${name}Input` : `${name}Output`
-}
-
 /**
  * The names, once every body is known.
  *
@@ -305,31 +321,32 @@ function sideName(name: string, io: Io): string {
  */
 function settle<S>(
   naming: Naming<S>,
-  described: readonly { readonly term: Described; readonly io: Io }[]
+  described: readonly { readonly term: Described; readonly io: Io }[],
+  names: SideNames
 ): Descriptions | UndescribableSchema {
-  const names = new Set([...naming.definitions.input.keys(), ...naming.definitions.output.keys()])
-  const split = splitting(naming.definitions, names)
+  const stated = new Set([...naming.definitions.input.keys(), ...naming.definitions.output.keys()])
+  const split = splitting(naming.definitions, stated)
 
-  for (const name of split) {
-    for (const io of SIDES) {
-      if (names.has(sideName(name, io))) {
-        return new UndescribableSchema(
-          name,
-          `the two sides of ${name} differ, so each needs a name of its own, and ${sideName(name, io)} is taken. Give one of them another name`
-        )
-      }
-    }
-  }
-
-  const named = (name: string, io: Io): string => (split.has(name) ? sideName(name, io) : name)
+  const named = (name: string, io: Io): string => (split.has(name) ? names[io](name) : name)
 
   const definitions = new Map<string, Described>()
   for (const io of SIDES) {
     for (const [name, term] of naming.definitions[io]) {
-      definitions.set(
-        named(name, io),
-        mapRefs(term, (to) => named(to, io))
-      )
+      const final = named(name, io)
+      const written = mapRefs(term, (to) => named(to, io))
+
+      // One check for every way two definitions land on one name: a name a caller gave to both
+      // sides, a name two schemas derived to, and a derived name a third schema already had. A name
+      // that did not split writes one body twice, which is the case this must not refuse.
+      const already = definitions.get(final)
+      if (already !== undefined && canonical(already) !== canonical(written)) {
+        return new UndescribableSchema(
+          name,
+          `two definitions are both called ${final}, and a name states one shape. Give the sides of ${name} names that differ, or rename the schema already called ${final}`
+        )
+      }
+
+      definitions.set(final, written)
     }
   }
 

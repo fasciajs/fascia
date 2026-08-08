@@ -1,5 +1,5 @@
 import { arktypeSource } from '@fasciajs/arktype'
-import type { Ask, Described, Descriptions, Io } from '@fasciajs/core'
+import type { Ask, Described, Descriptions, Io, SideNames } from '@fasciajs/core'
 import { describeAll, describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
@@ -169,13 +169,16 @@ describe('a key with a default may be left out of what is sent and is always in 
 })
 
 describe('a document holds both sides, and a name states one shape', () => {
+  /** What this document calls the two sides. Nothing in the library states one. */
+  const sides: SideNames = { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
+
   function bothSides(schema: z.core.$ZodType): Descriptions {
     const asks: readonly Ask<z.core.$ZodType>[] = [
       { schema, io: 'input' },
       { schema, io: 'output' }
     ]
 
-    const described = describeAll(asks, zodSource)
+    const described = describeAll(asks, zodSource, sides)
     if (isError(described)) {
       throw new Error(described.message)
     }
@@ -246,10 +249,50 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: User, io: 'output' },
         { schema: UserInput, io: 'input' }
       ],
-      zodSource
+      zodSource,
+      sides
     )
 
-    expect(isError(described) ? described.message : 'described').toContain('UserInput is taken')
+    expect(isError(described) ? described.message : 'described').toContain(
+      'two definitions are both called UserInput'
+    )
+  })
+
+  it('refuses a naming that gives the two sides one name', () => {
+    // The failure a caller can now write, and the reason nothing here supplies the names silently.
+    // A naming that ignores the side leaves two bodies under one name, which is what a split is for.
+    const User = z.object({ role: z.string().default('reader') }).meta({ id: 'User' })
+
+    const described = describeAll(
+      [
+        { schema: User, io: 'input' },
+        { schema: User, io: 'output' }
+      ],
+      zodSource,
+      { input: (name) => `${name}Body`, output: (name) => `${name}Body` }
+    )
+
+    expect(isError(described) ? described.message : 'described').toContain(
+      'two definitions are both called UserBody'
+    )
+  })
+
+  it('takes any naming a caller states, and states none of its own', () => {
+    const User = z.object({ role: z.string().default('reader') }).meta({ id: 'User' })
+
+    const described = describeAll(
+      [
+        { schema: User, io: 'input' },
+        { schema: User, io: 'output' }
+      ],
+      zodSource,
+      { input: (name) => `New${name}`, output: (name) => name }
+    )
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    expect([...described.definitions.keys()].sort()).toEqual(['NewUser', 'User'])
   })
 
   it('still refuses two different schemas sharing a name, one on each side', () => {
@@ -263,7 +306,8 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: first, io: 'input' },
         { schema: second, io: 'output' }
       ],
-      zodSource
+      zodSource,
+      sides
     )
 
     expect(isError(described) ? described.message : 'described').toContain(
