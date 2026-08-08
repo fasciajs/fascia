@@ -1,6 +1,13 @@
 import type { AdmittedValue, JsonValue, Node, Rest, Source } from '@fasciajs/core'
 import { UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
+import {
+  bigintAssertions,
+  dateAssertions,
+  listAssertions,
+  numberAssertions,
+  stringAssertions
+} from './assertions.js'
 import type { ZodTypesByType } from './zod-types.js'
 import { isZodType, ReadableZodTypes, UnreadableZodTypes } from './zod-types.js'
 
@@ -36,19 +43,19 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   // discriminates a union only on a property of the union itself, so a switch over it narrows
   // nothing and every case would need a cast.
   if (isZodType(schema, ['string'])) {
-    return { kind: 'scalar', name: 'string', assertions: {} }
+    return { kind: 'scalar', name: 'string', assertions: stringAssertions(schema) }
   }
   if (isZodType(schema, ['number'])) {
-    return { kind: 'scalar', name: 'number', assertions: {} }
+    return { kind: 'scalar', name: 'number', assertions: numberAssertions(schema) }
   }
   if (isZodType(schema, ['bigint'])) {
-    return { kind: 'scalar', name: 'bigint', assertions: {} }
+    return { kind: 'scalar', name: 'bigint', assertions: bigintAssertions(schema) }
   }
   if (isZodType(schema, ['boolean'])) {
     return { kind: 'scalar', name: 'boolean', assertions: {} }
   }
   if (isZodType(schema, ['date'])) {
-    return { kind: 'scalar', name: 'date', assertions: {} }
+    return { kind: 'scalar', name: 'date', assertions: dateAssertions(schema) }
   }
   if (isZodType(schema, ['null'])) {
     return { kind: 'scalar', name: 'null', assertions: {} }
@@ -100,7 +107,12 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
     return { kind: 'structural', of: 'object', properties, rest: restOf(schema._zod.def.catchall) }
   }
   if (isZodType(schema, ['array'])) {
-    return { kind: 'structural', of: 'list', items: schema._zod.def.element, assertions: {} }
+    return {
+      kind: 'structural',
+      of: 'list',
+      items: schema._zod.def.element,
+      assertions: listAssertions(schema)
+    }
   }
   if (isZodType(schema, ['tuple'])) {
     return {
