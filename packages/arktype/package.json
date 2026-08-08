@@ -15,6 +15,7 @@
     "@fasciajs/core": "0.0.0"
   },
   "peerDependencies": {
+    "@ark/schema": "^0.56.0",
     "arktype": "^2.0.0"
   }
 }

@@ -1,5 +1,14 @@
-import type { AdmittedValue, JsonValue, Node, ObjectProperty, Scalar, Source } from '@fasciajs/core'
+import type {
+  AdmittedValue,
+  Bound,
+  JsonValue,
+  Node,
+  ObjectProperty,
+  Scalar,
+  Source
+} from '@fasciajs/core'
 import { UnreadableSchema } from '@fasciajs/core'
+import { isReadArkRoot } from './ark-kinds.js'
 
 /**
  * An arktype schema, read as a `Node`.
@@ -99,7 +108,18 @@ function protoNameOf(node: ArkNode): string | undefined {
 }
 
 function read(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  switch (schema.kind) {
+  const kind = schema.kind
+
+  // Narrowed against arktype's own list of roots, so the dispatch below can be total. A kind
+  // arktype adds is a compile error at the `satisfies never`, naming the kind.
+  if (!isReadArkRoot(kind)) {
+    return new UnreadableSchema(
+      schema,
+      `arktype calls this a ${kind} and this package reads no such node`
+    )
+  }
+
+  switch (kind) {
     case 'domain':
       return domain(schema)
     case 'unit':
@@ -116,9 +136,9 @@ function read(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
       // A recursive type names itself and resolves on demand, which is a thunk.
       return { kind: 'deferred', resolve: () => resolvedAlias(schema) }
     default:
-      return new UnreadableSchema(
-        schema,
-        `arktype calls this a ${schema.kind} and this package reads no such node`
+      kind satisfies never
+      throw new Error(
+        `a root arktype states and this package classified reached no case: ${String(kind)}`
       )
   }
 }
@@ -233,7 +253,12 @@ function intersection(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
     return { kind: 'scalar', name: 'bigint', assertions: {} }
   }
   if (children['proto'] !== undefined) {
-    return proto(schema)
+    // A Date carries its bounds as `after` and `before` rather than as `min` and `max`, which is
+    // what the constraint list reported when it was first written against arktype's own.
+    const assertions = dateAssertions(children)
+    return protoNameOf(schema) === 'Date'
+      ? { kind: 'scalar', name: 'date', assertions }
+      : proto(schema)
   }
   if (Object.keys(children).length === 0) {
     return { kind: 'scalar', name: 'unknown', assertions: {} }
@@ -369,6 +394,29 @@ function numberAssertions(children: ArkNode): Extract<Scalar, { name: 'number' }
     ...(maximum !== undefined && { maximum }),
     ...(multipleOf !== undefined && { multipleOf })
   }
+}
+
+function dateAssertions(children: ArkNode): Extract<Scalar, { name: 'date' }>['assertions'] {
+  const minimum = dateBoundOf(nodeAt(children, 'after'))
+  const maximum = dateBoundOf(nodeAt(children, 'before'))
+
+  return {
+    ...(minimum !== undefined && { minimum }),
+    ...(maximum !== undefined && { maximum })
+  }
+}
+
+/**
+ * A Date bound, which arktype states as `after` and `before` rather than as `min` and `max`.
+ *
+ * The constraint classification is what reported these. Both were absent from the reading, and a
+ * caller stating one reached no assertion while every test passed, because no test knew to ask.
+ */
+function dateBoundOf(constraint: ArkNode | undefined): Bound<Date> | undefined {
+  const rule = constraint?.['rule']
+  const at = rule instanceof Date ? rule : typeof rule === 'number' ? new Date(rule) : undefined
+
+  return at === undefined ? undefined : { value: at, exclusive: constraint?.['exclusive'] === true }
 }
 
 function boundOf(
