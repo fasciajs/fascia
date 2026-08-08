@@ -1,8 +1,6 @@
 export {
-  ArkKinds,
-  isReadArkRoot,
+  ArkConstraintKinds,
   ReadArkConstraints,
-  ReadArkRoots,
   UnreadArkConstraints
-} from './ark-kinds.js'
+} from './ark-constraints.js'
 export { arktypeSource } from './read.js'

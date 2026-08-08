@@ -1,49 +1,22 @@
-import type { ConstraintKind, RootKind } from '@ark/schema'
-import { constraintKinds, rootKinds } from '@ark/schema'
+import type { ConstraintKind } from '@ark/schema'
+import { constraintKinds } from '@ark/schema'
 
 /**
- * arktype's own taxonomy of nodes, and this package's decision about each one.
+ * What a schema says about its values, and this package's decision about each one.
  *
  * `@ark/schema` is to arktype what `zod/v4/core` is to zod, and it is the more public of the two: it
  * publishes the kinds as ordered lists with types over them, rather than leaving a reader to recover
- * the set from the exports. So the lists below are held against arktype's own rather than derived
- * from what it happens to export.
+ * the set from the exports. So the lists below are held against arktype's own.
  *
- * A root is what a schema is. A constraint is what a schema says about its values. Both are
- * classified here, and both assertions exist for the same reason: a kind arktype adds is a compile
- * error naming the kind, rather than a schema that reads as nothing or a constraint that quietly
- * goes missing from every document.
- */
-
-/**
- * The roots this package reads, which is all seven of them.
+ * **Only the constraints, because only the constraints need saying.** A root is what a schema is,
+ * and the reading dispatches on `RootKind` and ends in `satisfies never`, so a root arktype adds is
+ * already a compile error at the dispatch. A second list of roots beside that one would be a copy of
+ * what the switch enumerates, and a spec over it would assert that the copy matches.
  *
- * No unread list, because there is nothing in it. The assertion below still earns its place: it is
- * what makes an eighth root a compile error rather than a schema reaching the reading's last branch.
+ * A constraint has no such dispatch. The reading reaches `inner.minLength` and the rest by name and
+ * says nothing about what it did not ask for, so this list is the only thing that would report a
+ * constraint arktype adds.
  */
-export const ReadArkRoots = [
-  'domain',
-  'unit',
-  'union',
-  'proto',
-  'intersection',
-  'morph',
-  'alias'
-] as const satisfies readonly RootKind[]
-
-export type ReadArkRoots = (typeof ReadArkRoots)[number]
-
-type UnreadArkRoots = Exclude<RootKind, ReadArkRoots>
-
-const _everyArkRootIsRead: [UnreadArkRoots] extends [never]
-  ? true
-  : { 'arktype states a root this package does not read': UnreadArkRoots } = true
-void _everyArkRootIsRead
-
-/** Whether a kind is one this package reads, narrowing so the reading's dispatch can be total. */
-export function isReadArkRoot(kind: string): kind is ReadArkRoots {
-  return (ReadArkRoots as readonly string[]).includes(kind)
-}
 
 /**
  * The constraints this package reads, each of which reaches an assertion or a shape.
@@ -107,5 +80,5 @@ const _noArkConstraintIsInBothLists: [ArkConstraintsInBothLists] extends [never]
   : { 'an arktype constraint is both read and unread': ArkConstraintsInBothLists } = true
 void _noArkConstraintIsInBothLists
 
-/** Every kind arktype states, for a spec that holds the lists to arktype's own count. */
-export const ArkKinds = { rootKinds, constraintKinds } as const
+/** Every constraint arktype states, for a spec that holds the lists to arktype's own count. */
+export const ArkConstraintKinds = constraintKinds
