@@ -1,8 +1,12 @@
+import { arktypeSource } from '@fasciajs/arktype'
 import type { Procedure } from '@fasciajs/atd'
 import { isAtdApp, isAtdProcedure, spellAtdApp } from '@fasciajs/atd'
 import type { SideNames } from '@fasciajs/core'
 import { isError } from '@fasciajs/core'
+import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
+import { type } from 'arktype'
+import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -230,5 +234,59 @@ describe('what a document refuses, and what it says instead', () => {
         }
       })
     ).toContain('no JSON form')
+  })
+})
+
+describe('a document holds schemas from a library arri never heard of', () => {
+  /**
+   * The claim the shape exists for, at the document level rather than at the schema level.
+   *
+   * `spellAtdApp` takes a `Source<S>` and cannot see which library produced it, so three validators
+   * that agree about nothing structurally reach one app definition. Written without names, so all
+   * three take the same derived one and the documents are comparable in full.
+   */
+  const procedures = {
+    'users.create': { transport: 'http', method: 'post', path: '/users/create' }
+  } as const
+
+  function appFrom<S>(source: Parameters<typeof spellAtdApp<S>>[1], params: S, response: S) {
+    const spelled = spellAtdApp(
+      { 'users.create': { ...procedures['users.create'], params, response } },
+      source,
+      sides
+    )
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+    expect(isAtdApp(spelled.written)).toBe(true)
+    return spelled.written
+  }
+
+  it('reaches one document from zod, arktype and effect', () => {
+    const fromZod = appFrom(
+      zodSource,
+      z.object({ name: z.string() }),
+      z.object({ id: z.string(), name: z.string() })
+    )
+
+    const fromArk = appFrom(
+      arktypeSource,
+      type.raw({ name: 'string' }) as unknown as Parameters<typeof arktypeSource.read>[0],
+      type.raw({ id: 'string', name: 'string' }) as unknown as Parameters<
+        typeof arktypeSource.read
+      >[0]
+    )
+
+    const fromEffect = appFrom(
+      effectSource,
+      Schema.Struct({ name: Schema.String }).ast,
+      Schema.Struct({ id: Schema.String, name: Schema.String }).ast
+    )
+
+    expect(fromArk).toEqual(fromZod)
+    expect(fromEffect).toEqual(fromZod)
+    expect(fromZod.definitions['UsersCreateParams']).toMatchObject({
+      properties: { name: { type: 'string' } }
+    })
   })
 })
