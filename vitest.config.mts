@@ -12,7 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['spec/**/*.spec.ts'],
+    include: ['packages/*/spec/**/*.spec.ts'],
 
     // No global names. Each spec imports what the spec uses, so a spec is a module rather than a
     // file that runs only inside a runner that injected names into the file.
