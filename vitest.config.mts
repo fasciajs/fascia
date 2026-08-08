@@ -7,7 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@fasciajs/core': resolve('packages/core/src/index.ts'),
-      '@fasciajs/zod': resolve('packages/zod/src/index.ts')
+      '@fasciajs/zod': resolve('packages/zod/src/index.ts'),
+      '@fasciajs/arktype': resolve('packages/arktype/src/index.ts')
     }
   },
   test: {
