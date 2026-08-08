@@ -1,3 +1,14 @@
+export type { Description } from './describe.js'
+export { describe, UndescribableSchema } from './describe.js'
+export type {
+  Described,
+  DescribedKind,
+  DescribedOf,
+  DescribedProperty,
+  DescribedRest,
+  DescribedTypeName,
+  SpellsDescribed
+} from './described.js'
 export type { JsonValue } from './json.js'
 export type {
   AdmittedValue,
