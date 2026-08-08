@@ -1,4 +1,4 @@
-import type { ArkNode } from '@fasciajs/arktype'
+import type { BaseRoot } from '@ark/schema'
 import { arktypeSource } from '@fasciajs/arktype'
 import type { Node, NodeFold } from '@fasciajs/core'
 import { foldSource, isError } from '@fasciajs/core'
@@ -11,8 +11,8 @@ import { describe, expect, it } from 'vitest'
  * Stated as a function rather than assumed at each call, because it is the claim this package rests
  * on: if a `Type` stopped being a node, every test here would fail on the same line.
  */
-function nodeOf(schema: unknown): Node<ArkNode> | Error {
-  return arktypeSource.read(schema as ArkNode)
+function nodeOf(schema: unknown): Node<BaseRoot> | Error {
+  return arktypeSource.read(schema as BaseRoot)
 }
 
 function groupOf(schema: unknown): string {
@@ -148,7 +148,7 @@ describe('a morph states what it is given and not what it produces', () => {
 })
 
 describe('the walk reaches the same answers over two validators', () => {
-  const leaves: NodeFold<ArkNode, string[]> = {
+  const leaves: NodeFold<BaseRoot, string[]> = {
     scalar: (node) => [node.name],
     values: (node) => node.admitted.map((value) => value.of),
     wrapper: (node, follow) => follow(node.inner),
@@ -172,7 +172,7 @@ describe('the walk reaches the same answers over two validators', () => {
 
     // Required keys before optional ones, which is arktype's own order and not the one written
     // above. A reading states what it is given, so the order is arktype's to choose.
-    expect(foldSource(schema as unknown as ArkNode, arktypeSource, leaves)).toEqual([
+    expect(foldSource(schema as unknown as BaseRoot, arktypeSource, leaves)).toEqual([
       'string',
       'string',
       'number'

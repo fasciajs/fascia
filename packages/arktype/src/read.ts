@@ -1,3 +1,4 @@
+import type { BaseRoot, nodeOfKind, RootKind } from '@ark/schema'
 import type {
   AdmittedValue,
   Bound,
@@ -8,116 +9,43 @@ import type {
   Source
 } from '@fasciajs/core'
 import { UnreadableSchema } from '@fasciajs/core'
-import { isReadArkRoot } from './ark-kinds.js'
 
 /**
  * An arktype schema, read as a `Node`.
  *
- * **This reads arktype's internal nodes and not a published surface.** A `Type` is one of those
- * nodes and every child of one is another, which is what makes a reading possible at one level. It
- * also means a minor release can move what this reads.
+ * A `Type` is one of arktype's nodes and every child of one is another, which is what makes a
+ * reading possible at one level.
+ *
+ * **Read through arktype's own machinery rather than through the shape of its output.** `hasKind`
+ * narrows to the node type for a kind, so a field is reached by name and a field arktype moves is a
+ * compile error. A first version of this file typed a node as an index signature and parsed each
+ * field from `unknown`, which compiled perfectly while reading every child as absent.
+ *
+ * `isNever`, `isUnknown` and `hasUnit` are arktype's answers to three questions this file used to
+ * ask by hand, and each was a comparison against a shape rather than against a meaning.
  *
  * The differences from a zod reading are why this package exists. arktype states optionality and a
  * default on an object's edge, holds no boolean domain, writes `never` as a union of no branches,
  * and writes an object, a record, an array and a tuple through one structure node.
  */
+export const arktypeSource: Source<BaseRoot> = { read }
 
-/**
- * What this package reads an arktype schema as.
- *
- * Declared here rather than imported, because arktype publishes `Type` and keeps its node types
- * private. Every field is read one at a time and parsed, the way any other boundary is parsed.
- *
- * An index signature, because arktype keeps a field where it suits the node: a constraint holds
- * `rule` on itself, a property holds `key` and `value` on itself, and a container holds its children
- * under `inner`. Naming each one here would be a second copy of arktype's own shape.
- */
-export interface ArkNode {
-  readonly kind: string
-  readonly [field: string]: unknown
-}
-
-export const arktypeSource: Source<ArkNode> = { read }
-
-/**
- * A node is callable, so a test for one accepts a function as readily as an object.
- *
- * Found by every child reading as absent. A first version asked for an object, and arktype builds
- * each node as a function carrying properties.
- */
-function isArkNode(value: unknown): value is ArkNode {
-  return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    typeof (value as ArkNode)['kind'] === 'string'
-  )
-}
-
-const NOTHING: ArkNode = { kind: 'nothing' }
-
-/** The children of a node, which arktype keeps under `inner`. */
-function childrenOf(node: ArkNode): ArkNode {
-  const inner = node['inner']
-  return typeof inner === 'object' && inner !== null ? (inner as ArkNode) : NOTHING
-}
-
-function nodeAt(holder: ArkNode, key: string): ArkNode | undefined {
-  const value = holder[key]
-  return isArkNode(value) ? value : undefined
-}
-
-function nodesAt(holder: ArkNode, key: string): readonly ArkNode[] {
-  const value = holder[key]
-  return Array.isArray(value) ? value.filter(isArkNode) : []
-}
-
-/** A constraint states its value as `rule`, on the node itself rather than under `inner`. */
-function numberRuleOf(constraint: ArkNode | undefined): number | undefined {
-  const rule = constraint?.['rule']
-  return typeof rule === 'number' ? rule : undefined
-}
-
-/**
- * The domain a node names.
- *
- * Two levels, because a bare domain node holds the name under its own children and a domain reached
- * inside an intersection is a node holding it under theirs.
- */
-function domainNameOf(node: ArkNode): string | undefined {
-  const named = childrenOf(node)['domain']
-  if (typeof named === 'string') {
-    return named
-  }
-  if (isArkNode(named)) {
-    const nested = childrenOf(named)['domain']
-    return typeof nested === 'string' ? nested : undefined
-  }
-  return undefined
-}
-
-/** The prototype a node names, which arktype states as the constructor itself. */
-function protoNameOf(node: ArkNode): string | undefined {
-  const named = childrenOf(node)['proto']
-  if (typeof named === 'string') {
-    return named
-  }
-  if (isArkNode(named)) {
-    return protoNameOf(named)
-  }
-  return typeof named === 'function' ? named.name : undefined
-}
-
-function read(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const kind = schema.kind
-
-  // Narrowed against arktype's own list of roots, so the dispatch below can be total. A kind
-  // arktype adds is a compile error at the `satisfies never`, naming the kind.
-  if (!isReadArkRoot(kind)) {
+function read(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  // A schema admitting no value, however arktype arrived at one. Asked before the dispatch, because
+  // arktype reduces several schemas to the same empty union and the kind alone does not say so.
+  if (schema.isNever()) {
     return new UnreadableSchema(
       schema,
-      `arktype calls this a ${kind} and this package reads no such node`
+      'this admits no value, so it describes nothing a caller could send'
     )
   }
+
+  // Nothing is asserted about the value at all, which arktype writes as an empty intersection.
+  if (schema.isUnknown()) {
+    return { kind: 'scalar', name: 'unknown', assertions: {} }
+  }
+
+  const kind: RootKind = schema.kind
 
   switch (kind) {
     case 'domain':
@@ -133,19 +61,25 @@ function read(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
     case 'morph':
       return morph(schema)
     case 'alias':
-      // A recursive type names itself and resolves on demand, which is a thunk.
-      return { kind: 'deferred', resolve: () => resolvedAlias(schema) }
+      return alias(schema)
     default:
+      // Held to arktype's own list of roots. A root arktype adds is a compile error naming the root.
       kind satisfies never
-      throw new Error(
-        `a root arktype states and this package classified reached no case: ${String(kind)}`
-      )
+      throw new Error(`arktype states a root this package reads no case for: ${String(kind)}`)
   }
 }
 
-function resolvedAlias(schema: ArkNode): ArkNode {
-  const held = nodeAt(childrenOf(schema), 'resolution') ?? nodeAt(schema, 'resolution')
-  return held ?? schema
+/**
+ * A schema whose kind the dispatch already decided, narrowed to the node type for that kind.
+ *
+ * The narrowing is what gives a field a name and a type. The `false` branch is unreachable, and it
+ * returns rather than throws so that a wrong dispatch is a reading that says so rather than a crash.
+ */
+function notOfKind(schema: BaseRoot, kind: RootKind): UnreadableSchema {
+  return new UnreadableSchema(
+    schema,
+    `this states it is a ${schema.kind} and was read as a ${kind}`
+  )
 }
 
 const SCALAR_DOMAINS: Partial<Record<string, Scalar['name']>> = {
@@ -155,39 +89,43 @@ const SCALAR_DOMAINS: Partial<Record<string, Scalar['name']>> = {
 }
 
 /** A bare domain, with nothing asserted about it. */
-function domain(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const named = domainNameOf(schema)
-  const name = named === undefined ? undefined : SCALAR_DOMAINS[named]
+function domain(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('domain')) {
+    return notOfKind(schema, 'domain')
+  }
+
+  const name = SCALAR_DOMAINS[schema.domain]
 
   return name === undefined
-    ? new UnreadableSchema(schema, `a ${String(named)} is not a value a document carries`)
+    ? new UnreadableSchema(schema, `a ${schema.domain} is not a value a document carries`)
     : { kind: 'scalar', name, assertions: {} }
 }
 
 /** One admitted value. arktype writes a literal, and `null`, this way. */
-function unit(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const value = asAdmittedValue(childrenOf(schema)['unit'])
+function unit(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('unit')) {
+    return notOfKind(schema, 'unit')
+  }
+
+  const value = asAdmittedValue(schema.unit)
+
   return value === undefined
     ? new UnreadableSchema(schema, 'this admits one value, and the value is not one JSON carries')
     : { kind: 'values', admitted: [value] }
 }
 
 /**
- * A union, and the two shapes arktype writes this way that are not disjunctions.
+ * A disjunction, and the one shape arktype writes this way that is not one.
  *
- * No branches is a schema admitting no value. Exactly the two boolean units is a boolean, which
- * arktype holds no domain for. Reading the second as a disjunction of two constants would accept
- * the same values and say so in a way no reader of a document would recognise.
+ * `boolean` is the two unit types, arktype holding no boolean domain. `hasUnit` is arktype's own
+ * answer to what a branch admits, and it replaced a comparison against the shape of the branch.
  */
-function union(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const branches = nodesAt(childrenOf(schema), 'branches')
-
-  if (branches.length === 0) {
-    return new UnreadableSchema(
-      schema,
-      'this admits no value, so it describes nothing a caller could send'
-    )
+function union(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('union')) {
+    return notOfKind(schema, 'union')
   }
+
+  const branches: readonly BaseRoot[] = schema.branches
 
   if (isBoolean(branches)) {
     return { kind: 'scalar', name: 'boolean', assertions: {} }
@@ -209,78 +147,97 @@ function union(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
   }
 }
 
-function isBoolean(branches: readonly ArkNode[]): boolean {
-  if (branches.length !== 2) {
-    return false
-  }
-  const units = branches.map((branch) =>
-    branch.kind === 'unit' ? childrenOf(branch)['unit'] : undefined
+function isBoolean(branches: readonly BaseRoot[]): boolean {
+  return (
+    branches.length === 2 &&
+    branches.some((branch) => branch.hasUnit(true)) &&
+    branches.some((branch) => branch.hasUnit(false))
   )
-  return units.includes(true) && units.includes(false)
 }
 
 /** A prototype. A Date is a value with a wire form, and the rest are not. */
-function proto(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const name = protoNameOf(schema)
+function proto(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('proto')) {
+    return notOfKind(schema, 'proto')
+  }
 
-  return name === 'Date'
+  return schema.builtinName === 'Date'
     ? { kind: 'scalar', name: 'date', assertions: {} }
-    : new UnreadableSchema(schema, `a ${String(name)} is not a value a document carries`)
+    : new UnreadableSchema(schema, `a ${schema.proto.name} is not a value a document carries`)
 }
 
-/**
- * A domain or a prototype with constraints beside it, which is most of what arktype builds.
- *
- * An intersection with no children is `unknown`: nothing is asserted about the value at all.
- */
-function intersection(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const children = childrenOf(schema)
-  const structure = nodeAt(children, 'structure')
+/** A recursive type names itself and resolves on demand, which is a thunk. */
+function alias(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  return schema.hasKind('alias')
+    ? { kind: 'deferred', resolve: () => schema.resolution }
+    : notOfKind(schema, 'alias')
+}
 
+/** A morph converts one way, so what a caller sends is stated and what comes out is a function. */
+function morph(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('morph')) {
+    return notOfKind(schema, 'morph')
+  }
+
+  // `in` on the node itself is declared `unknown`, with a note to reach the raw one instead. The
+  // inner holds the typed node, and arktype declares it optional, so an absent one is a morph that
+  // states nothing about what it converts.
+  const sent = schema.inner.in
+
+  return sent === undefined
+    ? new UnreadableSchema(
+        schema,
+        'this converts a value and states no schema for what it converts'
+      )
+    : { kind: 'conversion', how: 'unstatedOutput', sent }
+}
+
+/** A basis with constraints beside it, which is most of what arktype builds. */
+function intersection(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
+  if (!schema.hasKind('intersection')) {
+    return notOfKind(schema, 'intersection')
+  }
+
+  const structure = schema.structure
   if (structure !== undefined) {
-    return structured(schema, children, structure)
+    return structured(schema, structure)
   }
 
-  const domainName = domainNameOf(schema)
+  const inner = schema.inner
+  const basis = inner.domain ?? inner.proto
 
-  if (domainName === 'string') {
-    return { kind: 'scalar', name: 'string', assertions: stringAssertions(children) }
+  if (basis?.hasKind('domain')) {
+    if (basis.domain === 'string') {
+      return { kind: 'scalar', name: 'string', assertions: stringAssertions(schema) }
+    }
+    if (basis.domain === 'number') {
+      return { kind: 'scalar', name: 'number', assertions: numberAssertions(schema) }
+    }
+    if (basis.domain === 'bigint') {
+      return { kind: 'scalar', name: 'bigint', assertions: {} }
+    }
   }
-  if (domainName === 'number') {
-    return { kind: 'scalar', name: 'number', assertions: numberAssertions(children) }
-  }
-  if (domainName === 'bigint') {
-    return { kind: 'scalar', name: 'bigint', assertions: {} }
-  }
-  if (children['proto'] !== undefined) {
-    // A Date carries its bounds as `after` and `before` rather than as `min` and `max`, which is
-    // what the constraint list reported when it was first written against arktype's own.
-    const assertions = dateAssertions(children)
-    return protoNameOf(schema) === 'Date'
-      ? { kind: 'scalar', name: 'date', assertions }
-      : proto(schema)
-  }
-  if (Object.keys(children).length === 0) {
-    return { kind: 'scalar', name: 'unknown', assertions: {} }
+
+  if (basis?.hasKind('proto') && basis.builtinName === 'Date') {
+    return { kind: 'scalar', name: 'date', assertions: dateAssertions(schema) }
   }
 
   return new UnreadableSchema(
     schema,
-    `this states ${Object.keys(children).join(', ')} and this package reads no shape from that`
+    `this states ${Object.keys(inner).join(', ')} and this package reads no shape from that`
   )
 }
 
 /** An object, a record, an array or a tuple. arktype writes all four through one structure node. */
 function structured(
-  schema: ArkNode,
-  children: ArkNode,
-  structure: ArkNode
-): Node<ArkNode> | UnreadableSchema {
-  const sequence = nodeAt(childrenOf(structure), 'sequence')
+  schema: nodeOfKind<'intersection'>,
+  structure: nodeOfKind<'structure'>
+): Node<BaseRoot> | UnreadableSchema {
+  const sequence = structure.sequence
 
   if (sequence !== undefined) {
-    const positions = nodesAt(childrenOf(sequence), 'prefix')
-    const items = nodeAt(childrenOf(sequence), 'variadic')
+    const positions: readonly BaseRoot[] = sequence.prefix ?? []
+    const items = sequence.variadic
 
     if (positions.length > 0) {
       return {
@@ -292,9 +249,8 @@ function structured(
     }
 
     if (items !== undefined) {
-      const minItems = numberRuleOf(nodeAt(children, 'minLength'))
-      const maxItems =
-        numberRuleOf(nodeAt(children, 'maxLength')) ?? numberRuleOf(nodeAt(children, 'exactLength'))
+      const minItems = schema.inner.minLength?.rule
+      const maxItems = schema.inner.maxLength?.rule ?? schema.inner.exactLength?.rule
 
       return {
         kind: 'structural',
@@ -308,12 +264,8 @@ function structured(
     }
   }
 
-  const structureChildren = childrenOf(structure)
-  const named = [
-    ...nodesAt(structureChildren, 'required'),
-    ...nodesAt(structureChildren, 'optional')
-  ]
-  const index = nodesAt(structureChildren, 'index')
+  const named = [...(structure.required ?? []), ...(structure.optional ?? [])]
+  const index = structure.index ?? []
 
   // An index signature and named properties at once is one arktype shape that this sum holds as
   // two. Refused rather than read as either, because dropping the named keys and dropping the key
@@ -325,57 +277,38 @@ function structured(
     )
   }
 
-  if (named.length === 0 && index.length === 1) {
-    const [only] = index
-    const keys = only === undefined ? undefined : nodeAt(only, 'signature')
-    const values = only === undefined ? undefined : nodeAt(only, 'value')
-
-    return keys === undefined || values === undefined
-      ? new UnreadableSchema(schema, 'this states an index signature with no key or no value')
-      : { kind: 'structural', of: 'dictionary', keys, values }
+  const [only] = index
+  if (named.length === 0 && index.length === 1 && only !== undefined) {
+    return { kind: 'structural', of: 'dictionary', keys: only.signature, values: only.value }
   }
 
-  const properties = new Map<string, ObjectProperty<ArkNode>>()
+  const properties = new Map<string, ObjectProperty<BaseRoot>>()
   for (const property of named) {
-    const key = property['key']
-    const value = nodeAt(property, 'value')
-
-    if (typeof key !== 'string' || value === undefined) {
-      return new UnreadableSchema(
-        schema,
-        'a property of this object states no name, or no schema at the name'
-      )
+    const key = property.key
+    if (typeof key !== 'string') {
+      // A symbol key. A document names its keys with strings, so there is nothing to write.
+      return new UnreadableSchema(schema, 'a property of this object is named by a symbol')
     }
 
     properties.set(key, {
-      schema: value,
+      schema: property.value,
       // arktype states this on the edge, which is where the sum states it too.
-      required: property.kind === 'required',
-      default: asJsonValue(property['default'])
+      required: property.hasKind('required'),
+      default: property.hasKind('optional') ? asJsonValue(property.default) : undefined
     })
   }
 
   return { kind: 'structural', of: 'object', properties, rest: { allows: 'anything' } }
 }
 
-/** A morph converts one way, so what a caller sends is stated and what comes out is a function. */
-function morph(schema: ArkNode): Node<ArkNode> | UnreadableSchema {
-  const sent = nodeAt(childrenOf(schema), 'in')
-  return sent === undefined
-    ? new UnreadableSchema(
-        schema,
-        'this converts a value and states no schema for what it converts'
-      )
-    : { kind: 'conversion', how: 'unstatedOutput', sent }
-}
-
-function stringAssertions(children: ArkNode): Extract<Scalar, { name: 'string' }>['assertions'] {
-  const exact = numberRuleOf(nodeAt(children, 'exactLength'))
-  const minLength = numberRuleOf(nodeAt(children, 'minLength')) ?? exact
-  const maxLength = numberRuleOf(nodeAt(children, 'maxLength')) ?? exact
-  const patterns = nodesAt(children, 'pattern')
-    .map((one) => one['rule'])
-    .filter((one): one is string => typeof one === 'string')
+function stringAssertions(
+  schema: nodeOfKind<'intersection'>
+): Extract<Scalar, { name: 'string' }>['assertions'] {
+  const inner = schema.inner
+  const exact = inner.exactLength?.rule
+  const minLength = inner.minLength?.rule ?? exact
+  const maxLength = inner.maxLength?.rule ?? exact
+  const patterns = (inner.pattern ?? []).map((one) => one.rule)
 
   return {
     ...(minLength !== undefined && { minLength }),
@@ -384,10 +317,13 @@ function stringAssertions(children: ArkNode): Extract<Scalar, { name: 'string' }
   }
 }
 
-function numberAssertions(children: ArkNode): Extract<Scalar, { name: 'number' }>['assertions'] {
-  const minimum = boundOf(nodeAt(children, 'min'))
-  const maximum = boundOf(nodeAt(children, 'max'))
-  const multipleOf = numberRuleOf(nodeAt(children, 'divisor'))
+function numberAssertions(
+  schema: nodeOfKind<'intersection'>
+): Extract<Scalar, { name: 'number' }>['assertions'] {
+  const inner = schema.inner
+  const minimum = boundOf(inner.min)
+  const maximum = boundOf(inner.max)
+  const multipleOf = inner.divisor?.rule
 
   return {
     ...(minimum !== undefined && { minimum }),
@@ -396,9 +332,27 @@ function numberAssertions(children: ArkNode): Extract<Scalar, { name: 'number' }
   }
 }
 
-function dateAssertions(children: ArkNode): Extract<Scalar, { name: 'date' }>['assertions'] {
-  const minimum = dateBoundOf(nodeAt(children, 'after'))
-  const maximum = dateBoundOf(nodeAt(children, 'before'))
+function boundOf(
+  constraint: { rule: number; exclusive?: boolean } | undefined
+): Bound<number> | undefined {
+  return constraint === undefined
+    ? undefined
+    : { value: constraint.rule, exclusive: constraint.exclusive === true }
+}
+
+/**
+ * A Date bound, which arktype states as `after` and `before` rather than as `min` and `max`.
+ *
+ * arktype holds no exclusive Date bound: `Date > x` is normalised to `Date >= x plus one
+ * millisecond` and `exclusive` is never set. The shifted bound is what the schema accepts, so it is
+ * what the reading states.
+ */
+function dateAssertions(
+  schema: nodeOfKind<'intersection'>
+): Extract<Scalar, { name: 'date' }>['assertions'] {
+  const inner = schema.inner
+  const minimum = dateBoundOf(inner.after?.rule)
+  const maximum = dateBoundOf(inner.before?.rule)
 
   return {
     ...(minimum !== undefined && { minimum }),
@@ -406,24 +360,9 @@ function dateAssertions(children: ArkNode): Extract<Scalar, { name: 'date' }>['a
   }
 }
 
-/**
- * A Date bound, which arktype states as `after` and `before` rather than as `min` and `max`.
- *
- * The constraint classification is what reported these. Both were absent from the reading, and a
- * caller stating one reached no assertion while every test passed, because no test knew to ask.
- */
-function dateBoundOf(constraint: ArkNode | undefined): Bound<Date> | undefined {
-  const rule = constraint?.['rule']
+function dateBoundOf(rule: Date | number | undefined): Bound<Date> | undefined {
   const at = rule instanceof Date ? rule : typeof rule === 'number' ? new Date(rule) : undefined
-
-  return at === undefined ? undefined : { value: at, exclusive: constraint?.['exclusive'] === true }
-}
-
-function boundOf(
-  constraint: ArkNode | undefined
-): { value: number; exclusive: boolean } | undefined {
-  const value = numberRuleOf(constraint)
-  return value === undefined ? undefined : { value, exclusive: constraint?.['exclusive'] === true }
+  return at === undefined ? undefined : { value: at, exclusive: false }
 }
 
 function asAdmittedValue(value: unknown): AdmittedValue | undefined {

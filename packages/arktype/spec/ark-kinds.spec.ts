@@ -1,4 +1,5 @@
-import type { ArkNode } from '@fasciajs/arktype'
+import { attest } from '@ark/attest'
+import type { BaseRoot } from '@ark/schema'
 import {
   ArkKinds,
   arktypeSource,
@@ -10,8 +11,8 @@ import { isError, type Node, type UnreadableSchema } from '@fasciajs/core'
 import { type } from 'arktype'
 import { describe, expect, it } from 'vitest'
 
-function nodeOf(schema: unknown): Node<ArkNode> | UnreadableSchema {
-  return arktypeSource.read(schema as ArkNode)
+function nodeOf(schema: unknown): Node<BaseRoot> | UnreadableSchema {
+  return arktypeSource.read(schema as BaseRoot)
 }
 
 function assertionsOf(schema: unknown): Record<string, unknown> {
@@ -92,13 +93,22 @@ describe('a constraint filed as read reaches an assertion', () => {
   })
 })
 
-describe('the dispatch is total over arktype own roots', () => {
-  it('turns away a node that is not a root at all', () => {
-    // A constraint reached where a root belongs. arktype would not hand one over, and the reading
-    // says so by name rather than matching some case by accident.
-    const constraint = { kind: 'divisor', rule: 2 } as unknown as ArkNode
-    const node = arktypeSource.read(constraint)
+describe('the reading is over arktype own node type', () => {
+  it('refuses a value that is not one of arktype nodes', () => {
+    // Under a first version this compiled. The reading declared its own structural node type, so any
+    // object carrying a `kind` string satisfied it, and a shape that was never a node reached every
+    // branch. Reading through arktype's own type is what closed that.
+    attest(() => {
+      // @ts-expect-error a plain object is not one of arktype's nodes.
+      return arktypeSource.read({ kind: 'divisor', rule: 2 })
+    }).type.errors('not assignable')
+  })
 
-    expect(isError(node) ? node.message : 'read as something').toContain('reads no such node')
+  it('reads every root arktype states, and the dispatch ends in satisfies never', () => {
+    // The runtime half. The compile-time half is `kind satisfies never` in the reading, which a root
+    // arktype adds fails with the root named.
+    for (const kind of ArkKinds.rootKinds) {
+      expect(ReadArkRoots).toContain(kind)
+    }
   })
 })
