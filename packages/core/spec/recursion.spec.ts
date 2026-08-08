@@ -1,0 +1,132 @@
+import { arktypeSource } from '@fasciajs/arktype'
+import type { Describing, Description } from '@fasciajs/core'
+import { describe as description, isError } from '@fasciajs/core'
+import { effectSource } from '@fasciajs/effect'
+import { zodSource } from '@fasciajs/zod'
+import { scope } from 'arktype'
+import { Schema } from 'effect'
+import { describe, expect, it } from 'vitest'
+import * as z from 'zod'
+
+/**
+ * A schema that holds itself, from three validators that name one three ways.
+ *
+ * The name is bound before the body is walked, so meeting the schema again yields a reference and
+ * the knot ties itself. Nothing else can write a cycle down: a term is a tree, and a tree cannot
+ * hold itself.
+ */
+function described(describing: Describing): Description {
+  if (isError(describing)) {
+    throw new Error(`the schema could not be described: ${describing.message}`)
+  }
+  return describing
+}
+
+/** The names a description refers to, and the shape of the body under each. */
+function shapeOf(description: Description, name: string): string {
+  const body = description.definitions.get(name)
+  if (body === undefined) {
+    throw new Error(`nothing was defined under ${name}`)
+  }
+  return body.kind === 'typed' ? `${body.kind}/${body.name}` : body.kind
+}
+
+describe('a schema that holds itself is described once and referred to', () => {
+  it('describes a zod tree, named by the caller', () => {
+    // zod names nothing on its own, so a caller states one. Without it there is nothing to bind.
+    const Tree: z.ZodType = z
+      .lazy(() => z.object({ name: z.string(), children: z.array(Tree) }))
+      .meta({ id: 'Tree' })
+
+    const result = described(description(Tree, zodSource))
+
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(shapeOf(result, 'Tree')).toBe('typed/object')
+  })
+
+  it('describes an arktype tree, which arktype names itself', () => {
+    const types = scope({ Tree: { name: 'string', children: 'Tree[]' } }).export()
+    const result = described(
+      description(types.Tree as unknown as Parameters<typeof arktypeSource.read>[0], arktypeSource)
+    )
+
+    // arktype names the alias rather than the schema, so the name is found on the way down and
+    // points back at what the walk began at. That schema is filed under the name when it finishes.
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(shapeOf(result, 'Tree')).toBe('typed/object')
+  })
+
+  it('describes an effect tree, named by an annotation', () => {
+    interface Tree {
+      readonly name: string
+      readonly children: readonly Tree[]
+    }
+
+    const Tree: Schema.Schema<Tree> = Schema.Struct({
+      name: Schema.String,
+      children: Schema.Array(Schema.suspend((): Schema.Schema<Tree> => Tree))
+    }).annotations({ identifier: 'Tree' })
+
+    const result = described(description(Tree.ast, effectSource))
+
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(shapeOf(result, 'Tree')).toBe('typed/object')
+  })
+
+  it('points the child at the same name the root was bound under', () => {
+    const Tree: z.ZodType = z
+      .lazy(() => z.object({ name: z.string(), children: z.array(Tree) }))
+      .meta({ id: 'Tree' })
+
+    const result = described(description(Tree, zodSource))
+    const body = result.definitions.get('Tree')
+
+    if (body?.kind !== 'typed' || body.name !== 'object') {
+      throw new Error('the definition is not an object')
+    }
+
+    const children = body.assertions.properties.get('children')?.term
+    if (children?.kind !== 'typed' || children.name !== 'array') {
+      throw new Error('children is not a list')
+    }
+
+    // The knot. The list holds the same name the whole schema was bound under.
+    expect(children.assertions.items).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+  })
+})
+
+describe('a cycle with nothing to name it is refused, and says what would fix it', () => {
+  it('refuses an unnamed zod cycle', () => {
+    const Loop: z.ZodType = z.lazy(() => z.array(Loop))
+    const describing = description(Loop, zodSource)
+
+    expect(isError(describing) ? describing.message : 'described').toContain(
+      'holds itself and nothing names it'
+    )
+  })
+})
+
+describe('a name is described once wherever it is used, not only in a cycle', () => {
+  it('describes one named schema once and points at it twice', () => {
+    const Name = z.string().min(2).meta({ id: 'Name' })
+    const Pair = z.object({ first: Name, second: Name })
+
+    const result = described(description(Pair, zodSource))
+    const body = result.term
+
+    if (body.kind !== 'typed' || body.name !== 'object') {
+      throw new Error('the schema is not an object')
+    }
+
+    const ref = { kind: 'ref', name: 'Name', admitsNull: false }
+    expect(body.assertions.properties.get('first')?.term).toEqual(ref)
+    expect(body.assertions.properties.get('second')?.term).toEqual(ref)
+
+    // Described once, under the name, with the assertions the schema stated.
+    expect(result.definitions.get('Name')).toMatchObject({
+      kind: 'typed',
+      name: 'string',
+      assertions: { minLength: 2 }
+    })
+  })
+})

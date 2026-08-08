@@ -268,6 +268,18 @@ export class UnreadableSchema extends FasciaError<{ schema: unknown }> {
  */
 export interface Source<S> {
   readonly read: (schema: S) => Node<S> | UnreadableSchema
+
+  /**
+   * What this schema is called, where the source library knows.
+   *
+   * A name is what lets a schema that holds itself be written down: the name is bound before the
+   * body is described, so meeting the schema again yields a reference. Without one there is nothing
+   * to bind, and a cycle cannot be described at all.
+   *
+   * Every validator keeps this somewhere, and each keeps it somewhere different. Stated as a member
+   * every source must answer, so a frontend added later is a compile error asking what it names.
+   */
+  readonly nameOf: (schema: S) => string | undefined
 }
 
 /**

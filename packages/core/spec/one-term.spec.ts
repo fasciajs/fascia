@@ -22,7 +22,7 @@ function termOf(described: ReturnType<typeof description>): Described {
   if (isError(described)) {
     throw new Error(`the schema could not be described: ${described.message}`)
   }
-  return described
+  return described.term
 }
 
 type ArkRoot = Parameters<typeof arktypeSource.read>[0]
@@ -126,7 +126,15 @@ describe('where the three disagree, the term says what each one actually stated'
   })
 
   it('describes an effect codec by its wire form, which zod states rarely and arktype never', () => {
-    expect(asEffect(Schema.NumberFromString)).toEqual({
+    // effect names this one itself, so it is described once and pointed at. The wire form is what
+    // the definition holds: `from` travels whichever way the conversion runs.
+    const described = description(Schema.NumberFromString.ast, effectSource)
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    expect(described.term).toEqual({ kind: 'ref', name: 'NumberFromString', admitsNull: false })
+    expect(described.definitions.get('NumberFromString')).toEqual({
       kind: 'typed',
       name: 'string',
       assertions: {},

@@ -1,6 +1,5 @@
 import type { Described, DescribedProperty, DescribedRest } from './described.js'
-import type { Node, NodeFold, Rest, Source } from './node.js'
-import { foldSource } from './node.js'
+import type { Node, Rest, Source } from './node.js'
 import { FasciaError, isError } from './result.js'
 
 /**
@@ -21,49 +20,188 @@ export class UndescribableSchema extends FasciaError<{ schema: unknown }> {
   }
 }
 
-/** A term, or the reason there is none. */
-export type Description = Described | UndescribableSchema
+/**
+ * A schema described, and everything it referred to by name.
+ *
+ * The definitions are flat and keyed by name, which is the shape both targets want: ATD resolves a
+ * `ref` against an app definition's `definitions`, and JSON Schema resolves a `$ref` against `$defs`.
+ */
+export interface Description {
+  readonly term: Described
+  readonly definitions: ReadonlyMap<string, Described>
+}
+
+/** A description, or the reason there is none. */
+export type Describing = Description | UndescribableSchema
+
+interface Naming<S> {
+  readonly definitions: Map<string, Described>
+  /** Names bound and not yet described. A schema meeting its own name is a cycle, and that is the point. */
+  readonly binding: Set<string>
+  /**
+   * A schema being described that turned out to have a name, and the name to file it under.
+   *
+   * A validator may name the thunk rather than the schema, so the name is found on the way down and
+   * points back at something already being described. arktype does this: a recursive type is reached
+   * through an alias carrying the name, and the alias resolves to the schema the walk began at.
+   */
+  readonly pending: Map<S, string>
+}
 
 /**
- * The algebra.
+ * A source library's schema, described.
  *
- * A case answers with a term or with a failure, and a case that folds a child gets the child's
- * answer the same way. Nothing here throws: a schema this library cannot describe is a value a
- * caller reads, so a caller can describe the rest of a document and be told which part is missing.
+ * **This owns its walk rather than folding through `foldSource`.** Naming, the definitions table and
+ * what to do about a cycle are one decision, and the generic walk knows about none of them: its
+ * cases receive a node and cannot tell which schema produced one, so a name could not be bound where
+ * it has to be bound.
  */
-function describing<S>(): NodeFold<S, Description> {
-  return {
-    scalar: (node) => scalar(node),
+export function describe<S>(schema: S, source: Source<S>): Describing {
+  const naming: Naming<S> = { definitions: new Map(), binding: new Set(), pending: new Map() }
+  const term = at(schema, source, naming, new Set())
 
-    values: (node) => ({ kind: 'values', admitted: node.admitted, admitsNull: false }),
+  return isError(term) ? term : { term, definitions: naming.definitions }
+}
 
-    wrapper: (node, follow) => wrapper(node, follow),
+/**
+ * One schema, described, with its name bound before its body is walked.
+ *
+ * Binding first is the whole mechanism. A schema that holds itself meets its own name on the way
+ * down and yields a reference, so the knot ties itself and no sentinel is needed. The same step
+ * describes a schema used in several places once and points at it thereafter.
+ */
+function at<S>(
+  schema: S,
+  source: Source<S>,
+  naming: Naming<S>,
+  ancestors: ReadonlySet<S>
+): Described | UndescribableSchema {
+  const name = source.nameOf(schema)
 
-    structural: (node, follow) => structural(node, follow),
+  if (name === undefined) {
+    return body(schema, source, naming, ancestors)
+  }
 
-    combination: (node, follow) => combination(node, follow),
+  if (naming.definitions.has(name) || naming.binding.has(name)) {
+    return { kind: 'ref', name, admitsNull: false }
+  }
 
-    conversion: (node, follow) => conversion(node, follow),
+  // The name points back at something already being described, so the name belongs to that and the
+  // walk has simply met it from below. It is filed under this name when it finishes.
+  const target = resolved(schema, source)
+  if (target !== undefined && ancestors.has(target)) {
+    naming.pending.set(target, name)
+    return { kind: 'ref', name, admitsNull: false }
+  }
 
-    deferred: (node, follow) => follow(node.resolve()),
+  naming.binding.add(name)
+  const described = body(schema, source, naming, ancestors)
+  naming.binding.delete(name)
 
-    unreadable: ({ error }) =>
-      new UndescribableSchema(error, `the schema could not be read: ${error.message}`),
+  if (isError(described)) {
+    return described
+  }
 
-    revisited: (schema) =>
-      new UndescribableSchema(
-        schema,
-        'this schema holds itself, and a term has no way to name a schema yet'
+  naming.definitions.set(name, described)
+  return { kind: 'ref', name, admitsNull: false }
+}
+
+/** What a chain of thunks stands for, or nothing where the chain does not end. */
+function resolved<S>(schema: S, source: Source<S>): S | undefined {
+  let current = schema
+  const seen = new Set<S>()
+
+  while (!seen.has(current)) {
+    seen.add(current)
+    const read = source.read(current)
+    if (isError(read) || read.kind !== 'deferred') {
+      return current
+    }
+    current = read.resolve()
+  }
+
+  return undefined
+}
+
+function body<S>(
+  schema: S,
+  source: Source<S>,
+  naming: Naming<S>,
+  ancestors: ReadonlySet<S>
+): Described | UndescribableSchema {
+  const entered = schema
+  let current = schema
+  let path = ancestors
+
+  // A thunk is followed here rather than through `at`, because resolving one is not descending into
+  // something else: it is the same thing, reached lazily. Following it through `at` would ask what
+  // the resolved schema is named, and a validator that names the thunk rather than the schema would
+  // lose the binding on the way through. arktype does exactly that, and the first version of this
+  // reported a named recursive type as an unnamed cycle.
+  for (;;) {
+    if (path.has(current)) {
+      return new UndescribableSchema(
+        current,
+        'this schema holds itself and nothing names it. Give it a name, so a document can refer to it'
       )
+    }
+
+    const read = source.read(current)
+    if (isError(read)) {
+      return new UndescribableSchema(current, `the schema could not be read: ${read.message}`)
+    }
+
+    path = new Set(path).add(current)
+
+    if (read.kind !== 'deferred') {
+      const term = described(read, source, naming, path)
+      if (isError(term)) {
+        return term
+      }
+
+      // Something below named this while it was being described, so it is filed under that name and
+      // what stands here is a reference to it.
+      const name = naming.pending.get(entered) ?? naming.pending.get(current)
+      if (name === undefined) {
+        return term
+      }
+
+      naming.definitions.set(name, term)
+      return { kind: 'ref', name, admitsNull: false }
+    }
+
+    current = read.resolve()
   }
 }
 
-/** The one entry point. A source library's schema, described. */
-export function describe<S>(schema: S, source: Source<S>): Description {
-  return foldSource(schema, source, describing<S>())
+function described<S>(
+  node: Exclude<Node<S>, { kind: 'deferred' }>,
+  source: Source<S>,
+  naming: Naming<S>,
+  path: ReadonlySet<S>
+): Described | UndescribableSchema {
+  const follow = (child: S): Described | UndescribableSchema => at(child, source, naming, path)
+
+  switch (node.kind) {
+    case 'scalar':
+      return scalar(node)
+    case 'values':
+      return { kind: 'values', admitted: node.admitted, admitsNull: false }
+    case 'wrapper':
+      return wrapper(node, follow)
+    case 'structural':
+      return structural(node, follow)
+    case 'combination':
+      return combination(node, follow)
+    case 'conversion':
+      return conversion(node, follow)
+    default:
+      node satisfies never
+      throw new Error('a reading produced a node of no group')
+  }
 }
 
-function scalar<S>(node: Extract<Node<S>, { kind: 'scalar' }>): Description {
+function scalar<S>(node: Extract<Node<S>, { kind: 'scalar' }>): Described | UndescribableSchema {
   switch (node.name) {
     case 'string':
       return { kind: 'typed', name: 'string', assertions: node.assertions, admitsNull: false }
@@ -104,8 +242,8 @@ function scalar<S>(node: Extract<Node<S>, { kind: 'scalar' }>): Description {
  */
 function wrapper<S>(
   node: Extract<Node<S>, { kind: 'wrapper' }>,
-  follow: (child: S) => Description
-): Description {
+  follow: (child: S) => Described | UndescribableSchema
+): Described | UndescribableSchema {
   const inner = follow(node.inner)
   if (isError(inner)) {
     return inner
@@ -136,8 +274,8 @@ function wrapper<S>(
 
 function structural<S>(
   node: Extract<Node<S>, { kind: 'structural' }>,
-  follow: (child: S) => Description
-): Description {
+  follow: (child: S) => Described | UndescribableSchema
+): Described | UndescribableSchema {
   switch (node.of) {
     case 'object': {
       const properties = new Map<string, DescribedProperty>()
@@ -213,7 +351,7 @@ function structural<S>(
 
 function restOf<S>(
   rest: Rest<S>,
-  follow: (child: S) => Description
+  follow: (child: S) => Described | UndescribableSchema
 ): DescribedRest | UndescribableSchema {
   switch (rest.allows) {
     case 'anything':
@@ -239,8 +377,8 @@ function restOf<S>(
  */
 function combination<S>(
   node: Extract<Node<S>, { kind: 'combination' }>,
-  follow: (child: S) => Description
-): Description {
+  follow: (child: S) => Described | UndescribableSchema
+): Described | UndescribableSchema {
   const terms: Described[] = []
   let admitsNull = false
 
@@ -297,8 +435,8 @@ function isOnlyNull(term: Described): boolean {
  */
 function conversion<S>(
   node: Extract<Node<S>, { kind: 'conversion' }>,
-  follow: (child: S) => Description
-): Description {
+  follow: (child: S) => Described | UndescribableSchema
+): Described | UndescribableSchema {
   switch (node.how) {
     case 'checks':
     case 'transforms':

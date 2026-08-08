@@ -22,4 +22,4 @@ export {
   isAtdTypeForm,
   isAtdValues
 } from './atd.js'
-export { spellAtd } from './spell.js'
+export { spellAtd, spellAtdAll } from './spell.js'

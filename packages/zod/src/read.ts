@@ -1,6 +1,7 @@
 import type { AdmittedValue, JsonValue, Node, ObjectProperty, Rest, Source } from '@fasciajs/core'
 import { UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
+import { globalRegistry } from 'zod/v4/core'
 import {
   bigintAssertions,
   dateAssertions,
@@ -20,7 +21,19 @@ import { isZodType, ReadableZodTypes, UnreadableZodTypes } from './zod-types.js'
  * The reading states what the schema says. It does not decide what a document should do about what
  * the schema says, which is why a widening is never taken here even where a widening would be sound.
  */
-export const zodSource: Source<core.$ZodType> = { read }
+export const zodSource: Source<core.$ZodType> = { read, nameOf }
+
+/**
+ * What zod calls a schema, which is what a caller registered it as.
+ *
+ * zod names nothing on its own: `z.lazy(() => …)` has no identity a document could use. A caller
+ * states one with `.meta({ id })`, which zod keeps in its global registry, and without one a schema
+ * that holds itself cannot be described at all.
+ */
+function nameOf(schema: core.$ZodType): string | undefined {
+  const stated = globalRegistry.get(schema)?.id
+  return typeof stated === 'string' ? stated : undefined
+}
 
 function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   // Zod's own type for this field is wider than the set of classes zod exports: it carries `int`,

@@ -20,24 +20,25 @@ function sourceOver(tree: Record<Named, Node<Named>>): Source<Named> {
         throw new Error(`the spec named a schema it did not define: ${name}`)
       }
       return node
-    }
+    },
+    nameOf: () => undefined
   }
 }
 
 function termOf(tree: Record<Named, Node<Named>>, root: Named = 'root'): Described {
-  const term = description(root, sourceOver(tree))
-  if (isError(term)) {
-    throw new Error(`the schema could not be described: ${term.message}`)
+  const described = description(root, sourceOver(tree))
+  if (isError(described)) {
+    throw new Error(`the schema could not be described: ${described.message}`)
   }
-  return term
+  return described.term
 }
 
 function failureOf(tree: Record<Named, Node<Named>>, root: Named = 'root'): string {
-  const term = description(root, sourceOver(tree))
-  if (!isError(term)) {
-    throw new Error(`the schema was described as a ${term.kind}`)
+  const described = description(root, sourceOver(tree))
+  if (!isError(described)) {
+    throw new Error(`the schema was described as a ${described.term.kind}`)
   }
-  return term.message
+  return described.message
 }
 
 describe('a scalar becomes a type with what is asserted about it', () => {
@@ -266,6 +267,6 @@ describe('the term refuses what cannot be written', () => {
       // @ts-expect-error `untyped` is unspelled.
       const spelling: import('@fasciajs/core').SpellsDescribed<string> = partial
       return spelling
-    }).type.errors("Property 'untyped' is missing")
+    }).type.errors(/missing the following properties.*ref, untyped/)
   })
 })

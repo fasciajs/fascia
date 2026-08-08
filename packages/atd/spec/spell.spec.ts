@@ -78,12 +78,12 @@ function conforming(written: AtdSchema, at: readonly string[] = []): void {
 
 /** A zod schema, all the way to a document. The first thing this library does end to end. */
 function atdOf(schema: z.core.$ZodType): Spelled<AtdSchema> {
-  const term = description(schema, zodSource)
-  if (isError(term)) {
-    throw new Error(`the schema could not be described: ${term.message}`)
+  const described = description(schema, zodSource)
+  if (isError(described)) {
+    throw new Error(`the schema could not be described: ${described.message}`)
   }
 
-  const spelled = spellAtd(term)
+  const spelled = spellAtd(described.term)
   if (isError(spelled)) {
     throw new Error(`the term could not be written: ${spelled.message}`)
   }
@@ -94,12 +94,12 @@ function atdOf(schema: z.core.$ZodType): Spelled<AtdSchema> {
 
 /** The reason ATD refuses a schema outright, for the cases where it does. */
 function refusalOf(schema: z.core.$ZodType): string {
-  const term = description(schema, zodSource)
-  if (isError(term)) {
-    throw new Error(`the schema could not be described: ${term.message}`)
+  const described = description(schema, zodSource)
+  if (isError(described)) {
+    throw new Error(`the schema could not be described: ${described.message}`)
   }
 
-  const spelled = spellAtd(term)
+  const spelled = spellAtd(described.term)
   if (!isError(spelled)) {
     throw new Error(`the term was written as ${JSON.stringify(spelled.written)}`)
   }
@@ -324,11 +324,11 @@ describe('one document from three validators', () => {
       effectSource
     )
 
-    for (const term of [fromZod, fromArk, fromEffect]) {
-      if (isError(term)) {
-        throw new Error(term.message)
+    for (const described of [fromZod, fromArk, fromEffect]) {
+      if (isError(described)) {
+        throw new Error(described.message)
       }
-      const spelled = spellAtd(term)
+      const spelled = spellAtd(described.term)
       if (isError(spelled)) {
         throw new Error(spelled.message)
       }

@@ -38,6 +38,9 @@ export function spellAtd(term: Described): Spelling<AtdSchema> {
       return tuple(term)
     case 'untyped':
       return faithful(nullable({}, term.admitsNull))
+    case 'ref':
+      // ATD resolves this against an app definition's `definitions`, keyed by the same name.
+      return faithful(nullable({ ref: term.name }, term.admitsNull))
     case 'some':
       return new UnsayableTerm(
         [],
@@ -383,4 +386,36 @@ function tuple(term: DescribedOf<'tuple'>): Spelled<AtdSchema> {
       )
     ]
   }
+}
+
+/**
+ * A whole description, written as ATD.
+ *
+ * The definitions travel beside the root rather than inside it, which is the shape arri wants: an
+ * app definition holds `definitions` and every `ref` names a key of it.
+ */
+export function spellAtdAll(described: {
+  readonly term: Described
+  readonly definitions: ReadonlyMap<string, Described>
+}): Spelling<{ root: AtdSchema; definitions: Readonly<Record<string, AtdSchema>> }> {
+  const root = spellAtd(described.term)
+  if (isError(root)) {
+    return root
+  }
+
+  const definitions: Record<string, AtdSchema> = {}
+  const departures: Departure[] = [...root.departures]
+
+  for (const [name, term] of described.definitions) {
+    const spelled = spellAtd(term)
+    if (isError(spelled)) {
+      return spelled
+    }
+
+    // The name is what a `ref` points at, so it is also what arri wants stated on the definition.
+    definitions[name] = { ...spelled.written, metadata: { id: name } }
+    departures.push(...under(name, spelled.departures))
+  }
+
+  return { written: { root: root.written, definitions }, departures }
 }

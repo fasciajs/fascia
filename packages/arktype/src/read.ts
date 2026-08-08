@@ -28,7 +28,21 @@ import { UnreadableSchema } from '@fasciajs/core'
  * default on an object's edge, holds no boolean domain, writes `never` as a union of no branches,
  * and writes an object, a record, an array and a tuple through one structure node.
  */
-export const arktypeSource: Source<BaseRoot> = { read }
+export const arktypeSource: Source<BaseRoot> = { read, nameOf }
+
+/**
+ * What arktype calls a schema.
+ *
+ * arktype names one on its own. A schema declared in a scope is reached through an alias node whose
+ * `reference` is the name, so a recursive type needs nothing from a caller.
+ */
+function nameOf(schema: BaseRoot): string | undefined {
+  if (!schema.hasKind('alias')) {
+    return undefined
+  }
+  const reference = schema.reference
+  return typeof reference === 'string' ? reference.replace(/^\$/, '') : undefined
+}
 
 function read(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
   // A schema admitting no value, however arktype arrived at one. Asked before the dispatch, because

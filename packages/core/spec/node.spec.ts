@@ -19,7 +19,8 @@ function sourceOver(tree: Record<Named, Node<Named> | UnreadableSchema>): Source
         throw new Error(`the spec named a schema it did not define: ${name}`)
       }
       return node
-    }
+    },
+    nameOf: () => undefined
   }
 }
 

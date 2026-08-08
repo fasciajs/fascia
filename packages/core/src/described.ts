@@ -117,6 +117,15 @@ interface DescribedCases {
     readonly rest: DescribedRest
   }
 
+  /**
+   * A schema described elsewhere, under this name.
+   *
+   * How a schema that holds itself is written down at all: the name is bound before the body is
+   * described, so meeting the schema again yields this rather than descending again. It is also how
+   * one schema used in several places is described once and pointed at.
+   */
+  readonly ref: { readonly name: string }
+
   /** Nothing is stated about the value. */
   readonly untyped: NoPayload
 }

@@ -31,7 +31,19 @@ import {
  * An **optional property states itself twice**: the property carries `isOptional` and its type is a
  * union holding `undefined`. The edge is the statement this library keeps.
  */
-export const effectSource: Source<SchemaAST.AST> = { read }
+export const effectSource: Source<SchemaAST.AST> = { read, nameOf }
+
+/**
+ * What effect calls a schema, which is the identifier a caller annotated it with.
+ *
+ * Asked of what a `Suspend` resolves to rather than of the `Suspend` itself: effect keeps the
+ * annotation on the schema, and a suspend is a thunk standing in front of it.
+ */
+function nameOf(ast: SchemaAST.AST): string | undefined {
+  const named = SchemaAST.isSuspend(ast) ? ast.f() : ast
+  const stated = named.annotations[SchemaAST.IdentifierAnnotationId]
+  return typeof stated === 'string' ? stated : undefined
+}
 
 function read(ast: SchemaAST.AST): Node<SchemaAST.AST> | UnreadableSchema {
   switch (ast._tag) {
