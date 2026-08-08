@@ -1,4 +1,5 @@
 import type { JsonValue } from './json.js'
+import type { Meta } from './meta.js'
 import { FasciaError, isError } from './result.js'
 
 /**
@@ -280,6 +281,16 @@ export interface Source<S> {
    * every source must answer, so a frontend added later is a compile error asking what it names.
    */
   readonly nameOf: (schema: S) => string | undefined
+
+  /**
+   * What this schema says about itself, taking only what a caller stated.
+   *
+   * **Two of the three validators here derive one for every schema.** `type('string').description`
+   * is already `a string` and `Schema.String` already annotates `a string`, so a reading that took
+   * whatever the field held would fill a document with prose nobody wrote. Each frontend answers with
+   * what a caller said and with nothing its own library made up.
+   */
+  readonly metaOf: (schema: S) => Meta
 }
 
 /**

@@ -1,5 +1,13 @@
-import type { AdmittedValue, JsonValue, Node, ObjectProperty, Rest, Source } from '@fasciajs/core'
-import { UnreadableSchema } from '@fasciajs/core'
+import type {
+  AdmittedValue,
+  JsonValue,
+  Meta,
+  Node,
+  ObjectProperty,
+  Rest,
+  Source
+} from '@fasciajs/core'
+import { metaFrom, UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
 import { globalRegistry } from 'zod/v4/core'
 import {
@@ -21,7 +29,7 @@ import { isZodType, ReadableZodTypes, UnreadableZodTypes } from './zod-types.js'
  * The reading states what the schema says. It does not decide what a document should do about what
  * the schema says, which is why a widening is never taken here even where a widening would be sound.
  */
-export const zodSource: Source<core.$ZodType> = { read, nameOf }
+export const zodSource: Source<core.$ZodType> = { read, nameOf, metaOf }
 
 /**
  * What zod calls a schema, which is what a caller registered it as.
@@ -33,6 +41,16 @@ export const zodSource: Source<core.$ZodType> = { read, nameOf }
 function nameOf(schema: core.$ZodType): string | undefined {
   const stated = globalRegistry.get(schema)?.id
   return typeof stated === 'string' ? stated : undefined
+}
+
+/**
+ * What a caller said about a schema, from the registry the name comes from.
+ *
+ * zod is the one of the three that states nothing on its own: a schema a caller never annotated is
+ * absent from the registry, so everything here is something somebody wrote.
+ */
+function metaOf(schema: core.$ZodType): Meta {
+  return metaFrom(globalRegistry.get(schema))
 }
 
 function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
@@ -227,7 +245,10 @@ function propertyOf(schema: core.$ZodType): ObjectProperty<core.$ZodType> {
     break
   }
 
-  return { schema: current, required: required ?? true, default: replacement }
+  // The schema a caller wrote rather than what is left after the wrappers, which the term drops on
+  // its own. A wrapper carries a caller's words, and returning what it holds left a description
+  // written on an optional property out of every document.
+  return { schema, required: required ?? true, default: replacement }
 }
 
 /** What an object or a tuple accepts beyond the children it names. */

@@ -158,12 +158,16 @@ describe('an object states on the edge what zod states on the value', () => {
     })
   })
 
-  it('lifts optional onto the edge and points at what is left', () => {
+  it('lifts optional onto the edge and keeps pointing at the schema a caller wrote', () => {
     const property = propertyAt(z.object({ a: z.string().optional() }), 'a')
 
     expect(property).toMatchObject({ required: false, default: undefined })
-    // The wrapper is gone from the tree, so nothing downstream reads the question twice.
-    expect(groupOf((property as { schema: z.core.$ZodType }).schema)).toBe('scalar')
+
+    // The wrapper stays where a caller put it. It carries a caller's words, and pointing past it
+    // left a description written on an optional property out of every document. Nothing downstream
+    // reads the question twice: the term drops the wrapper and states the key on the edge, which is
+    // the spec below this one.
+    expect(groupOf((property as { schema: z.core.$ZodType }).schema)).toBe('wrapper')
   })
 
   it('lifts a default onto the edge, and a default makes a key absent-able', () => {

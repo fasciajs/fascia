@@ -214,3 +214,35 @@ describe('two targets that refuse different things agree about one term', () => 
     })
   }
 })
+
+describe('what a schema says about itself, which 2020-12 has a word for all of', () => {
+  it('writes all four beside what the term states', () => {
+    expect(
+      writtenOf(
+        z
+          .string()
+          .min(2)
+          .meta({
+            title: 'Name',
+            description: 'who they are',
+            examples: ['ada'],
+            deprecated: true
+          })
+      )
+    ).toEqual({
+      type: 'string',
+      minLength: 2,
+      title: 'Name',
+      description: 'who they are',
+      examples: ['ada'],
+      deprecated: true
+    })
+  })
+
+  it('writes them outside a nullable, which is where they are about the whole value', () => {
+    expect(writtenOf(z.union([z.string(), z.number()]).nullable().describe('D'))).toMatchObject({
+      description: 'D',
+      anyOf: [{ anyOf: [{ type: 'string' }, { type: 'number' }] }, { type: 'null' }]
+    })
+  })
+})

@@ -1,6 +1,6 @@
 import { attest } from '@ark/attest'
 import type { Node, NodeFold, Source } from '@fasciajs/core'
-import { foldSource, UnreadableSchema } from '@fasciajs/core'
+import { foldSource, noMeta, UnreadableSchema } from '@fasciajs/core'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -20,7 +20,8 @@ function sourceOver(tree: Record<Named, Node<Named> | UnreadableSchema>): Source
       }
       return node
     },
-    nameOf: () => undefined
+    nameOf: () => undefined,
+    metaOf: () => noMeta
   }
 }
 

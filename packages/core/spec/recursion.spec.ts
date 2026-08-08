@@ -40,7 +40,7 @@ describe('a schema that holds itself is described once and referred to', () => {
 
     const result = described(description(Tree, zodSource, 'input'))
 
-    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false, meta: {} })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
   })
 
@@ -56,7 +56,7 @@ describe('a schema that holds itself is described once and referred to', () => {
 
     // arktype names the alias rather than the schema, so the name is found on the way down and
     // points back at what the walk began at. That schema is filed under the name when it finishes.
-    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false, meta: {} })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
   })
 
@@ -73,7 +73,7 @@ describe('a schema that holds itself is described once and referred to', () => {
 
     const result = described(description(Tree.ast, effectSource, 'input'))
 
-    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false, meta: {} })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
   })
 
@@ -95,7 +95,12 @@ describe('a schema that holds itself is described once and referred to', () => {
     }
 
     // The knot. The list holds the same name the whole schema was bound under.
-    expect(children.assertions.items).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
+    expect(children.assertions.items).toEqual({
+      kind: 'ref',
+      name: 'Tree',
+      admitsNull: false,
+      meta: {}
+    })
   })
 })
 
@@ -122,7 +127,7 @@ describe('a name is described once wherever it is used, not only in a cycle', ()
       throw new Error('the schema is not an object')
     }
 
-    const ref = { kind: 'ref', name: 'Name', admitsNull: false }
+    const ref = { kind: 'ref', name: 'Name', admitsNull: false, meta: {} }
     expect(body.assertions.properties.get('first')?.term).toEqual(ref)
     expect(body.assertions.properties.get('second')?.term).toEqual(ref)
 

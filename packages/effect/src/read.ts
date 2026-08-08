@@ -1,5 +1,13 @@
-import type { AdmittedValue, JsonValue, Node, ObjectProperty, Rest, Source } from '@fasciajs/core'
-import { UnreadableSchema } from '@fasciajs/core'
+import type {
+  AdmittedValue,
+  JsonValue,
+  Meta,
+  Node,
+  ObjectProperty,
+  Rest,
+  Source
+} from '@fasciajs/core'
+import { metaFrom, UnreadableSchema } from '@fasciajs/core'
 import { SchemaAST } from 'effect'
 import type { Refined } from './refinements.js'
 import {
@@ -31,7 +39,7 @@ import {
  * An **optional property states itself twice**: the property carries `isOptional` and its type is a
  * union holding `undefined`. The edge is the statement this library keeps.
  */
-export const effectSource: Source<SchemaAST.AST> = { read, nameOf }
+export const effectSource: Source<SchemaAST.AST> = { read, nameOf, metaOf }
 
 /**
  * What effect calls a schema, which is the identifier a caller annotated it with.
@@ -43,6 +51,55 @@ function nameOf(ast: SchemaAST.AST): string | undefined {
   const named = SchemaAST.isSuspend(ast) ? ast.f() : ast
   const stated = named.annotations[SchemaAST.IdentifierAnnotationId]
   return typeof stated === 'string' ? stated : undefined
+}
+
+/**
+ * What a caller said about a schema, with what effect says about it taken out.
+ *
+ * **effect annotates schemas itself, and a caller's annotation replaces the same field on the same
+ * node.** The two are one field with nothing kept, so where effect writes one, nothing a caller
+ * wrote can be recovered. Which nodes effect writes on was measured rather than assumed: the three
+ * keywords, a refinement, and a declaration, and no other tag carries one.
+ *
+ * A keyword is compared against the one effect built, which is sound and is the rule effect's own
+ * `JSONSchema` module uses under the name `filterBuiltIn`.
+ *
+ * **A refinement and a declaration state nothing here, and that loses what a caller wrote on one.**
+ * `Schema.minLength(2)` writes `a string at least 2 character(s) long` and `minLength(2)` onto its
+ * own node, and `.annotations(…)` replaces them. Carrying the field puts prose nobody wrote into
+ * every document that holds a bounded string, and the words are a formatter's rather than an
+ * author's. effect's own generator carries them; this does not. A caller wanting a description on a
+ * refined schema has nowhere here to put one, which is the cost, and it is stated rather than paid
+ * in silence.
+ *
+ * A description on one of effect's own schemas, such as the string inside `NumberFromString`, is on
+ * a keyword and differs from the keyword effect built, so it travels. It describes the field.
+ */
+function metaOf(ast: SchemaAST.AST): Meta {
+  return metaFrom({
+    title: stated(ast, SchemaAST.TitleAnnotationId),
+    description: stated(ast, SchemaAST.DescriptionAnnotationId),
+    examples: ast.annotations[SchemaAST.ExamplesAnnotationId]
+  })
+}
+
+/** The keywords effect annotates itself, so an annotation equal to one of theirs is effect's. */
+const KEYWORDS: Partial<Record<string, SchemaAST.AST>> = {
+  StringKeyword: SchemaAST.stringKeyword,
+  NumberKeyword: SchemaAST.numberKeyword,
+  BooleanKeyword: SchemaAST.booleanKeyword
+}
+
+/** The nodes effect writes words onto that no caller can be told apart from. */
+const DERIVED: ReadonlySet<string> = new Set(['Refinement', 'Declaration'])
+
+function stated(ast: SchemaAST.AST, id: symbol): unknown {
+  if (DERIVED.has(ast._tag)) {
+    return undefined
+  }
+
+  const said = ast.annotations[id]
+  return said === KEYWORDS[ast._tag]?.annotations[id] ? undefined : said
 }
 
 function read(ast: SchemaAST.AST): Node<SchemaAST.AST> | UnreadableSchema {

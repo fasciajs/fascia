@@ -1,6 +1,6 @@
 import { attest } from '@ark/attest'
 import type { Described, Node, Source } from '@fasciajs/core'
-import { describe as description, isError } from '@fasciajs/core'
+import { describe as description, isError, noMeta } from '@fasciajs/core'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -21,7 +21,8 @@ function sourceOver(tree: Record<Named, Node<Named>>): Source<Named> {
       }
       return node
     },
-    nameOf: () => undefined
+    nameOf: () => undefined,
+    metaOf: () => noMeta
   }
 }
 
@@ -45,13 +46,20 @@ describe('a scalar becomes a type with what is asserted about it', () => {
   it('keeps the assertions beside the type they belong to', () => {
     expect(
       termOf({ root: { kind: 'scalar', name: 'string', assertions: { minLength: 2 } } })
-    ).toEqual({ kind: 'typed', name: 'string', assertions: { minLength: 2 }, admitsNull: false })
+    ).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
+    })
   })
 
   it('describes what states nothing as stating nothing', () => {
     expect(termOf({ root: { kind: 'scalar', name: 'unknown', assertions: {} } })).toEqual({
       kind: 'untyped',
-      admitsNull: false
+      admitsNull: false,
+      meta: {}
     })
   })
 
@@ -61,7 +69,8 @@ describe('a scalar becomes a type with what is asserted about it', () => {
     expect(termOf({ root: { kind: 'scalar', name: 'null', assertions: {} } })).toEqual({
       kind: 'values',
       admitted: [{ of: 'null' }],
-      admitsNull: true
+      admitsNull: true,
+      meta: {}
     })
   })
 
@@ -82,7 +91,13 @@ describe('nullability is decided once, and it is a fact about the value', () => 
         root: { kind: 'wrapper', how: 'nullable', inner: 'name' },
         name: { kind: 'scalar', name: 'string', assertions: { minLength: 2 } }
       })
-    ).toEqual({ kind: 'typed', name: 'string', assertions: { minLength: 2 }, admitsNull: true })
+    ).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: { minLength: 2 },
+      admitsNull: true,
+      meta: {}
+    })
   })
 
   it('takes a null member out of a disjunction and states it on the disjunction', () => {
@@ -99,7 +114,13 @@ describe('nullability is decided once, and it is a fact about the value', () => 
       nothing: { kind: 'scalar', name: 'null', assertions: {} }
     })
 
-    expect(term).toEqual({ kind: 'typed', name: 'string', assertions: {}, admitsNull: true })
+    expect(term).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: true,
+      meta: {}
+    })
   })
 
   it('leaves one member as itself where the null member was the only other one', () => {
@@ -218,7 +239,8 @@ describe('the term refuses what cannot be written', () => {
         name: 'string',
         // @ts-expect-error `multipleOf` belongs to a number.
         assertions: { multipleOf: 2 },
-        admitsNull: false
+        admitsNull: false,
+        meta: {}
       }
       return wrong
     }).type.errors("'multipleOf' does not exist in type")
@@ -231,7 +253,8 @@ describe('the term refuses what cannot be written', () => {
         // @ts-expect-error null is a value and not a type a document names.
         name: 'null',
         assertions: {},
-        admitsNull: false
+        admitsNull: false,
+        meta: {}
       }
       return wrong
     }).type.errors('not assignable')
@@ -240,15 +263,16 @@ describe('the term refuses what cannot be written', () => {
   it('refuses a discriminant on a law whose members do not exclude each other', () => {
     attest(() => {
       const members: [Described, Described] = [
-        { kind: 'untyped', admitsNull: false },
-        { kind: 'untyped', admitsNull: false }
+        { kind: 'untyped', admitsNull: false, meta: noMeta },
+        { kind: 'untyped', admitsNull: false, meta: noMeta }
       ]
       const wrong: Described = {
         kind: 'some',
         members,
         // @ts-expect-error only exactlyOne carries a discriminant.
         discriminant: 'tag',
-        admitsNull: false
+        admitsNull: false,
+        meta: {}
       }
       return wrong
     }).type.errors('discriminant')

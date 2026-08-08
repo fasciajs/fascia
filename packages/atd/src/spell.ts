@@ -4,6 +4,7 @@ import type {
   DescribedOf,
   DescribedProperty,
   DescribedRest,
+  Meta,
   Spelled,
   Spelling
 } from '@fasciajs/core'
@@ -23,6 +24,61 @@ import type { AtdProperties, AtdSchema, AtdType } from './atd.js'
  * target where it works and is merely wide.
  */
 export function spellAtd(term: Described): Spelling<AtdSchema> {
+  const spelled = body(term)
+  if (isError(spelled)) {
+    return spelled
+  }
+
+  const said = annotated(spelled.written, term.meta)
+  return { written: said.written, departures: [...spelled.departures, ...said.departures] }
+}
+
+/**
+ * What a schema says about itself, of which ATD has a word for two.
+ *
+ * A description and a deprecation go under `metadata`, where arri already keeps a name. A title and
+ * an example have no keyword, and losing either changes nothing about what a reader accepts, so both
+ * are reported as a departure in neither direction rather than as a refusal.
+ */
+function annotated(written: AtdSchema, meta: Meta): Spelled<AtdSchema> {
+  const departures: Departure[] = []
+
+  if (meta.title !== undefined) {
+    departures.push({
+      at: [],
+      direction: 'neither',
+      cause: 'noWordForIt',
+      said: 'this states a title, and ATD names a schema and describes it and has no third word. What a reader accepts is unchanged'
+    })
+  }
+
+  if (meta.examples !== undefined) {
+    departures.push({
+      at: [],
+      direction: 'neither',
+      cause: 'noWordForIt',
+      said: 'this states examples, and ATD has no keyword for one. What a reader accepts is unchanged'
+    })
+  }
+
+  if (meta.description === undefined && meta.deprecated === undefined) {
+    return { written, departures }
+  }
+
+  return {
+    written: {
+      ...written,
+      metadata: {
+        ...written.metadata,
+        ...(meta.description !== undefined && { description: meta.description }),
+        ...(meta.deprecated !== undefined && { isDeprecated: meta.deprecated })
+      }
+    },
+    departures
+  }
+}
+
+function body(term: Described): Spelling<AtdSchema> {
   // A switch rather than a table indexed by the tag. Indexing reads as the same thing and is not
   // checked: the compiler cannot correlate the handler it selects with the term it holds, so every
   // handler receives every case and the call needs a cast to compile. The `satisfies never` is what
@@ -413,7 +469,8 @@ export function spellAtdAll(described: {
     }
 
     // The name is what a `ref` points at, so it is also what arri wants stated on the definition.
-    definitions[name] = { ...spelled.written, metadata: { id: name } }
+    // The name goes beside what a caller already said rather than over it.
+    definitions[name] = { ...spelled.written, metadata: { ...spelled.written.metadata, id: name } }
     departures.push(...under(name, spelled.departures))
   }
 

@@ -4,6 +4,7 @@ import type {
   DescribedOf,
   DescribedProperty,
   DescribedRest,
+  Meta,
   Spelling
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
@@ -22,6 +23,31 @@ import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
  * the term chose no target's words.
  */
 export function spellJsonSchema(term: Described): Spelling<JSONSchema> {
+  const spelled = body(term)
+  return isError(spelled) ? spelled : { ...spelled, written: annotated(spelled.written, term.meta) }
+}
+
+/**
+ * What a schema says about itself, which 2020-12 has a word for all of.
+ *
+ * Written outermost, over whatever the case produced. A term admitting null is written as an `anyOf`
+ * here, and what a caller said is about the whole of that rather than about the branch inside it.
+ */
+function annotated(written: JSONSchema, meta: Meta): JSONSchema {
+  if (typeof written === 'boolean') {
+    return written
+  }
+
+  return {
+    ...written,
+    ...(meta.title !== undefined && { title: meta.title }),
+    ...(meta.description !== undefined && { description: meta.description }),
+    ...(meta.examples !== undefined && { examples: [...meta.examples] }),
+    ...(meta.deprecated !== undefined && { deprecated: meta.deprecated })
+  }
+}
+
+function body(term: Described): Spelling<JSONSchema> {
   switch (term.kind) {
     case 'typed':
       return typed(term)

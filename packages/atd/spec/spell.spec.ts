@@ -8,10 +8,11 @@ import {
   isAtdSchema,
   isAtdTypeForm,
   isAtdValues,
-  spellAtd
+  spellAtd,
+  spellAtdAll
 } from '@fasciajs/atd'
 import type { Departure, Spelled } from '@fasciajs/core'
-import { describe as description, isError } from '@fasciajs/core'
+import { describe as description, isError, noMeta } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
 import { type } from 'arktype'
@@ -254,9 +255,10 @@ describe('a tagged disjunction is the one ATD has', () => {
       kind: 'exactlyOne',
       discriminant: 'kind',
       admitsNull: false,
+      meta: noMeta,
       members: [
-        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false },
-        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false }
+        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: noMeta },
+        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: noMeta }
       ]
     })
 
@@ -268,17 +270,25 @@ describe('a tagged disjunction is the one ATD has', () => {
       kind: 'exactlyOne',
       discriminant: 'kind',
       admitsNull: false,
+      meta: noMeta,
       members: [
         {
           kind: 'typed',
           name: 'object',
           admitsNull: false,
+          meta: noMeta,
           assertions: {
             properties: new Map([
               [
                 'kind',
                 {
-                  term: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false },
+                  term: {
+                    kind: 'typed',
+                    name: 'string',
+                    assertions: {},
+                    admitsNull: false,
+                    meta: noMeta
+                  },
                   required: true,
                   default: undefined
                 }
@@ -291,6 +301,7 @@ describe('a tagged disjunction is the one ATD has', () => {
           kind: 'typed',
           name: 'object',
           admitsNull: false,
+          meta: noMeta,
           assertions: { properties: new Map(), rest: { allows: 'anything' } }
         }
       ]
@@ -337,5 +348,47 @@ describe('one document from three validators', () => {
       }
       expect(spelled.written).toEqual(expected)
     }
+  })
+})
+
+describe('what a schema says about itself, of which ATD has a word for two', () => {
+  it('writes a description and a deprecation under metadata, where arri keeps a name', () => {
+    expect(
+      atdOf(z.string().meta({ description: 'who they are', deprecated: true })).written
+    ).toMatchObject({
+      type: 'string',
+      metadata: { description: 'who they are', isDeprecated: true }
+    })
+  })
+
+  it('reports a title and examples, which change nothing about what a reader accepts', () => {
+    const spelled = atdOf(z.string().meta({ title: 'Name', examples: ['ada'] }))
+
+    // Neither direction. ATD has no keyword for either, and a document without them accepts exactly
+    // what one with them accepts, so this is a loss to report rather than a refusal.
+    expect(spelled.departures.map((one) => one.direction)).toEqual(['neither', 'neither'])
+    expect(spelled.departures.map((one) => one.said.slice(0, 20))).toEqual([
+      'this states a title,',
+      'this states examples'
+    ])
+    expect(spelled.written).not.toHaveProperty('title')
+  })
+
+  it('keeps a description beside the name a definition is filed under', () => {
+    const User = z.object({ id: z.string() }).meta({ id: 'User', description: 'a person' })
+    const described = description(User, zodSource, 'input')
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    const spelled = spellAtdAll(described)
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.written.definitions['User']?.metadata).toEqual({
+      id: 'User',
+      description: 'a person'
+    })
   })
 })

@@ -3,12 +3,13 @@ import type {
   AdmittedValue,
   Bound,
   JsonValue,
+  Meta,
   Node,
   ObjectProperty,
   Scalar,
   Source
 } from '@fasciajs/core'
-import { UnreadableSchema } from '@fasciajs/core'
+import { metaFrom, UnreadableSchema } from '@fasciajs/core'
 
 /**
  * An arktype schema, read as a `Node`.
@@ -28,7 +29,7 @@ import { UnreadableSchema } from '@fasciajs/core'
  * default on an object's edge, holds no boolean domain, writes `never` as a union of no branches,
  * and writes an object, a record, an array and a tuple through one structure node.
  */
-export const arktypeSource: Source<BaseRoot> = { read, nameOf }
+export const arktypeSource: Source<BaseRoot> = { read, nameOf, metaOf }
 
 /**
  * What arktype calls a schema.
@@ -42,6 +43,17 @@ function nameOf(schema: BaseRoot): string | undefined {
   }
   const reference = schema.reference
   return typeof reference === 'string' ? reference.replace(/^\$/, '') : undefined
+}
+
+/**
+ * What a caller said about a schema, from `meta` and never from `description`.
+ *
+ * `description` is derived: a bare string already answers `a string`, and a reading that took it
+ * would put prose nobody wrote into every document. `meta` holds what `.describe(…)` and
+ * `.configure(…)` were given and is empty otherwise, which is the question this asks.
+ */
+function metaOf(schema: BaseRoot): Meta {
+  return metaFrom(schema.meta)
 }
 
 function read(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {

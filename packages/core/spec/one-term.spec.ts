@@ -37,7 +37,7 @@ const asEffect = (schema: Schema.Schema.All) =>
 
 describe('three validators reach one term for one value', () => {
   it('describes a string the same way from each', () => {
-    const expected = { kind: 'typed', name: 'string', assertions: {}, admitsNull: false }
+    const expected = { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} }
 
     expect(asZod(z.string())).toEqual(expected)
     expect(asArk(type('string'))).toEqual(expected)
@@ -51,7 +51,8 @@ describe('three validators reach one term for one value', () => {
       kind: 'typed',
       name: 'string',
       assertions: { minLength: 2 },
-      admitsNull: false
+      admitsNull: false,
+      meta: {}
     }
 
     expect(asZod(z.string().min(2))).toEqual(expected)
@@ -60,7 +61,7 @@ describe('three validators reach one term for one value', () => {
   })
 
   it('describes a boolean the same way, though arktype holds no boolean at all', () => {
-    const expected = { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false }
+    const expected = { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false, meta: {} }
 
     expect(asZod(z.boolean())).toEqual(expected)
     // arktype writes this as the two unit types and holds no boolean domain.
@@ -71,7 +72,7 @@ describe('three validators reach one term for one value', () => {
   it('describes a nullable string the same way, from a wrapper and from two unions', () => {
     // The sharpest of these. zod states it as a wrapper around the schema, arktype and effect as a
     // union holding null. Nullability is a fact about the value, so all three land on one flag.
-    const expected = { kind: 'typed', name: 'string', assertions: {}, admitsNull: true }
+    const expected = { kind: 'typed', name: 'string', assertions: {}, admitsNull: true, meta: {} }
 
     expect(asZod(z.string().nullable())).toEqual(expected)
     expect(asArk(type('string|null'))).toEqual(expected)
@@ -98,8 +99,11 @@ describe('three validators reach one term for one value', () => {
     const expected = {
       kind: 'typed',
       name: 'array',
-      assertions: { items: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false } },
-      admitsNull: false
+      assertions: {
+        items: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} }
+      },
+      admitsNull: false,
+      meta: {}
     }
 
     expect(asZod(z.array(z.string()))).toEqual(expected)
@@ -134,12 +138,22 @@ describe('where the three disagree, the term says what each one actually stated'
       throw new Error(described.message)
     }
 
-    expect(described.term).toEqual({ kind: 'ref', name: 'NumberFromString', admitsNull: false })
+    expect(described.term).toEqual({
+      kind: 'ref',
+      name: 'NumberFromString',
+      admitsNull: false,
+      meta: {}
+    })
     expect(described.definitions.get('NumberFromString')).toEqual({
       kind: 'typed',
       name: 'string',
       assertions: {},
-      admitsNull: false
+      admitsNull: false,
+      // effect's own words about its own schema, on the string rather than on the conversion. A
+      // keyword whose description differs from the keyword effect built states something, and this
+      // states what the field is. What a formatter derives from a refinement does not travel, and
+      // this is not that.
+      meta: { description: 'a string to be decoded into a number' }
     })
   })
 

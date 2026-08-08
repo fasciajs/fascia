@@ -18,6 +18,8 @@ export type {
   SpellsDescribed
 } from './described.js'
 export type { JsonValue } from './json.js'
+export type { Meta } from './meta.js'
+export { metaFrom, noMeta, outermost } from './meta.js'
 export type {
   AdmittedValue,
   Bound,

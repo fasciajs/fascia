@@ -194,8 +194,8 @@ describe('a document holds both sides, and a name states one shape', () => {
 
     expect([...described.definitions.keys()]).toEqual(['User'])
     expect(described.terms).toEqual([
-      { kind: 'ref', name: 'User', admitsNull: false },
-      { kind: 'ref', name: 'User', admitsNull: false }
+      { kind: 'ref', name: 'User', admitsNull: false, meta: {} },
+      { kind: 'ref', name: 'User', admitsNull: false, meta: {} }
     ])
   })
 
@@ -207,8 +207,8 @@ describe('a document holds both sides, and a name states one shape', () => {
 
     expect([...described.definitions.keys()].sort()).toEqual(['UserInput', 'UserOutput'])
     expect(described.terms).toEqual([
-      { kind: 'ref', name: 'UserInput', admitsNull: false },
-      { kind: 'ref', name: 'UserOutput', admitsNull: false }
+      { kind: 'ref', name: 'UserInput', admitsNull: false, meta: {} },
+      { kind: 'ref', name: 'UserOutput', admitsNull: false, meta: {} }
     ])
   })
 
@@ -232,7 +232,9 @@ describe('a document holds both sides, and a name states one shape', () => {
         properties: new Map([
           [
             'user',
-            expect.objectContaining({ term: { kind: 'ref', name: 'UserInput', admitsNull: false } })
+            expect.objectContaining({
+              term: { kind: 'ref', name: 'UserInput', admitsNull: false, meta: {} }
+            })
           ]
         ])
       }

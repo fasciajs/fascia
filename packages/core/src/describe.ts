@@ -1,4 +1,5 @@
 import type { Described, DescribedOf, DescribedProperty, DescribedRest } from './described.js'
+import { type Meta, noMeta, outermost } from './meta.js'
 import type { Node, ObjectProperty, Rest, Source } from './node.js'
 import { FasciaError, isError } from './result.js'
 
@@ -218,7 +219,7 @@ function at<S>(
 
     // The same schema, met again on a side that already holds it or is describing it now.
     if (naming.definitions[io].has(name) || naming.binding[io].has(name)) {
-      return { kind: 'ref', name, admitsNull: false }
+      return { kind: 'ref', name, admitsNull: false, meta: noMeta }
     }
 
     // The same schema, met for the first time on this side. Its other side is described and this one
@@ -230,7 +231,7 @@ function at<S>(
   const target = resolved(schema, source)
   if (target !== undefined && ancestors.has(target)) {
     walk.pending.set(target, name)
-    return { kind: 'ref', name, admitsNull: false }
+    return { kind: 'ref', name, admitsNull: false, meta: noMeta }
   }
 
   naming.binding[io].add(name)
@@ -243,7 +244,7 @@ function at<S>(
   }
 
   naming.definitions[io].set(name, described)
-  return { kind: 'ref', name, admitsNull: false }
+  return { kind: 'ref', name, admitsNull: false, meta: noMeta }
 }
 
 /**
@@ -295,7 +296,7 @@ function sameThing<S>(
   }
 
   if (canonical(already) === canonical(second)) {
-    return { kind: 'ref', name, admitsNull: false }
+    return { kind: 'ref', name, admitsNull: false, meta: noMeta }
   }
 
   return new UndescribableSchema(
@@ -535,6 +536,14 @@ function body<S>(
   let current = schema
   let path = ancestors
 
+  // What the schema says about itself, gathered along the way rather than read at the end.
+  //
+  // A wrapper is a schema of its own and carries its own words, and the term beneath it is what the
+  // wrapper describes: `z.string().optional().describe('D')` states `D` about the string. So the
+  // statement has to be taken where it was written, before the case that drops the wrapper runs.
+  // The outer one wins, because it is the later word about the same value.
+  let stated: Meta = noMeta
+
   // A thunk is followed here rather than through `at`, because resolving one is not descending into
   // something else: it is the same thing, reached lazily. Following it through `at` would ask what
   // the resolved schema is named, and a validator that names the thunk rather than the schema would
@@ -554,12 +563,15 @@ function body<S>(
     }
 
     path = new Set(path).add(current)
+    stated = outermost(stated, source.metaOf(current))
 
     if (read.kind !== 'deferred') {
-      const term = described(read, walk, path)
-      if (isError(term)) {
-        return term
+      const described_ = described(read, walk, path)
+      if (isError(described_)) {
+        return described_
       }
+
+      const term: Described = { ...described_, meta: outermost(stated, described_.meta) }
 
       // Something below named this while it was being described, so it is filed under that name and
       // what stands here is a reference to it.
@@ -569,7 +581,7 @@ function body<S>(
       }
 
       naming.definitions[walk.io].set(name, term)
-      return { kind: 'ref', name, admitsNull: false }
+      return { kind: 'ref', name, admitsNull: false, meta: noMeta }
     }
 
     current = read.resolve()
@@ -587,7 +599,7 @@ function described<S>(
     case 'scalar':
       return scalar(node)
     case 'values':
-      return { kind: 'values', admitted: node.admitted, admitsNull: false }
+      return { kind: 'values', admitted: node.admitted, admitsNull: false, meta: noMeta }
     case 'wrapper':
       return wrapper(node, follow)
     case 'structural':
@@ -605,17 +617,29 @@ function described<S>(
 function scalar<S>(node: Extract<Node<S>, { kind: 'scalar' }>): Described | UndescribableSchema {
   switch (node.name) {
     case 'string':
-      return { kind: 'typed', name: 'string', assertions: node.assertions, admitsNull: false }
+      return {
+        kind: 'typed',
+        name: 'string',
+        assertions: node.assertions,
+        admitsNull: false,
+        meta: noMeta
+      }
     case 'number':
-      return { kind: 'typed', name: 'number', assertions: node.assertions, admitsNull: false }
+      return {
+        kind: 'typed',
+        name: 'number',
+        assertions: node.assertions,
+        admitsNull: false,
+        meta: noMeta
+      }
     case 'boolean':
-      return { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false }
+      return { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false, meta: noMeta }
     case 'unknown':
-      return { kind: 'untyped', admitsNull: false }
+      return { kind: 'untyped', admitsNull: false, meta: noMeta }
 
     // Null is a value rather than a type, so a schema admitting only null admits one value.
     case 'null':
-      return { kind: 'values', admitted: [{ of: 'null' }], admitsNull: true }
+      return { kind: 'values', admitted: [{ of: 'null' }], admitsNull: true, meta: noMeta }
 
     // A bigint and a date are values JSON has no form for. A document naming a string or a number
     // for either would be describing a value the schema rejects every instance of.
@@ -700,7 +724,8 @@ function structural<S>(
             kind: 'typed',
             name: 'object',
             assertions: { properties, rest },
-            admitsNull: false
+            admitsNull: false,
+            meta: noMeta
           }
     }
 
@@ -716,7 +741,8 @@ function structural<S>(
               ...(node.assertions.minItems !== undefined && { minItems: node.assertions.minItems }),
               ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems })
             },
-            admitsNull: false
+            admitsNull: false,
+            meta: noMeta
           }
     }
 
@@ -731,7 +757,9 @@ function structural<S>(
       }
 
       const rest = restOf(node.rest, follow)
-      return isError(rest) ? rest : { kind: 'tuple', positions, rest, admitsNull: false }
+      return isError(rest)
+        ? rest
+        : { kind: 'tuple', positions, rest, admitsNull: false, meta: noMeta }
     }
 
     // A document names a key with a string. What a key must satisfy beyond being a string is a
@@ -745,7 +773,8 @@ function structural<S>(
             kind: 'typed',
             name: 'object',
             assertions: { properties: new Map(), rest: { allows: 'term', term: values } },
-            admitsNull: false
+            admitsNull: false,
+            meta: noMeta
           }
     }
 
@@ -817,7 +846,7 @@ function combination<S>(
 
   // Every member admitted only null, so the whole disjunction is the null value.
   if (first === undefined) {
-    return { kind: 'values', admitted: [{ of: 'null' }], admitsNull: true }
+    return { kind: 'values', admitted: [{ of: 'null' }], admitsNull: true, meta: noMeta }
   }
 
   // One member is left after the null members were taken out, so there is nothing to choose between.
@@ -829,11 +858,17 @@ function combination<S>(
 
   switch (node.law) {
     case 'any':
-      return { kind: 'some', members, admitsNull }
+      return { kind: 'some', members, admitsNull, meta: noMeta }
     case 'exactlyOne':
-      return { kind: 'exactlyOne', members, discriminant: node.discriminant, admitsNull }
+      return {
+        kind: 'exactlyOne',
+        members,
+        discriminant: node.discriminant,
+        admitsNull,
+        meta: noMeta
+      }
     case 'all':
-      return { kind: 'every', members, admitsNull }
+      return { kind: 'every', members, admitsNull, meta: noMeta }
     default:
       node.law satisfies never
       throw new Error('a reading produced a combination of no law')

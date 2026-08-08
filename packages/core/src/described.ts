@@ -1,4 +1,5 @@
 import type { JsonValue } from './json.js'
+import type { Meta } from './meta.js'
 import type { AdmittedValue, Bound, StringFormat } from './node.js'
 
 /**
@@ -154,6 +155,13 @@ export type Described = {
   [K in DescribedKind]: {
     readonly kind: K
     readonly admitsNull: boolean
+    /**
+     * What the schema says about itself, which changes nothing about what it accepts.
+     *
+     * Carried by every case for the same reason nullability is: a caller may describe any of them,
+     * and a case that could not carry one would be a case a caller may not annotate.
+     */
+    readonly meta: Meta
   } & DescribedCases[K]
 }[DescribedKind]
 
