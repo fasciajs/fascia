@@ -28,11 +28,12 @@ function termOf(described: ReturnType<typeof description>): Described {
 type ArkRoot = Parameters<typeof arktypeSource.read>[0]
 
 /** One cast, here, because arktype publishes `Type` and keeps its node types private. */
-const arkDescription = (schema: unknown) => description(schema as ArkRoot, arktypeSource)
+const arkDescription = (schema: unknown) => description(schema as ArkRoot, arktypeSource, 'input')
 
-const asZod = (schema: z.core.$ZodType) => termOf(description(schema, zodSource))
+const asZod = (schema: z.core.$ZodType) => termOf(description(schema, zodSource, 'input'))
 const asArk = (schema: unknown) => termOf(arkDescription(schema))
-const asEffect = (schema: Schema.Schema.All) => termOf(description(schema.ast, effectSource))
+const asEffect = (schema: Schema.Schema.All) =>
+  termOf(description(schema.ast, effectSource, 'input'))
 
 describe('three validators reach one term for one value', () => {
   it('describes a string the same way from each', () => {
@@ -128,7 +129,7 @@ describe('where the three disagree, the term says what each one actually stated'
   it('describes an effect codec by its wire form, which zod states rarely and arktype never', () => {
     // effect names this one itself, so it is described once and pointed at. The wire form is what
     // the definition holds: `from` travels whichever way the conversion runs.
-    const described = description(Schema.NumberFromString.ast, effectSource)
+    const described = description(Schema.NumberFromString.ast, effectSource, 'input')
     if (isError(described)) {
       throw new Error(described.message)
     }
@@ -144,9 +145,9 @@ describe('where the three disagree, the term says what each one actually stated'
 
   it('refuses a date from every one of them, for the same reason', () => {
     for (const described of [
-      description(z.date(), zodSource),
+      description(z.date(), zodSource, 'input'),
       arkDescription(type('Date')),
-      description(Schema.DateFromSelf.ast, effectSource)
+      description(Schema.DateFromSelf.ast, effectSource, 'input')
     ]) {
       expect(isError(described) ? described.message : 'described').toContain('no JSON form')
     }

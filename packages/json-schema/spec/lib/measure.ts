@@ -115,7 +115,7 @@ export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Me
   for (let round = 0; round < run.rounds; round += 1) {
     const subject = grammar(next, run.depth)
 
-    const described = description(subject.schema, source)
+    const described = description(subject.schema, source, 'input')
     if (isError(described)) {
       measured.refused += 1
       continue

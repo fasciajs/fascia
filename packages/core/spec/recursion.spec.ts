@@ -38,7 +38,7 @@ describe('a schema that holds itself is described once and referred to', () => {
       .lazy(() => z.object({ name: z.string(), children: z.array(Tree) }))
       .meta({ id: 'Tree' })
 
-    const result = described(description(Tree, zodSource))
+    const result = described(description(Tree, zodSource, 'input'))
 
     expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
@@ -47,7 +47,11 @@ describe('a schema that holds itself is described once and referred to', () => {
   it('describes an arktype tree, which arktype names itself', () => {
     const types = scope({ Tree: { name: 'string', children: 'Tree[]' } }).export()
     const result = described(
-      description(types.Tree as unknown as Parameters<typeof arktypeSource.read>[0], arktypeSource)
+      description(
+        types.Tree as unknown as Parameters<typeof arktypeSource.read>[0],
+        arktypeSource,
+        'input'
+      )
     )
 
     // arktype names the alias rather than the schema, so the name is found on the way down and
@@ -67,7 +71,7 @@ describe('a schema that holds itself is described once and referred to', () => {
       children: Schema.Array(Schema.suspend((): Schema.Schema<Tree> => Tree))
     }).annotations({ identifier: 'Tree' })
 
-    const result = described(description(Tree.ast, effectSource))
+    const result = described(description(Tree.ast, effectSource, 'input'))
 
     expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
@@ -78,7 +82,7 @@ describe('a schema that holds itself is described once and referred to', () => {
       .lazy(() => z.object({ name: z.string(), children: z.array(Tree) }))
       .meta({ id: 'Tree' })
 
-    const result = described(description(Tree, zodSource))
+    const result = described(description(Tree, zodSource, 'input'))
     const body = result.definitions.get('Tree')
 
     if (body?.kind !== 'typed' || body.name !== 'object') {
@@ -98,7 +102,7 @@ describe('a schema that holds itself is described once and referred to', () => {
 describe('a cycle with nothing to name it is refused, and says what would fix it', () => {
   it('refuses an unnamed zod cycle', () => {
     const Loop: z.ZodType = z.lazy(() => z.array(Loop))
-    const describing = description(Loop, zodSource)
+    const describing = description(Loop, zodSource, 'input')
 
     expect(isError(describing) ? describing.message : 'described').toContain(
       'holds itself and nothing names it'
@@ -111,7 +115,7 @@ describe('a name is described once wherever it is used, not only in a cycle', ()
     const Name = z.string().min(2).meta({ id: 'Name' })
     const Pair = z.object({ first: Name, second: Name })
 
-    const result = described(description(Pair, zodSource))
+    const result = described(description(Pair, zodSource, 'input'))
     const body = result.term
 
     if (body.kind !== 'typed' || body.name !== 'object') {
@@ -138,7 +142,7 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
     const A = z.object({ kind: z.literal('a'), a: z.string() }).meta({ id: 'User' })
     const B = z.object({ kind: z.literal('b'), b: z.number() }).meta({ id: 'User' })
 
-    const describing = description(z.object({ first: A, second: B }), zodSource)
+    const describing = description(z.object({ first: A, second: B }), zodSource, 'input')
 
     expect(isError(describing) ? describing.message : 'described').toContain(
       'two different schemas are named User'
@@ -151,7 +155,7 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
     const first = z.string().min(2).meta({ id: 'Name' })
     const second = z.string().min(2).meta({ id: 'Name' })
 
-    const describing = description(z.object({ a: first, b: second }), zodSource)
+    const describing = description(z.object({ a: first, b: second }), zodSource, 'input')
     if (isError(describing)) {
       throw new Error(describing.message)
     }
@@ -164,7 +168,7 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
       .lazy(() => z.object({ inner: z.string().meta({ id: 'Shared' }) }))
       .meta({ id: 'Shared' })
 
-    const describing = description(Outer, zodSource)
+    const describing = description(Outer, zodSource, 'input')
 
     expect(isError(describing) ? describing.message : 'described').toContain(
       'still being described'
@@ -176,7 +180,7 @@ describe('a name is scoped to one description, and holds across every root in it
   it('describes one named schema once across two roots', () => {
     const User = z.object({ id: z.string() }).meta({ id: 'User' })
 
-    const described = describeAll([z.object({ author: User }), z.array(User)], zodSource)
+    const described = describeAll([z.object({ author: User }), z.array(User)], zodSource, 'input')
     if (isError(described)) {
       throw new Error(described.message)
     }
@@ -191,7 +195,7 @@ describe('a name is scoped to one description, and holds across every root in it
     const A = z.object({ a: z.string() }).meta({ id: 'Thing' })
     const B = z.object({ b: z.number() }).meta({ id: 'Thing' })
 
-    const described = describeAll([A, B], zodSource)
+    const described = describeAll([A, B], zodSource, 'input')
 
     expect(isError(described) ? described.message : 'described').toContain(
       'two different schemas are named Thing'
@@ -205,7 +209,7 @@ describe('a name is scoped to one description, and holds across every root in it
     // The same name, two documents, no contradiction. A reading could not allow this: zod keeps its
     // names in a registry that outlives every document.
     for (const one of [A, B]) {
-      const described = description(one, zodSource)
+      const described = description(one, zodSource, 'input')
       expect(isError(described) ? 'refused' : [...described.definitions.keys()]).toEqual(['Thing'])
     }
   })

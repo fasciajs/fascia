@@ -74,7 +74,7 @@ describe('what the arktype grammar leaves out, and why', () => {
     const schema = type.raw({ '[string]': 'number' })
     expect(schema([]) instanceof type.errors).toBe(false)
 
-    const described = description(schema as unknown as BaseRoot, arktypeSource)
+    const described = description(schema as unknown as BaseRoot, arktypeSource, 'input')
     if (isError(described)) {
       throw new Error(described.message)
     }

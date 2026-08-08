@@ -1,5 +1,5 @@
 import type { Described, DescribedProperty, DescribedRest } from './described.js'
-import type { Node, Rest, Source } from './node.js'
+import type { Node, ObjectProperty, Rest, Source } from './node.js'
 import { FasciaError, isError } from './result.js'
 
 /**
@@ -12,6 +12,19 @@ import { FasciaError, isError } from './result.js'
  * Generic in the source library. This file names no validator, which is what a second frontend
  * inherits rather than re-earns.
  */
+
+/**
+ * Which side of a schema a description is about.
+ *
+ * **A schema does not have a direction, a position does.** A request body is what a caller sends and
+ * a response body is what a caller receives, and the same schema stands in both places. So the side
+ * is stated by whoever asks for the description and never read off the schema.
+ *
+ * Stated rather than defaulted, at every call. A default is how the two sides disagree in silence:
+ * one traversal is told and another takes the default, and the document that comes out is wrong in a
+ * way nothing reports.
+ */
+export type Io = 'input' | 'output'
 
 /** A schema that cannot be described, because nothing true of it can be written down. */
 export class UndescribableSchema extends FasciaError<{ schema: unknown }> {
@@ -56,6 +69,19 @@ interface Naming<S> {
   readonly claimedBy: Map<string, S>
 }
 
+/**
+ * What the walk carries the whole way down.
+ *
+ * The three travel together at every step, so they travel as one thing. `io` joined them and made
+ * that plain: a fifth parameter threaded through six functions is the same state with more places to
+ * forget it.
+ */
+interface Walk<S> {
+  readonly source: Source<S>
+  readonly io: Io
+  readonly naming: Naming<S>
+}
+
 /** Several schemas described together, sharing one set of names. */
 export interface Descriptions {
   readonly terms: readonly Described[]
@@ -76,25 +102,30 @@ export interface Descriptions {
  */
 export function describeAll<S>(
   schemas: readonly S[],
-  source: Source<S>
+  source: Source<S>,
+  io: Io
 ): Descriptions | UndescribableSchema {
-  const naming: Naming<S> = {
-    definitions: new Map(),
-    binding: new Set(),
-    pending: new Map(),
-    claimedBy: new Map()
+  const walk: Walk<S> = {
+    source,
+    io,
+    naming: {
+      definitions: new Map(),
+      binding: new Set(),
+      pending: new Map(),
+      claimedBy: new Map()
+    }
   }
 
   const terms: Described[] = []
   for (const schema of schemas) {
-    const term = at(schema, source, naming, new Set())
+    const term = at(schema, walk, new Set())
     if (isError(term)) {
       return term
     }
     terms.push(term)
   }
 
-  return { terms, definitions: naming.definitions }
+  return { terms, definitions: walk.naming.definitions }
 }
 
 /**
@@ -105,8 +136,8 @@ export function describeAll<S>(
  * cases receive a node and cannot tell which schema produced one, so a name could not be bound where
  * it has to be bound.
  */
-export function describe<S>(schema: S, source: Source<S>): Describing {
-  const described = describeAll([schema], source)
+export function describe<S>(schema: S, source: Source<S>, io: Io): Describing {
+  const described = describeAll([schema], source, io)
   if (isError(described)) {
     return described
   }
@@ -126,21 +157,21 @@ export function describe<S>(schema: S, source: Source<S>): Describing {
  */
 function at<S>(
   schema: S,
-  source: Source<S>,
-  naming: Naming<S>,
+  walk: Walk<S>,
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
+  const { source, naming } = walk
   const name = source.nameOf(schema)
 
   if (name === undefined) {
-    return body(schema, source, naming, ancestors)
+    return body(schema, walk, ancestors)
   }
 
   const claimed = naming.claimedBy.get(name)
   if (claimed !== undefined) {
     return isSameSchema(claimed, schema, source)
       ? { kind: 'ref', name, admitsNull: false }
-      : sameThing(name, schema, source, naming, ancestors)
+      : sameThing(name, schema, walk, ancestors)
   }
 
   // The name points back at something already being described, so the name belongs to that and the
@@ -153,7 +184,7 @@ function at<S>(
 
   naming.binding.add(name)
   naming.claimedBy.set(name, schema)
-  const described = body(schema, source, naming, ancestors)
+  const described = body(schema, walk, ancestors)
   naming.binding.delete(name)
 
   if (isError(described)) {
@@ -191,11 +222,10 @@ function isSameSchema<S>(left: S, right: S, source: Source<S>): boolean {
 function sameThing<S>(
   name: string,
   schema: S,
-  source: Source<S>,
-  naming: Naming<S>,
+  walk: Walk<S>,
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
-  const already = naming.definitions.get(name)
+  const already = walk.naming.definitions.get(name)
 
   if (already === undefined) {
     // The first is still being described, so there is nothing to compare against. A different schema
@@ -206,7 +236,7 @@ function sameThing<S>(
     )
   }
 
-  const second = body(schema, source, naming, ancestors)
+  const second = body(schema, walk, ancestors)
   if (isError(second)) {
     return second
   }
@@ -266,10 +296,10 @@ function resolved<S>(schema: S, source: Source<S>): S | undefined {
 
 function body<S>(
   schema: S,
-  source: Source<S>,
-  naming: Naming<S>,
+  walk: Walk<S>,
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
+  const { source, naming } = walk
   const entered = schema
   let current = schema
   let path = ancestors
@@ -295,7 +325,7 @@ function body<S>(
     path = new Set(path).add(current)
 
     if (read.kind !== 'deferred') {
-      const term = described(read, source, naming, path)
+      const term = described(read, walk, path)
       if (isError(term)) {
         return term
       }
@@ -317,11 +347,10 @@ function body<S>(
 
 function described<S>(
   node: Exclude<Node<S>, { kind: 'deferred' }>,
-  source: Source<S>,
-  naming: Naming<S>,
+  walk: Walk<S>,
   path: ReadonlySet<S>
 ): Described | UndescribableSchema {
-  const follow = (child: S): Described | UndescribableSchema => at(child, source, naming, path)
+  const follow = (child: S): Described | UndescribableSchema => at(child, walk, path)
 
   switch (node.kind) {
     case 'scalar':
@@ -331,11 +360,11 @@ function described<S>(
     case 'wrapper':
       return wrapper(node, follow)
     case 'structural':
-      return structural(node, follow)
+      return structural(node, follow, walk.io)
     case 'combination':
       return combination(node, follow)
     case 'conversion':
-      return conversion(node, follow)
+      return conversion(node, follow, walk.io)
     default:
       node satisfies never
       throw new Error('a reading produced a node of no group')
@@ -415,7 +444,8 @@ function wrapper<S>(
 
 function structural<S>(
   node: Extract<Node<S>, { kind: 'structural' }>,
-  follow: (child: S) => Described | UndescribableSchema
+  follow: (child: S) => Described | UndescribableSchema,
+  io: Io
 ): Described | UndescribableSchema {
   switch (node.of) {
     case 'object': {
@@ -425,7 +455,11 @@ function structural<S>(
         if (isError(term)) {
           return term
         }
-        properties.set(key, { term, required: property.required, default: property.default })
+        properties.set(key, {
+          term,
+          required: isRequired(property, io),
+          default: property.default
+        })
       }
 
       const rest = restOf(node.rest, follow)
@@ -488,6 +522,18 @@ function structural<S>(
       node satisfies never
       throw new Error('a reading produced a structure of no shape')
   }
+}
+
+/**
+ * Whether a key is present, which is not the same question on the two sides.
+ *
+ * A key with a default may be left out of what a caller sends and is always in what comes back, so
+ * one edge states two things. zod and arktype both state a default here and both need the answer;
+ * effect states it as a conversion instead, giving one shape for each side, so this changes nothing
+ * for effect and the sides still differ.
+ */
+function isRequired<S>(property: ObjectProperty<S>, io: Io): boolean {
+  return property.required || (io === 'output' && property.default !== undefined)
 }
 
 function restOf<S>(
@@ -568,29 +614,47 @@ function isOnlyNull(term: Described): boolean {
 }
 
 /**
- * A conversion, described by what a caller sends.
+ * A conversion, described by the side that was asked for.
  *
- * A codec's wire form is its input side whichever way the conversion runs, so the other side is an
- * in-memory type no document describes. A conversion that states no input describes nothing a caller
- * could be told to send.
+ * This is the case the side exists for. A conversion is the one construct whose two ends are two
+ * different schemas, and every validator here writes one: zod as a pipe, arktype as a morph, effect
+ * as a transformation that always carries both.
+ *
+ * An end that no schema states is a refusal rather than a departure, and which end that is depends
+ * on the side. A conversion standing last leaves nothing to describe on the output; one standing
+ * first leaves nothing on the input. Both are the same fact met from two directions.
  */
 function conversion<S>(
   node: Extract<Node<S>, { kind: 'conversion' }>,
-  follow: (child: S) => Described | UndescribableSchema
+  follow: (child: S) => Described | UndescribableSchema,
+  io: Io
 ): Described | UndescribableSchema {
   switch (node.how) {
     case 'checks':
     case 'transforms':
-      return follow(node.sent)
+      return follow(io === 'input' ? node.sent : node.produced)
+
+    // A codec runs both ways, and the wire form is what a caller sends when the conversion decodes.
+    // The value is what comes out, and a document describes it wherever that value has a JSON form.
     case 'codec':
-      return follow(node.wire)
+      return follow(io === 'input' ? node.wire : node.value)
+
     case 'unstatedOutput':
-      return follow(node.sent)
+      return io === 'input'
+        ? follow(node.sent)
+        : new UndescribableSchema(
+            node,
+            'a conversion runs last and no schema states what comes out of it'
+          )
+
     case 'unstatedInput':
-      return new UndescribableSchema(
-        node,
-        'a conversion runs before this, so no schema states what a caller may send'
-      )
+      return io === 'output'
+        ? follow(node.produced)
+        : new UndescribableSchema(
+            node,
+            'a conversion runs before this, so no schema states what a caller may send'
+          )
+
     default:
       node satisfies never
       throw new Error('a reading produced a conversion of no kind')

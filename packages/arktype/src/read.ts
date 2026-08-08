@@ -187,7 +187,15 @@ function alias(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
     : notOfKind(schema, 'alias')
 }
 
-/** A morph converts one way, so what a caller sends is stated and what comes out is a function. */
+/**
+ * A morph converts one way, and each side is a schema or a function.
+ *
+ * `introspectableOut` is arktype's own answer to whether the far side can be read. A caller states
+ * one with `.pipe(fn, type)` or with `.to(...)`, and arktype compiles either to a node standing last
+ * among the morphs; a bare `.pipe(fn)` leaves a function there and nothing states what comes out.
+ * Reading the field rather than the last element is the same discipline as the rest of this file: a
+ * node is a function too, so a shape cannot tell the two apart.
+ */
 function morph(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
   if (!schema.hasKind('morph')) {
     return notOfKind(schema, 'morph')
@@ -197,13 +205,18 @@ function morph(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
   // inner holds the typed node, and arktype declares it optional, so an absent one is a morph that
   // states nothing about what it converts.
   const sent = schema.inner.in
+  if (sent === undefined) {
+    return new UnreadableSchema(
+      schema,
+      'this converts a value and states no schema for what it converts'
+    )
+  }
 
-  return sent === undefined
-    ? new UnreadableSchema(
-        schema,
-        'this converts a value and states no schema for what it converts'
-      )
-    : { kind: 'conversion', how: 'unstatedOutput', sent }
+  const produced = schema.introspectableOut
+
+  return produced === undefined
+    ? { kind: 'conversion', how: 'unstatedOutput', sent }
+    : { kind: 'conversion', how: 'transforms', sent, produced }
 }
 
 /** A basis with constraints beside it, which is most of what arktype builds. */

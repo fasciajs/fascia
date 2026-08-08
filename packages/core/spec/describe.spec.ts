@@ -26,7 +26,7 @@ function sourceOver(tree: Record<Named, Node<Named>>): Source<Named> {
 }
 
 function termOf(tree: Record<Named, Node<Named>>, root: Named = 'root'): Described {
-  const described = description(root, sourceOver(tree))
+  const described = description(root, sourceOver(tree), 'input')
   if (isError(described)) {
     throw new Error(`the schema could not be described: ${described.message}`)
   }
@@ -34,7 +34,7 @@ function termOf(tree: Record<Named, Node<Named>>, root: Named = 'root'): Describ
 }
 
 function failureOf(tree: Record<Named, Node<Named>>, root: Named = 'root'): string {
-  const described = description(root, sourceOver(tree))
+  const described = description(root, sourceOver(tree), 'input')
   if (!isError(described)) {
     throw new Error(`the schema was described as a ${described.term.kind}`)
   }

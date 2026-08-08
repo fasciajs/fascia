@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
 function termOf(schema: z.core.$ZodType): Described {
-  const described = description(schema, zodSource)
+  const described = description(schema, zodSource, 'input')
   if (isError(described)) {
     throw new Error(`the schema could not be described: ${described.message}`)
   }
@@ -147,7 +147,7 @@ describe('a description reaches a document, definitions and all', () => {
     .meta({ id: 'Tree' })
 
   function describedTree() {
-    const described = description(Tree, zodSource)
+    const described = description(Tree, zodSource, 'input')
     if (isError(described)) {
       throw new Error(described.message)
     }

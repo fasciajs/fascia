@@ -6,7 +6,7 @@ export type {
   Spelling
 } from './departure.js'
 export { faithful, UnsayableTerm, under } from './departure.js'
-export type { Describing, Description, Descriptions } from './describe.js'
+export type { Describing, Description, Descriptions, Io } from './describe.js'
 export { describe, describeAll, UndescribableSchema } from './describe.js'
 export type {
   Described,
