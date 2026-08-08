@@ -224,3 +224,19 @@ describe('the walk ends on a schema that holds itself', () => {
     expect(foldSource(tree, zodSource, groups)).toEqual(['string', 'revisited'])
   })
 })
+
+describe('a tuple says what it admits past its positions', () => {
+  it('refuses anything past the positions where zod does', () => {
+    // `restOf` reads an absent catchall as an object ignoring an unnamed key, which is what zod's
+    // objects do. A tuple means the opposite by the same absence, and reading it the object's way
+    // made every document accept lists longer than the schema takes.
+    expect(z.tuple([z.string()]).safeParse(['a', 'extra']).success).toBe(false)
+    expect(nodeOf(z.tuple([z.string()]))).toMatchObject({ rest: { allows: 'nothing' } })
+  })
+
+  it('names the schema a rest is held to where the tuple states one', () => {
+    expect(nodeOf(z.tuple([z.string()], z.number()))).toMatchObject({
+      rest: { allows: 'schema' }
+    })
+  })
+})

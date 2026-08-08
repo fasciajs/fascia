@@ -28,6 +28,7 @@
     "@types/node": "^24.13.3",
     "arktype": "^2.2.3",
     "effect": "^3.22.1",
+    "json-schema-typed": "^8.0.2",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
     "zod": "^4.4.3"

@@ -10,7 +10,8 @@ export default defineConfig({
       '@fasciajs/zod': resolve('packages/zod/src/index.ts'),
       '@fasciajs/arktype': resolve('packages/arktype/src/index.ts'),
       '@fasciajs/effect': resolve('packages/effect/src/index.ts'),
-      '@fasciajs/atd': resolve('packages/atd/src/index.ts')
+      '@fasciajs/atd': resolve('packages/atd/src/index.ts'),
+      '@fasciajs/json-schema': resolve('packages/json-schema/src/index.ts')
     }
   },
   test: {

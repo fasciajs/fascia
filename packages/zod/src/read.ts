@@ -130,11 +130,15 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
     }
   }
   if (isZodType(schema, ['tuple'])) {
+    const rest = schema._zod.def.rest
     return {
       kind: 'structural',
       of: 'tuple',
       positions: schema._zod.def.items,
-      rest: restOf(schema._zod.def.rest ?? undefined)
+      // A tuple with no rest refuses anything past its positions, which `restOf` cannot say: it
+      // reads an absent catchall as an object ignoring an unnamed key, and a tuple has no such
+      // reading. Told apart here, because the two structures mean opposite things by the absence.
+      rest: rest === null || rest === undefined ? { allows: 'nothing' } : restOf(rest)
     }
   }
   if (isZodType(schema, ['record'])) {
