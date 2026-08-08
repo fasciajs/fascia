@@ -67,6 +67,13 @@ interface AssertionsByTypeName {
     readonly items: Described
     readonly minItems?: number
     readonly maxItems?: number
+    /**
+     * The items do not repeat.
+     *
+     * A fact about the values rather than a way of writing them, so it belongs here even though the
+     * two JSON targets have no keyword for it. DynamoDB does: a set is one of its ten types.
+     */
+    readonly unique?: boolean
   }
 }
 

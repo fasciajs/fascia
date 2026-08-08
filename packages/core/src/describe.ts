@@ -739,7 +739,8 @@ function structural<S>(
             assertions: {
               items,
               ...(node.assertions.minItems !== undefined && { minItems: node.assertions.minItems }),
-              ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems })
+              ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems }),
+              ...(node.assertions.unique !== undefined && { unique: node.assertions.unique })
             },
             admitsNull: false,
             meta: noMeta
