@@ -26,6 +26,8 @@
     "@arrirpc/schema": "^0.84.1",
     "@biomejs/biome": "^2.5.6",
     "@types/node": "^24.13.3",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "arktype": "^2.2.3",
     "effect": "^3.22.1",
     "json-schema-typed": "^8.0.2",

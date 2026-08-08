@@ -78,12 +78,24 @@ describe('what ATD refuses, 2020-12 states', () => {
   })
 
   it('writes a tuple at its positions, where ATD writes a list of anything', () => {
+    // No `minItems`. It would be exact where every position must be present, and a term does not
+    // say which are: a validator may hold a position that admits a missing value, and zod does.
+    // A tuple of one `unknown` accepts the empty list, and demanding the prefix refused it.
     expect(writtenOf(z.tuple([z.string(), z.number()]))).toEqual({
       type: 'array',
       prefixItems: [{ type: 'string' }, { type: 'number' }],
-      items: false,
-      minItems: 2
+      items: false
     })
+  })
+
+  it('says that a shorter list is admitted, rather than leaving the widening silent', () => {
+    const spelled = spellJsonSchema(termOf(z.tuple([z.string()])))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.departures[0]).toMatchObject({ direction: 'wider' })
+    expect(spelled.departures[0]?.said).toContain('does not say which of them must be present')
   })
 })
 

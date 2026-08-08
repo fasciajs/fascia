@@ -283,6 +283,24 @@ function exactlyOne(term: DescribedOf<'exactlyOne'>): Spelling<JSONSchema> {
   return { written: orNull({ oneOf: written }, term.admitsNull), departures }
 }
 
+/**
+ * A shorter list than the positions is admitted, because the term does not say which are required.
+ *
+ * `minItems` would be the exact statement where every position must be present, and a term has no
+ * way to say that: a validator may hold a position that admits a missing value, and zod does. A
+ * tuple of one `unknown` accepts the empty list, and a document demanding its whole prefix refuses
+ * a value the schema takes. That is the direction that breaks a client, so the count is left off and
+ * said instead.
+ */
+function shorterIsAdmitted(positions: number): Departure {
+  return {
+    at: [],
+    direction: 'wider',
+    cause: 'noWordForIt',
+    said: `this states ${positions} values at positions, and a term does not say which of them must be present, so the document accepts a shorter list. Nothing states how many are required.`
+  }
+}
+
 /** Values at positions, which 2020-12 states exactly and ATD has no form for. */
 function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
   const prefixItems: JSONSchema[] = []
@@ -309,20 +327,14 @@ function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
     departures.push(...under('items', spelled.departures))
 
     return {
-      written: orNull(
-        { type: 'array', prefixItems, items: spelled.written, minItems: prefixItems.length },
-        term.admitsNull
-      ),
-      departures
+      written: orNull({ type: 'array', prefixItems, items: spelled.written }, term.admitsNull),
+      departures: [...departures, shorterIsAdmitted(term.positions.length)]
     }
   }
 
   return {
-    written: orNull(
-      { type: 'array', prefixItems, ...items, minItems: prefixItems.length },
-      term.admitsNull
-    ),
-    departures
+    written: orNull({ type: 'array', prefixItems, ...items }, term.admitsNull),
+    departures: [...departures, shorterIsAdmitted(term.positions.length)]
   }
 }
 
