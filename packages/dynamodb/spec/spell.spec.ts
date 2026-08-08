@@ -15,6 +15,20 @@ import * as z from 'zod'
  * keyword for any assertion, no reference form, and a native set. So it states things both of the
  * others refuse and refuses most of what both of them state exactly, which is the sharpest test the
  * term has had of holding no target's vocabulary.
+ *
+ * **Nothing reads this format, and that is what these tests are worth.** The other two targets each
+ * have a third party that disagrees: Ajv compiles a 2020-12 document and answers about values, and
+ * arri's own guards say what an ATD schema is. Both found a defect nothing else could see. This
+ * shape was designed here, written here and checked here, so every claim below about which member
+ * carries what is this file agreeing with the file beside it.
+ *
+ * The type claims are the exception. A value carrying two members is refused by TypeScript, which
+ * did not write the type.
+ *
+ * The oracle exists and is not used yet. `marshall` from the AWS SDK answers which member a value
+ * actually lands under, so a value the schema accepts, marshalled, states its own member and the
+ * shape either predicted it or did not. Until that runs, treat a green run here as well formed
+ * rather than as true.
  */
 
 function termOf(schema: z.core.$ZodType): Described {
