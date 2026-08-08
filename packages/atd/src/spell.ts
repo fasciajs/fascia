@@ -256,7 +256,10 @@ function spellProperties(
 
   return {
     written: {
-      ...(Object.keys(required).length > 0 && { properties: required }),
+      // Always written, even where it is empty. arri requires it, and a properties form without it
+      // is read as the empty form, which accepts any value at all. An object whose keys are all
+      // optional would otherwise describe anything.
+      properties: required,
       ...(Object.keys(optional).length > 0 && { optionalProperties: optional }),
       ...(rest.allows === 'nothing' && { isStrict: true })
     },

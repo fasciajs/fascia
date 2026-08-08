@@ -1,6 +1,15 @@
 import { arktypeSource } from '@fasciajs/arktype'
 import type { AtdSchema } from '@fasciajs/atd'
-import { spellAtd } from '@fasciajs/atd'
+import {
+  isAtdDiscriminator,
+  isAtdElements,
+  isAtdEnum,
+  isAtdProperties,
+  isAtdSchema,
+  isAtdTypeForm,
+  isAtdValues,
+  spellAtd
+} from '@fasciajs/atd'
 import type { Departure, Spelled } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
@@ -9,6 +18,63 @@ import { type } from 'arktype'
 import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
+
+/**
+ * Every document this spec produces, held to arri's own guards.
+ *
+ * `isAtdSchema` alone is too weak to be the whole check, and knowing why is the point. The empty
+ * form has no required key, so **any object at all** satisfies it, and a properties form missing its
+ * `properties` passes as an empty form that accepts every value. So the check asks which form the
+ * document is as well as whether it is one, and refuses a document that is only ever a legal empty
+ * form by accident.
+ */
+function conforming(written: AtdSchema, at: readonly string[] = []): void {
+  const where = at.length === 0 ? 'the document' : at.join('/')
+
+  if (!isAtdSchema(written)) {
+    throw new Error(`${where} is not an ATD schema: ${JSON.stringify(written)}`)
+  }
+
+  if (isAtdProperties(written)) {
+    for (const [key, value] of Object.entries(written.properties)) {
+      conforming(value, [...at, key])
+    }
+    for (const [key, value] of Object.entries(written.optionalProperties ?? {})) {
+      conforming(value, [...at, key])
+    }
+    return
+  }
+
+  if (isAtdDiscriminator(written)) {
+    for (const [tag, member] of Object.entries(written.mapping)) {
+      if (!isAtdProperties(member)) {
+        throw new Error(`${where} maps ${tag} to something that is not a properties form`)
+      }
+      conforming(member, [...at, tag])
+    }
+    return
+  }
+
+  if (isAtdElements(written)) {
+    conforming(written.elements, [...at, 'elements'])
+    return
+  }
+
+  if (isAtdValues(written)) {
+    conforming(written.values, [...at, 'values'])
+    return
+  }
+
+  if (isAtdEnum(written) || isAtdTypeForm(written)) {
+    return
+  }
+
+  // What is left is the empty form, which every object satisfies. Reaching it by accident is the
+  // failure this check exists for: a form missing a key it needs reads as this one.
+  if (Object.keys(written).some((key) => key !== 'isNullable' && key !== 'metadata')) {
+    throw new Error(`${where} states keys no ATD form names: ${JSON.stringify(written)}`)
+  }
+}
 
 /** A zod schema, all the way to a document. The first thing this library does end to end. */
 function atdOf(schema: z.core.$ZodType): Spelled<AtdSchema> {
@@ -21,6 +87,8 @@ function atdOf(schema: z.core.$ZodType): Spelled<AtdSchema> {
   if (isError(spelled)) {
     throw new Error(`the term could not be written: ${spelled.message}`)
   }
+
+  conforming(spelled.written)
   return spelled
 }
 
