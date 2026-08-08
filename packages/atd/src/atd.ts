@@ -12,6 +12,10 @@
  * document is legal would have passed a document that accepts everything.
  */
 export type {
+  AppDefinition as AtdApp,
+  HttpRpcDefinition as AtdHttpProcedure,
+  RpcDefinition as AtdProcedure,
+  RpcHttpMethod as AtdHttpMethod,
   Schema as AtdSchema,
   SchemaFormDiscriminator as AtdDiscriminator,
   SchemaFormElements as AtdElements,
@@ -22,10 +26,14 @@ export type {
   SchemaFormType as AtdTypeForm,
   SchemaFormValues as AtdValues,
   SchemaMetadata as AtdMetadata,
-  Type as AtdType
+  Type as AtdType,
+  WsRpcDefinition as AtdWsProcedure
 } from '@arrirpc/type-defs'
 
 export {
+  HttpMethodValues as AtdHttpMethods,
+  isAppDefinition as isAtdApp,
+  isRpcDefinition as isAtdProcedure,
   isSchema as isAtdSchema,
   isSchemaFormDiscriminator as isAtdDiscriminator,
   isSchemaFormElements as isAtdElements,
@@ -34,5 +42,6 @@ export {
   isSchemaFormRef as isAtdRef,
   isSchemaFormType as isAtdTypeForm,
   isSchemaFormValues as isAtdValues,
+  SCHEMA_VERSION as ATD_SCHEMA_VERSION,
   TypeValues as AtdTypeNames
 } from '@arrirpc/type-defs'
