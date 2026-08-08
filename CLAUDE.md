@@ -2,11 +2,40 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status
+## The stack
 
-This repository is empty. `README.md` holds only the title `# fascia`. There is one commit (`581bfc1 first commit`). There is no source code, build system, dependency manifest, or test suite.
+TypeScript, ESM only, npm workspaces under `packages/`. Node 24 in the devcontainer at
+`.devcontainer/devcontainer.json`. Run every command inside the container.
 
-The rules below apply now. Add commands and architecture to this file when code lands. Do not document what a directory listing or a manifest file already shows.
+`tsconfig.json` is the checking config. It sets `strict`, `noUncheckedIndexedAccess`,
+`noPropertyAccessFromIndexSignature`, `noImplicitReturns`, `noFallthroughCasesInSwitch`,
+`exactOptionalPropertyTypes`, `noImplicitOverride`, `noUnusedLocals`, `noUnusedParameters`,
+`isolatedModules` and `verbatimModuleSyntax`. Do not remove a flag to make code compile.
+
+Biome formats and lints. Vitest runs the suite. `@ark/attest` runs inside the same suite, and a
+claim about a type states the clause the compiler refused the code with.
+
+Write a claim about a type through `attest(...).type.errors(...)`. A bare `@ts-expect-error` passes
+on any error, including an error a rename caused. Match the clause by inclusion, so a version of
+TypeScript that rewords its preamble does not fail the claim.
+
+End every switch over a tagged sum with `default:`, then `value satisfies never`, then a throw. The
+`satisfies` makes a case added to the sum a compile error that names the case. The throw is for a
+value that arrives anyway, which is a broken invariant rather than a failure a caller can expect.
+Throw a plain `Error` there, so `isError` does not read the throw as a declared failure.
+
+A failure is a value and the value is the error. A function that can fail returns
+`Happy | SomeError`. Each error class extends `FasciaError`, and `isError` branches on the union.
+Nothing wraps the happy path.
+
+## Commands
+
+```sh
+docker exec fascia-dev bash -lc 'cd /workspaces/fascia && npm run check'
+```
+
+`npm run check` runs the three standing checks in order: `check:types`, `check:lint`, `check:unit`.
+Run `npm run format` to apply Biome's formatting.
 
 ## Writing style: ASD-STE100
 
