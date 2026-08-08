@@ -1,6 +1,6 @@
 import { arktypeSource } from '@fasciajs/arktype'
 import type { Describing, Description } from '@fasciajs/core'
-import { describe as description, isError } from '@fasciajs/core'
+import { describeAll, describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
 import { scope } from 'arktype'
@@ -169,5 +169,44 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
     expect(isError(describing) ? describing.message : 'described').toContain(
       'still being described'
     )
+  })
+})
+
+describe('a name is scoped to one description, and holds across every root in it', () => {
+  it('describes one named schema once across two roots', () => {
+    const User = z.object({ id: z.string() }).meta({ id: 'User' })
+
+    const described = describeAll([z.object({ author: User }), z.array(User)], zodSource)
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    // One definition, reached from both roots. A document holds several schemas and one set of
+    // names, which is why the scope is the call rather than the schema.
+    expect([...described.definitions.keys()]).toEqual(['User'])
+    expect(described.terms).toHaveLength(2)
+  })
+
+  it('refuses two roots that disagree about a name', () => {
+    const A = z.object({ a: z.string() }).meta({ id: 'Thing' })
+    const B = z.object({ b: z.number() }).meta({ id: 'Thing' })
+
+    const described = describeAll([A, B], zodSource)
+
+    expect(isError(described) ? described.message : 'described').toContain(
+      'two different schemas are named Thing'
+    )
+  })
+
+  it('lets two descriptions disagree, because a name belongs to a document', () => {
+    const A = z.object({ a: z.string() }).meta({ id: 'Thing' })
+    const B = z.object({ b: z.number() }).meta({ id: 'Thing' })
+
+    // The same name, two documents, no contradiction. A reading could not allow this: zod keeps its
+    // names in a registry that outlives every document.
+    for (const one of [A, B]) {
+      const described = description(one, zodSource)
+      expect(isError(described) ? 'refused' : [...described.definitions.keys()]).toEqual(['Thing'])
+    }
   })
 })

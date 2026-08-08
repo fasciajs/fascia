@@ -56,8 +56,49 @@ interface Naming<S> {
   readonly claimedBy: Map<string, S>
 }
 
+/** Several schemas described together, sharing one set of names. */
+export interface Descriptions {
+  readonly terms: readonly Described[]
+  readonly definitions: ReadonlyMap<string, Described>
+}
+
 /**
- * A source library's schema, described.
+ * Several schemas described under one set of names.
+ *
+ * **A name is scoped to this call, and that is the whole of the scoping rule.** Two schemas
+ * described together may not disagree about a name, and two described apart never meet, so the same
+ * schema may be called one thing in one document and another in the next.
+ *
+ * The scope cannot live with the reading. A reading answers what the source library calls a schema,
+ * and a source library's answer is one answer: zod keeps names in a registry that outlives every
+ * document, so two documents sharing a reading could never disagree about a name. Whether two things
+ * may share one is a fact about a document.
+ */
+export function describeAll<S>(
+  schemas: readonly S[],
+  source: Source<S>
+): Descriptions | UndescribableSchema {
+  const naming: Naming<S> = {
+    definitions: new Map(),
+    binding: new Set(),
+    pending: new Map(),
+    claimedBy: new Map()
+  }
+
+  const terms: Described[] = []
+  for (const schema of schemas) {
+    const term = at(schema, source, naming, new Set())
+    if (isError(term)) {
+      return term
+    }
+    terms.push(term)
+  }
+
+  return { terms, definitions: naming.definitions }
+}
+
+/**
+ * One schema, described.
  *
  * **This owns its walk rather than folding through `foldSource`.** Naming, the definitions table and
  * what to do about a cycle are one decision, and the generic walk knows about none of them: its
@@ -65,15 +106,15 @@ interface Naming<S> {
  * it has to be bound.
  */
 export function describe<S>(schema: S, source: Source<S>): Describing {
-  const naming: Naming<S> = {
-    definitions: new Map(),
-    binding: new Set(),
-    pending: new Map(),
-    claimedBy: new Map()
+  const described = describeAll([schema], source)
+  if (isError(described)) {
+    return described
   }
-  const term = at(schema, source, naming, new Set())
 
-  return isError(term) ? term : { term, definitions: naming.definitions }
+  const [term] = described.terms
+  return term === undefined
+    ? new UndescribableSchema(schema, 'nothing was described')
+    : { term, definitions: described.definitions }
 }
 
 /**
