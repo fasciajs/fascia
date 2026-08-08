@@ -1,0 +1,14 @@
+{
+  "name": "@fasciajs/core",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The waist. What a schema is once read, and the term between the two trees.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ]
+}
