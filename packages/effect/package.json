@@ -1,0 +1,20 @@
+{
+  "name": "@fasciajs/effect",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "An effect Schema, read as a Node.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@fasciajs/core": "0.0.0"
+  },
+  "peerDependencies": {
+    "effect": "^3.0.0"
+  }
+}
