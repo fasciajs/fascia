@@ -187,6 +187,13 @@ export type Conversion<S> =
    */
   | { readonly how: 'unstatedInput'; readonly produced: S }
   /**
+   * One direction, and the conversion runs last, so no schema states what comes out.
+   *
+   * The mirror of the case above, and both exist because a validator writes both. A conversion
+   * standing at either end of a chain leaves that end with nothing to describe.
+   */
+  | { readonly how: 'unstatedOutput'; readonly sent: S }
+  /**
    * Both directions. The wire form travels whichever way the conversion runs, so `value` is an
    * in-memory type that no document describes.
    */
