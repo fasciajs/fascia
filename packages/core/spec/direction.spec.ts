@@ -80,16 +80,6 @@ describe('a conversion is described by the side that was asked for', () => {
     })
   })
 
-  it("describes a zod codec's wire form on one side and its value on the other", () => {
-    const codec = z.codec(z.string(), z.number(), {
-      decode: (value) => Number(value),
-      encode: (value) => String(value)
-    })
-
-    expect(fromZod(codec, 'input')).toMatchObject({ name: 'string' })
-    expect(fromZod(codec, 'output')).toMatchObject({ name: 'number' })
-  })
-
   it('describes what arktype converts, and what it converts to where the caller said', () => {
     // arktype compiles a declared output to a node standing last among the morphs, and leaves a
     // function there otherwise. So a morph states its far side exactly when a caller stated one.
@@ -98,10 +88,28 @@ describe('a conversion is described by the side that was asked for', () => {
     expect(fromArk(declared, 'input')).toMatchObject({ name: 'string' })
     expect(fromArk(declared, 'output')).toMatchObject({ name: 'number' })
   })
+})
 
-  it("describes an effect transformation's encoded side and its type side", () => {
+describe('a codec travels as its wire form, whichever way it runs', () => {
+  /**
+   * The one conversion the side does not choose, and it is forced rather than preferred.
+   *
+   * A codec encodes back to its wire form on the way out, so the wire form is what a document
+   * describes in both directions and the value is an in-memory type that never reaches one.
+   */
+  it('says the wire form of a zod codec on both sides', () => {
+    const codec = z.codec(z.string(), z.number(), {
+      decode: (value) => Number(value),
+      encode: (value) => String(value)
+    })
+
+    expect(fromZod(codec, 'input')).toMatchObject({ name: 'string' })
+    expect(fromZod(codec, 'output')).toMatchObject({ name: 'string' })
+  })
+
+  it('says the encoded side of an effect transformation on both sides', () => {
     expect(fromEffect(Schema.NumberFromString, 'input')).toMatchObject({ name: 'string' })
-    expect(fromEffect(Schema.NumberFromString, 'output')).toMatchObject({ name: 'number' })
+    expect(fromEffect(Schema.NumberFromString, 'output')).toMatchObject({ name: 'string' })
   })
 })
 
@@ -149,15 +157,20 @@ describe('a key with a default may be left out of what is sent and is always in 
     expect(requires(fromArk(schema, 'output'), 'a')).toBe(true)
   })
 
-  it('states both sides of an effect default, which effect writes as two shapes', () => {
-    // effect states this as a transformation rather than on the edge, so it reaches the two sides
-    // through the conversion and never through the rule the other two need. The answer is the same.
+  it('says less about an effect default, because effect writes one as a transformation', () => {
+    // The one place the three do not agree, and the reason is worth stating. zod and arktype put a
+    // default on the edge, so the rule above reaches it. effect writes one as a transformation,
+    // which is a codec, and a codec's wire form travels both ways. So the encoded side is what both
+    // documents say and it states the key as absent-able.
+    //
+    // Wider than what an effect server produces, which always has the key. Wider is sound, and a
+    // document naming the type side would describe a value the wire never carries.
     const schema = Schema.Struct({
       a: Schema.optionalWith(Schema.Number, { default: () => 1 })
     })
 
     expect(requires(fromEffect(schema, 'input'), 'a')).toBe(false)
-    expect(requires(fromEffect(schema, 'output'), 'a')).toBe(true)
+    expect(requires(fromEffect(schema, 'output'), 'a')).toBe(false)
   })
 
   it('leaves a key that is merely optional absent-able on both sides', () => {

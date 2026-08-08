@@ -900,10 +900,12 @@ function conversion<S>(
     case 'transforms':
       return follow(io === 'input' ? node.sent : node.produced)
 
-    // A codec runs both ways, and the wire form is what a caller sends when the conversion decodes.
-    // The value is what comes out, and a document describes it wherever that value has a JSON form.
+    // A codec is the one conversion whose side the direction does not choose, and this is forced
+    // rather than preferred. A codec encodes back to its wire form on the way out, so the wire form
+    // is what travels in both directions and the value is an in-memory type that never does. A
+    // document describes what is on the wire, so `value` reaches no document at all.
     case 'codec':
-      return follow(io === 'input' ? node.wire : node.value)
+      return follow(node.wire)
 
     case 'unstatedOutput':
       return io === 'input'
