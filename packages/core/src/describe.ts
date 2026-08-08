@@ -46,6 +46,14 @@ interface Naming<S> {
    * through an alias carrying the name, and the alias resolves to the schema the walk began at.
    */
   readonly pending: Map<S, string>
+  /**
+   * Which schema claimed each name.
+   *
+   * Without it, the second schema to claim a name is silently described as the first: both become a
+   * reference to one definition, and the document states one shape where the schema states two.
+   * Nothing else reports that, because a reference to a name that exists is a well formed document.
+   */
+  readonly claimedBy: Map<string, S>
 }
 
 /**
@@ -57,7 +65,12 @@ interface Naming<S> {
  * it has to be bound.
  */
 export function describe<S>(schema: S, source: Source<S>): Describing {
-  const naming: Naming<S> = { definitions: new Map(), binding: new Set(), pending: new Map() }
+  const naming: Naming<S> = {
+    definitions: new Map(),
+    binding: new Set(),
+    pending: new Map(),
+    claimedBy: new Map()
+  }
   const term = at(schema, source, naming, new Set())
 
   return isError(term) ? term : { term, definitions: naming.definitions }
@@ -82,8 +95,11 @@ function at<S>(
     return body(schema, source, naming, ancestors)
   }
 
-  if (naming.definitions.has(name) || naming.binding.has(name)) {
-    return { kind: 'ref', name, admitsNull: false }
+  const claimed = naming.claimedBy.get(name)
+  if (claimed !== undefined) {
+    return isSameSchema(claimed, schema, source)
+      ? { kind: 'ref', name, admitsNull: false }
+      : sameThing(name, schema, source, naming, ancestors)
   }
 
   // The name points back at something already being described, so the name belongs to that and the
@@ -95,6 +111,7 @@ function at<S>(
   }
 
   naming.binding.add(name)
+  naming.claimedBy.set(name, schema)
   const described = body(schema, source, naming, ancestors)
   naming.binding.delete(name)
 
@@ -104,6 +121,89 @@ function at<S>(
 
   naming.definitions.set(name, described)
   return { kind: 'ref', name, admitsNull: false }
+}
+
+/**
+ * Whether two schemas are the same one, reached two ways.
+ *
+ * Identity alone is not enough, and neither is identity after resolving. effect keeps a name on the
+ * thunk, so the thunk and what it resolves to are two objects standing for one schema. zod builds a
+ * fresh schema every time a thunk is called, so what one resolves to is a different object each
+ * time. Asking both questions answers for both.
+ */
+function isSameSchema<S>(left: S, right: S, source: Source<S>): boolean {
+  if (left === right) {
+    return true
+  }
+
+  const to = resolved(right, source)
+  return to !== undefined && (to === left || to === resolved(left, source))
+}
+
+/**
+ * Whether a second schema claiming a name describes the same thing as the first.
+ *
+ * Two schemas may be one thing written twice, which is common and harmless, or two things sharing a
+ * name, which makes a document state one shape where the schema states two. The two cannot be told
+ * apart by identity, so the second is described and the two are compared.
+ */
+function sameThing<S>(
+  name: string,
+  schema: S,
+  source: Source<S>,
+  naming: Naming<S>,
+  ancestors: ReadonlySet<S>
+): Described | UndescribableSchema {
+  const already = naming.definitions.get(name)
+
+  if (already === undefined) {
+    // The first is still being described, so there is nothing to compare against. A different schema
+    // reaching a name mid-definition is a claim on a name that is already spoken for.
+    return new UndescribableSchema(
+      schema,
+      `two schemas are named ${name}, and the first is still being described. A name states one shape, so give one of them another name`
+    )
+  }
+
+  const second = body(schema, source, naming, ancestors)
+  if (isError(second)) {
+    return second
+  }
+
+  if (canonical(already) === canonical(second)) {
+    return { kind: 'ref', name, admitsNull: false }
+  }
+
+  return new UndescribableSchema(
+    schema,
+    `two different schemas are named ${name}. A document states one shape under a name, so the second would be written as the first. Give one of them another name`
+  )
+}
+
+/**
+ * A string two terms share exactly when they describe the same thing.
+ *
+ * Keys are sorted, so a property order a validator chose is not a difference. Equality is string
+ * equality, which is what makes the comparison above cheap enough to run on every second claim.
+ */
+function canonical(term: unknown): string {
+  if (typeof term === 'bigint') {
+    return `${term}n`
+  }
+  if (term instanceof Map) {
+    return canonical(Object.fromEntries([...term.entries()]))
+  }
+  if (Array.isArray(term)) {
+    return `[${term.map(canonical).join(',')}]`
+  }
+  if (typeof term === 'object' && term !== null) {
+    const entries = Object.entries(term)
+      .filter(([, value]) => value !== undefined)
+      .sort(([left], [right]) => (left < right ? -1 : 1))
+
+    return `{${entries.map(([key, value]) => `${key}:${canonical(value)}`).join(',')}}`
+  }
+  return JSON.stringify(term) ?? 'undefined'
 }
 
 /** What a chain of thunks stands for, or nothing where the chain does not end. */

@@ -130,3 +130,44 @@ describe('a name is described once wherever it is used, not only in a cycle', ()
     })
   })
 })
+
+describe('two schemas claiming one name is refused, not silently merged', () => {
+  it('refuses two different schemas under one name', () => {
+    // Left alone this is the worst kind of wrong: both keys become a reference to one definition,
+    // the document states one shape where the schema states two, and the document is well formed.
+    const A = z.object({ kind: z.literal('a'), a: z.string() }).meta({ id: 'User' })
+    const B = z.object({ kind: z.literal('b'), b: z.number() }).meta({ id: 'User' })
+
+    const describing = description(z.object({ first: A, second: B }), zodSource)
+
+    expect(isError(describing) ? describing.message : 'described').toContain(
+      'two different schemas are named User'
+    )
+  })
+
+  it('shares one name across two schemas that describe the same thing', () => {
+    // Two objects, one shape. A validator rebuilding a schema is not a collision, so this is a
+    // comparison of what they describe rather than of which object they are.
+    const first = z.string().min(2).meta({ id: 'Name' })
+    const second = z.string().min(2).meta({ id: 'Name' })
+
+    const describing = description(z.object({ a: first, b: second }), zodSource)
+    if (isError(describing)) {
+      throw new Error(describing.message)
+    }
+
+    expect([...describing.definitions.keys()]).toEqual(['Name'])
+  })
+
+  it('refuses a name claimed while the first is still being described', () => {
+    const Outer: z.ZodType = z
+      .lazy(() => z.object({ inner: z.string().meta({ id: 'Shared' }) }))
+      .meta({ id: 'Shared' })
+
+    const describing = description(Outer, zodSource)
+
+    expect(isError(describing) ? describing.message : 'described').toContain(
+      'still being described'
+    )
+  })
+})
