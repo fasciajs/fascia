@@ -5,8 +5,7 @@ import type {
   DescribedProperty,
   DescribedRest,
   Spelled,
-  Spelling,
-  SpellsDescribed
+  Spelling
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
 import type { AtdProperties, AtdSchema, AtdType } from './atd.js'
@@ -24,31 +23,35 @@ import type { AtdProperties, AtdSchema, AtdType } from './atd.js'
  * target where it works and is merely wide.
  */
 export function spellAtd(term: Described): Spelling<AtdSchema> {
-  return SPELLING[term.kind](term as never)
-}
-
-/**
- * One answer per case of the term.
- *
- * Stated as a table rather than a switch, so a case added to the term is a compile error naming this
- * target rather than a branch that quietly falls through.
- */
-const SPELLING: SpellsDescribed<Spelling<AtdSchema>> = {
-  typed: (term) => typed(term),
-  values: (term) => values(term),
-  some: () =>
-    new UnsayableTerm(
-      [],
-      'this admits any of several shapes, and ATD has no form for a disjunction that is not chosen by a tag'
-    ),
-  exactlyOne: (term) => exactlyOne(term),
-  every: () =>
-    new UnsayableTerm(
-      [],
-      'this admits all of several shapes at once, and ATD has no form for an intersection'
-    ),
-  tuple: (term) => tuple(term),
-  untyped: (term) => faithful(nullable({}, term.admitsNull))
+  // A switch rather than a table indexed by the tag. Indexing reads as the same thing and is not
+  // checked: the compiler cannot correlate the handler it selects with the term it holds, so every
+  // handler receives every case and the call needs a cast to compile. The `satisfies never` is what
+  // makes a case added to the term a compile error naming this target.
+  switch (term.kind) {
+    case 'typed':
+      return typed(term)
+    case 'values':
+      return values(term)
+    case 'exactlyOne':
+      return exactlyOne(term)
+    case 'tuple':
+      return tuple(term)
+    case 'untyped':
+      return faithful(nullable({}, term.admitsNull))
+    case 'some':
+      return new UnsayableTerm(
+        [],
+        'this admits any of several shapes, and ATD has no form for a disjunction that is not chosen by a tag'
+      )
+    case 'every':
+      return new UnsayableTerm(
+        [],
+        'this admits all of several shapes at once, and ATD has no form for an intersection'
+      )
+    default:
+      term satisfies never
+      throw new Error('a term reached this target with a case it states no answer for')
+  }
 }
 
 /** Nullability is a flag on any form, which is the one thing ATD says uniformly. */
