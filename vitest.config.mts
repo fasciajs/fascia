@@ -9,7 +9,8 @@ export default defineConfig({
       '@fasciajs/core': resolve('packages/core/src/index.ts'),
       '@fasciajs/zod': resolve('packages/zod/src/index.ts'),
       '@fasciajs/arktype': resolve('packages/arktype/src/index.ts'),
-      '@fasciajs/effect': resolve('packages/effect/src/index.ts')
+      '@fasciajs/effect': resolve('packages/effect/src/index.ts'),
+      '@fasciajs/atd': resolve('packages/atd/src/index.ts')
     }
   },
   test: {

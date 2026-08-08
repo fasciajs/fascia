@@ -1,0 +1,17 @@
+{
+  "name": "@fasciajs/atd",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A term, written as Arri Type Definition.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@fasciajs/core": "0.0.0"
+  }
+}

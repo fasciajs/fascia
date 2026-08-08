@@ -214,9 +214,16 @@ function typeLiteral(ast: SchemaAST.TypeLiteral): Node<SchemaAST.AST> | Unreadab
   return { kind: 'structural', of: 'object', properties, rest: restOf(index) }
 }
 
+/**
+ * What a struct admits at a key it does not name.
+ *
+ * `anything` where no index signature is stated, because effect ignores an unnamed key rather than
+ * refusing the value. A first version said `nothing` here, which made every document narrower than
+ * its schema, and the cross-target spec is what reported it.
+ */
 function restOf(index: SchemaAST.TypeLiteral['indexSignatures']): Rest<SchemaAST.AST> {
   const [only] = index
-  return only === undefined ? { allows: 'nothing' } : { allows: 'schema', schema: only.type }
+  return only === undefined ? { allows: 'anything' } : { allows: 'schema', schema: only.type }
 }
 
 /**
