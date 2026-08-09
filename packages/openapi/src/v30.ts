@@ -29,7 +29,7 @@ export function toV30(written: JSONSchema): Spelled<JSONSchema> {
   const out: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(written)) {
-    const said = translated(key, value, out, departures)
+    const said = translated(key, value, written, departures)
     if (said !== undefined) {
       Object.assign(out, said)
     }
@@ -46,7 +46,7 @@ export function toV30(written: JSONSchema): Spelled<JSONSchema> {
 function translated(
   key: string,
   value: unknown,
-  out: Record<string, unknown>,
+  source: Record<string, unknown>,
   departures: Departure[]
 ): Record<string, unknown> | undefined {
   switch (key) {
@@ -82,7 +82,19 @@ function translated(
         said: `this states ${positions.length} values at positions, and 3.0 has no keyword for one. Every element is held to what any position admits, so nothing states the count or which shape stands where`
       })
 
-      return { items: { anyOf: spelled.map((one) => one.written) } }
+      // What stands past the positions is held to the same one keyword, so it joins the list. A
+      // tuple stating no `items` admits anything past its positions, and 3.0 holds every element to
+      // one schema, so nothing at all can be said: a list of the positions would refuse an element
+      // the schema takes.
+      const past = source['items']
+      if (past === undefined) {
+        return { items: {} }
+      }
+
+      const rest =
+        typeof past === 'object' && past !== null ? [toV30(past as JSONSchema).written] : []
+
+      return { items: { anyOf: [...spelled.map((one) => one.written), ...rest] } }
     }
 
     // 3.0 states one example rather than a list of them.
@@ -103,8 +115,10 @@ function translated(
     }
 
     // A tuple's `items` is what stands past the positions, and `prefixItems` already wrote one.
+    // A tuple's `items` is what stands past its positions, and the positional case already joined
+    // it to them.
     case 'items':
-      return 'items' in out ? undefined : { items: subschema(value, key, departures) }
+      return 'prefixItems' in source ? undefined : { items: subschema(value, key, departures) }
 
     case 'anyOf':
     case 'oneOf':
@@ -174,7 +188,33 @@ function admittingNull(written: unknown, departures: Departure[]): unknown {
 
   const stated = written as Record<string, unknown>
 
-  for (const key of ['anyOf', 'oneOf'] as const) {
+  // A list of admitted values states what it admits, and a flag beside it states nothing. Null is
+  // added to the list, which is the same trap arri's own converter falls into the other way.
+  if (Array.isArray(stated['enum'])) {
+    return { ...stated, enum: [...stated['enum'], null] }
+  }
+
+  // Beside a conjunction the flag is read nowhere either. Pushed onto each member it says the same
+  // thing: a value satisfies every branch, and null satisfies every branch that admits one.
+  // Exactly one of several, admitting null, is a thing 3.0 cannot say. The flag is read nowhere
+  // beside a disjunction, `type: null` is not one of the six types 3.0 names, and null pushed onto
+  // every branch matches every branch, which is what `oneOf` refuses. So the disjunction is written
+  // as any of several instead. For members that exclude each other, which is what `oneOf` is chosen
+  // for, the two accept the same values and only the statement is weaker.
+  const exactlyOne = stated['oneOf']
+  if (Array.isArray(exactlyOne)) {
+    departures.push({
+      at: [],
+      direction: 'wider',
+      cause: 'noShapeForIt',
+      said: 'this admits exactly one of several and admits null, and 3.0 states null nowhere a disjunction can hear it. It is written as any of several, which accepts the same values where the members exclude each other and more where they do not'
+    })
+
+    const { oneOf: _dropped, ...rest } = stated
+    return { ...rest, anyOf: exactlyOne.map((one) => admittingNull(one, departures)) }
+  }
+
+  for (const key of ['anyOf', 'allOf'] as const) {
     const members = stated[key]
     if (Array.isArray(members)) {
       return { ...stated, [key]: members.map((one) => admittingNull(one, departures)) }

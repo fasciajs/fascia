@@ -3,6 +3,7 @@ import { spellJsonSchema, toV30 } from '@fasciajs/openapi'
 import { zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
+import { fromV30 } from './lib/reverse.js'
 
 /**
  * The translation into 3.0, read back.
@@ -15,46 +16,6 @@ import * as z from 'zod'
  * What does not survive is what was reported. A positional form and a list of examples have no 3.0
  * keyword, and both are named in the departures rather than being lost in silence.
  */
-
-/** 2020-12, recovered from what 3.0 says. */
-function fromV30(written: unknown): unknown {
-  if (typeof written !== 'object' || written === null) {
-    return written
-  }
-  if (Array.isArray(written)) {
-    return written.map(fromV30)
-  }
-
-  const stated = written as Record<string, unknown>
-  const out: Record<string, unknown> = {}
-
-  for (const [key, value] of Object.entries(stated)) {
-    if (key === 'nullable') {
-      continue
-    }
-    if (key === 'exclusiveMinimum' && value === true) {
-      out['exclusiveMinimum'] = stated['minimum']
-      continue
-    }
-    if (key === 'exclusiveMaximum' && value === true) {
-      out['exclusiveMaximum'] = stated['maximum']
-      continue
-    }
-    if (key === 'minimum' && stated['exclusiveMinimum'] === true) {
-      continue
-    }
-    if (key === 'maximum' && stated['exclusiveMaximum'] === true) {
-      continue
-    }
-    out[key] = fromV30(value)
-  }
-
-  if (stated['nullable'] === true && typeof out['type'] === 'string') {
-    out['type'] = [out['type'], 'null']
-  }
-
-  return out
-}
 
 function roundTrip(schema: z.core.$ZodType): { there: unknown; back: unknown; said: number } {
   const described = description(schema, zodSource, 'input')
