@@ -21,6 +21,23 @@ flowchart LR
 Four validators and five targets: nine packages and a core, rather than twenty. A frontend reads a
 schema into one term and a target writes that term down. Neither knows the other exists.
 
+## Why it is called fascia
+
+Fascia is the connective tissue that wraps every muscle and organ. Two things about it are the whole
+of what this library is.
+
+**It is one continuous sheet rather than a joint between each pair of parts.** That is why four
+validators and five targets are nine packages and not twenty: there is one term in the middle, and a
+frontend and a target that have never heard of each other meet in it.
+
+**It transmits force and generates none.** Fascia does not contract; muscles do. This library
+validates nothing, and your validator keeps doing that. It invents no wire format, and the
+specification keeps doing that. It carries what one said to where the other can hear it, and says so
+when something did not survive the trip.
+
+A surgeon cuts through fascia without naming it. Boundary code is the same layer: nobody thinks
+about it until a document is wrong.
+
 ## The term holds no target's vocabulary
 
 A validator says a thing and a target says the same thing with another word. The term says the
