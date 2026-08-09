@@ -2,6 +2,7 @@
   "name": "@fasciajs/json-schema",
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": false,
   "description": "A term, written as JSON Schema 2020-12.",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",

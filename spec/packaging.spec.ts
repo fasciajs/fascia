@@ -23,7 +23,11 @@ const packages = readdirSync('packages', { withFileTypes: true })
 
 interface Packed {
   readonly name: string
-  readonly manifest: { exports: Record<string, Record<string, string>>; files: string[] }
+  readonly manifest: {
+    exports: Record<string, Record<string, string>>
+    files: string[]
+    sideEffects?: boolean
+  }
   readonly files: readonly string[]
 }
 
@@ -88,6 +92,15 @@ describe('a package ships every file it says it has', () => {
         (file) => /(^|\/)spec\//.test(file) || file.endsWith('.spec.ts') || file.includes('/lib/')
       )
       expect(unwanted, `${one.name} ships ${unwanted.join(', ')}`).toEqual([])
+    }
+  })
+
+  it('states that importing it does nothing', () => {
+    // Every file here declares and nothing else, so an export nobody uses is an export a bundler
+    // may drop. Stated in the manifest because a bundler cannot see it any other way, and asserted
+    // here because a package added without it would quietly stop being droppable.
+    for (const one of packed) {
+      expect(one.manifest.sideEffects, `${one.name} does not say`).toBe(false)
     }
   })
 

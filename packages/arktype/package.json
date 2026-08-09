@@ -2,6 +2,7 @@
   "name": "@fasciajs/arktype",
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": false,
   "description": "An arktype schema, read as a Node.",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
