@@ -1,0 +1,21 @@
+{
+  "name": "@fasciajs/openapi",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A set of operations, written as an OpenAPI 3.1 document.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@fasciajs/core": "0.0.0",
+    "@fasciajs/json-schema": "0.0.0"
+  },
+  "peerDependencies": {
+    "openapi-types": "^12.0.0"
+  }
+}
