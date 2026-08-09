@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 864 864" role="img" aria-label="Fascia">
+  <defs>
+    <clipPath id="fascia-cut"><path d="M0 0H472V864H0zM470 0H864V87H470z"/></clipPath>
+    <g id="fascia-domain">
+      <path id="fascia-strip-1" fill="none" stroke="currentColor" stroke-width="82" clip-path="url(#fascia-cut)" d="M337 278V105A64 64 0 0 1 401 41H463A64 64 0 0 1 527 105"/>
+      <path id="fascia-strip-2" fill="none" stroke="currentColor" stroke-width="82" d="M145 469V166A21 21 0 0 1 166 145H278"/>
+      <path id="fascia-strip-3" fill="none" stroke="currentColor" stroke-width="82" d="M204 336H469"/>
+    </g>
+  </defs>
+  <g color="#04736a">
+    <g class="fascia-turn-0">
+      <use class="fascia-s1" href="#fascia-strip-1" color="#ff9100"/>
+      <use class="fascia-s2" href="#fascia-strip-2"/>
+      <use class="fascia-s3" href="#fascia-strip-3" color="#ff9100"/>
+    </g>
+    <use class="fascia-turn-1" href="#fascia-domain" transform="rotate(90 432 432)"/>
+    <use class="fascia-turn-2" href="#fascia-domain" transform="rotate(180 432 432)"/>
+    <g class="fascia-turn-3" transform="rotate(270 432 432)">
+      <use class="fascia-s1" href="#fascia-strip-1"/>
+      <use class="fascia-s2" href="#fascia-strip-2"/>
+      <use class="fascia-s3" href="#fascia-strip-3" color="#ff9100"/>
+    </g>
+  </g>
+</svg>
