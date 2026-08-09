@@ -2,15 +2,13 @@ import type { BaseRoot } from '@ark/schema'
 import { arktypeSource } from '@fasciajs/arktype'
 import { describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
+import { arkGrammar, effectGrammar, zodGrammar } from '@fasciajs/grammar'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { type } from 'arktype'
 import { describe, expect, it } from 'vitest'
-import { arkGrammar } from './lib/ark-grammar.js'
-import { effectGrammar } from './lib/effect-grammar.js'
 import { counts, firstNarrowing, measure } from './lib/measure.js'
-import { zodGrammar } from './lib/zod-grammar.js'
 
 /**
  * **Does the document accept a value exactly when the schema does?**

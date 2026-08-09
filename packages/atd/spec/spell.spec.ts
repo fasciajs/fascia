@@ -163,8 +163,19 @@ describe('a width is chosen from the bounds, which is the motto running forwards
   it('reports a bound no width matches, because ATD has no keyword for one', () => {
     const spelled = atdOf(z.number().int().min(1).max(9))
 
-    expect(spelled.written).toMatchObject({ type: 'int32' })
+    // `float64`, not `int32`. A width states its own bounds, so writing one the schema did not ask
+    // for refuses whole numbers the schema takes: `int32` here refused 3000000000, and the property
+    // beside this file found it. No ATD width holds every whole number, and `int64` travels as a
+    // string, so a document naming one describes a value the schema rejects every instance of.
+    expect(spelled.written).toMatchObject({ type: 'float64' })
     expect(said(spelled.departures)).toContain('no ATD width matches')
+    expect(said(spelled.departures)).toContain('accepts a fraction')
+  })
+
+  it('writes the width where the schema asked for exactly one', () => {
+    // Unchanged, and this is the case a width is for: the bounds are the width, so naming it gives
+    // nothing up in either direction.
+    expect(atdOf(z.int32()).written).toMatchObject({ type: 'int32' })
   })
 })
 

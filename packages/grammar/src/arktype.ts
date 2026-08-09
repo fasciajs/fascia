@@ -1,6 +1,6 @@
 import type { BaseRoot } from '@ark/schema'
 import { type } from 'arktype'
-import { pick, type Subject } from './measure.js'
+import { pick, type Subject } from './draw.js'
 
 /**
  * Schemas built from the arktype constructs this library claims to describe.

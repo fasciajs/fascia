@@ -190,7 +190,22 @@ function number(term: Extract<DescribedOf<'typed'>, { name: 'number' }>): Spelli
   const departures: Departure[] = []
 
   const width = integer === true ? widthFor(minimum?.value, maximum?.value) : undefined
-  const type: AtdType = width ?? (integer === true ? 'int32' : 'float64')
+
+  // `float64` where no width holds every value the schema takes, which is a whole number with no
+  // bounds. `int32` was written here and it refuses 3000000000, a value `z.number().int()` accepts,
+  // and the property found it. No ATD width holds every whole number: `int64` is written on the wire
+  // as a string, so a document naming one describes a value the schema rejects every instance of.
+  const type: AtdType = width ?? 'float64'
+
+  if (integer === true && width === undefined) {
+    departures.push(
+      gaveUp(
+        'wider',
+        'noWordForIt',
+        'this states a whole number and no bounds that name an ATD width, and no width holds every whole number. The document accepts a fraction.'
+      )
+    )
+  }
 
   // A bound the chosen width does not already state is a bound ATD has no word for.
   if ((minimum !== undefined || maximum !== undefined) && width === undefined) {

@@ -1,22 +1,10 @@
 import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
+import type { Grammar } from '@fasciajs/grammar'
+import { numbers, VALUES } from '@fasciajs/grammar'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
-
-/**
- * One schema drawn from a grammar, and the validator's own answer about a value.
- *
- * The answer is asked of the validator rather than of a reading of it. A reading asked twice agrees
- * with itself whatever it says, which measures nothing.
- */
-export interface Subject<S> {
-  readonly schema: S
-  readonly accepts: (value: unknown) => boolean
-}
-
-/** A grammar: a schema of a validator, drawn from a source of numbers. */
-export type Grammar<S> = (next: () => number, depth: number) => Subject<S>
 
 export interface Measured {
   readonly narrower: { readonly value: unknown; readonly document: string }[]
@@ -26,62 +14,6 @@ export interface Measured {
   uncompilable: number
   threw: number
 }
-
-/** A deterministic source of numbers. An unreproducible failure is a rumour rather than a report. */
-export function numbers(seed: number): () => number {
-  let state = seed >>> 0
-
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let drawn = Math.imul(state ^ (state >>> 15), 1 | state)
-    drawn = (drawn + Math.imul(drawn ^ (drawn >>> 7), 61 | drawn)) ^ drawn
-    return ((drawn ^ (drawn >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-export function pick<T>(next: () => number, choices: readonly T[]): T {
-  const chosen = choices[Math.floor(next() * choices.length)]
-  if (chosen === undefined) {
-    throw new Error('the grammar drew from nothing')
-  }
-  return chosen
-}
-
-/**
- * The values every subject is asked about.
- *
- * Fixed rather than derived from the schema in hand, because the values that tell two readings apart
- * are the ones a schema's own shape would not suggest: the empty array against a tuple's bounds,
- * `null` against everything, a fractional number against a whole one.
- */
-export const VALUES: readonly unknown[] = [
-  null,
-  true,
-  false,
-  0,
-  1,
-  -1,
-  1.5,
-  2,
-  9,
-  10,
-  '',
-  'a',
-  'abc',
-  'abcdefgh',
-  [],
-  [1],
-  ['a'],
-  ['a', 1],
-  ['a', 1, 'extra'],
-  {},
-  { a: 'a' },
-  { a: 1 },
-  { a: 'a', b: 1 },
-  { a: 'a', extra: true },
-  { kind: 'a' },
-  { kind: 'b', b: 1 }
-]
 
 export interface Run {
   readonly seed: number

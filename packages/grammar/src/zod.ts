@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { pick, type Subject } from './measure.js'
+import { pick, type Subject } from './draw.js'
 
 /**
  * Schemas built from the zod constructs this library claims to describe.
