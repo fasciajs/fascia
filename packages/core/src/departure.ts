@@ -1,4 +1,4 @@
-import { FasciaError } from './result.js'
+import { FasciaError, isError } from './result.js'
 
 /**
  * What a spelling gave up, said about the schema rather than about this library.
@@ -82,4 +82,36 @@ export function faithful<Written>(written: Written): Spelled<Written> {
  */
 export function under(step: string, departures: readonly Departure[]): readonly Departure[] {
   return departures.map((departure) => ({ ...departure, at: [step, ...departure.at] }))
+}
+
+/**
+ * A spelling a caller refuses to accept, held to what they will take.
+ *
+ * **A loss reported is not a loss acted on.** Every target here fills `departures` and, until this,
+ * nothing outside a spec read one. A caller publishing a document wants a build to stop rather than
+ * a line of prose, and which losses stop it is theirs to decide: a service that must never refuse a
+ * value its schema takes cares about `narrower`, and one whose document is a contract cares about
+ * every one.
+ *
+ * Returns the spelling unchanged where nothing it gave up was refused, so this composes with a
+ * spelling that already failed and with one that gave up nothing.
+ */
+export function refusing<Written>(
+  spelled: Spelling<Written>,
+  directions: readonly DepartureDirection[]
+): Spelling<Written> {
+  if (isError(spelled)) {
+    return spelled
+  }
+
+  const refused = spelled.departures.filter((one) => directions.includes(one.direction))
+  const [first] = refused
+  if (first === undefined) {
+    return spelled
+  }
+
+  return new UnsayableTerm(
+    first.at,
+    `this gave up ${refused.length === 1 ? 'one thing' : `${refused.length} things`} a caller refuses: ${refused.map((one) => one.said).join(' ')}`
+  )
 }

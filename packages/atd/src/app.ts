@@ -2,7 +2,7 @@ import type {
   Ask,
   Departure,
   Described,
-  SideNames,
+  Naming,
   Source,
   Spelling,
   UndescribableSchema
@@ -70,7 +70,7 @@ export type AppSpelling = Spelling<AtdApp> | UndescribableSchema
 export function spellAtdApp<S>(
   procedures: Readonly<Record<string, Procedure<S>>>,
   source: Source<S>,
-  names: SideNames,
+  naming: Naming<S>,
   info?: AppInfo
 ): AppSpelling {
   const positions = positionsOf(procedures)
@@ -78,7 +78,7 @@ export function spellAtdApp<S>(
   const described = describeAll(
     positions.map((position) => position.ask),
     source,
-    names
+    naming
   )
   if (isError(described)) {
     return described

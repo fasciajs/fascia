@@ -26,7 +26,7 @@ import * as z from 'zod'
 const sides: SideNames = { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
 
 function appOf(procedures: Record<string, Procedure<z.core.$ZodType>>) {
-  const spelled = spellAtdApp(procedures, zodSource, sides, { title: 'Users', version: '1' })
+  const spelled = spellAtdApp(procedures, zodSource, { sides }, { title: 'Users', version: '1' })
   if (isError(spelled)) {
     throw new Error(spelled.message)
   }
@@ -42,7 +42,7 @@ function appOf(procedures: Record<string, Procedure<z.core.$ZodType>>) {
 }
 
 function refusalOf(procedures: Record<string, Procedure<z.core.$ZodType>>): string {
-  const spelled = spellAtdApp(procedures, zodSource, sides)
+  const spelled = spellAtdApp(procedures, zodSource, { sides })
   if (!isError(spelled)) {
     throw new Error(`the app was written as ${JSON.stringify(spelled.written)}`)
   }
@@ -216,7 +216,7 @@ describe('what a document refuses, and what it says instead', () => {
         }
       },
       zodSource,
-      sides
+      { sides }
     )
 
     expect(isError(app) ? app.message : 'written').toContain('UsersCreateParams')
@@ -253,7 +253,7 @@ describe('a document holds schemas from a library arri never heard of', () => {
     const spelled = spellAtdApp(
       { 'users.create': { ...procedures['users.create'], params, response } },
       source,
-      sides
+      { sides }
     )
     if (isError(spelled)) {
       throw new Error(spelled.message)

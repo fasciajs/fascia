@@ -191,7 +191,7 @@ describe('a document holds both sides, and a name states one shape', () => {
       { schema, io: 'output' }
     ]
 
-    const described = describeAll(asks, zodSource, sides)
+    const described = describeAll(asks, zodSource, { sides })
     if (isError(described)) {
       throw new Error(described.message)
     }
@@ -265,7 +265,7 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: UserInput, io: 'input' }
       ],
       zodSource,
-      sides
+      { sides }
     )
 
     expect(isError(described) ? described.message : 'described').toContain(
@@ -284,7 +284,7 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: User, io: 'output' }
       ],
       zodSource,
-      { input: (name) => `${name}Body`, output: (name) => `${name}Body` }
+      { sides: { input: (name) => `${name}Body`, output: (name) => `${name}Body` } }
     )
 
     expect(isError(described) ? described.message : 'described').toContain(
@@ -301,7 +301,7 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: User, io: 'output' }
       ],
       zodSource,
-      { input: (name) => `New${name}`, output: (name) => name }
+      { sides: { input: (name) => `New${name}`, output: (name) => name } }
     )
     if (isError(described)) {
       throw new Error(described.message)
@@ -322,7 +322,7 @@ describe('a document holds both sides, and a name states one shape', () => {
         { schema: second, io: 'output' }
       ],
       zodSource,
-      sides
+      { sides }
     )
 
     expect(isError(described) ? described.message : 'described').toContain(

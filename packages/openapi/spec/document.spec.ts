@@ -29,7 +29,7 @@ const info: V31.InfoObject = { title: 'Users', version: '1' }
 const validator = new Validator()
 
 async function documentOf(operations: readonly Operation<z.core.$ZodType>[]) {
-  const spelled = spellOpenApi(operations, zodSource, sides, info)
+  const spelled = spellOpenApi(operations, zodSource, { sides }, info)
   if (isError(spelled)) {
     throw new Error(spelled.message)
   }
@@ -149,7 +149,7 @@ describe('what OpenAPI refuses, and what this says instead', () => {
     const spelled = spellOpenApi(
       [{ path: '/x', method: 'get', responses: { '200': Spaced } }],
       zodSource,
-      sides,
+      { sides },
       info
     )
 
@@ -175,7 +175,7 @@ describe('one document from three validators', () => {
     const fromZod = spellOpenApi(
       [{ ...operation, responses: { '200': z.object({ id: z.string() }) } }],
       zodSource,
-      sides,
+      { sides },
       info
     )
     const fromArk = spellOpenApi(
@@ -188,13 +188,13 @@ describe('one document from three validators', () => {
         }
       ],
       arktypeSource,
-      sides,
+      { sides },
       info
     )
     const fromEffect = spellOpenApi(
       [{ ...operation, responses: { '200': Schema.Struct({ id: Schema.String }).ast } }],
       effectSource,
-      sides,
+      { sides },
       info
     )
 
@@ -219,7 +219,7 @@ describe('3.0 is a different dialect of one target', () => {
    * Both are read by the OpenAPI meta-schema, which knows both versions.
    */
   async function documentIn30(operations: readonly Operation<z.core.$ZodType>[]) {
-    const spelled = spellOpenApi(operations, zodSource, sides, info, '3.0')
+    const spelled = spellOpenApi(operations, zodSource, { sides }, info, '3.0')
     if (isError(spelled)) {
       throw new Error(spelled.message)
     }

@@ -191,7 +191,7 @@ describe('a name is scoped to one description, and holds across every root in it
         { schema: z.array(User), io: 'input' }
       ],
       zodSource,
-      { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
+      { sides: { input: (name) => `${name}Input`, output: (name) => `${name}Output` } }
     )
     if (isError(described)) {
       throw new Error(described.message)
@@ -213,7 +213,7 @@ describe('a name is scoped to one description, and holds across every root in it
         { schema: B, io: 'input' }
       ],
       zodSource,
-      { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
+      { sides: { input: (name) => `${name}Input`, output: (name) => `${name}Output` } }
     )
 
     expect(isError(described) ? described.message : 'described').toContain(

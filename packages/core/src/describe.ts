@@ -51,6 +51,20 @@ type PerSide<T> = Record<Io, T>
  */
 export type SideNames = PerSide<(name: string) => string>
 
+/**
+ * What the schemas in a description are called.
+ *
+ * **A caller names a schema without touching it.** `nameOf` asks the validator, and a validator only
+ * knows what somebody wrote into it: `.meta({ id })` on zod, `v.metadata({ id })` on valibot, a scope
+ * in arktype. A caller describing schemas they did not write, or one who would rather keep a
+ * document's vocabulary out of their domain code, has nowhere to put a name. Here is that place, and
+ * what a caller states wins over what the validator says.
+ */
+export interface Naming<S> {
+  readonly sides: SideNames
+  readonly named?: ReadonlyMap<S, string>
+}
+
 /** A schema that cannot be described, because nothing true of it can be written down. */
 export class UndescribableSchema extends FasciaError<{ schema: unknown }> {
   constructor(schema: unknown, reason: string) {
@@ -72,7 +86,7 @@ export interface Description {
 /** A description, or the reason there is none. */
 export type Describing = Description | UndescribableSchema
 
-interface Naming<S> {
+interface Table<S> {
   /**
    * What each name stands for, on each side.
    *
@@ -107,7 +121,7 @@ interface Naming<S> {
 interface Walk<S> {
   readonly source: Source<S>
   readonly io: Io
-  readonly naming: Naming<S>
+  readonly naming: Table<S>
   /**
    * A schema being described that turned out to have a name, and the name to file it under.
    *
@@ -119,6 +133,8 @@ interface Walk<S> {
    * by one side would file the next side's body under a name it never met.
    */
   readonly pending: Map<S, string>
+  /** What a caller called each schema, which wins over what the validator says. */
+  readonly named: ReadonlyMap<S, string> | undefined
 }
 
 /** Several schemas described together, sharing one set of names. */
@@ -142,9 +158,9 @@ export interface Descriptions {
 export function describeAll<S>(
   asks: readonly Ask<S>[],
   source: Source<S>,
-  names: SideNames
+  naming: Naming<S>
 ): Descriptions | UndescribableSchema {
-  const naming: Naming<S> = {
+  const table: Table<S> = {
     definitions: { input: new Map(), output: new Map() },
     binding: { input: new Set(), output: new Set() },
     claimedBy: new Map()
@@ -152,7 +168,13 @@ export function describeAll<S>(
 
   const described: { term: Described; io: Io }[] = []
   for (const ask of asks) {
-    const walk: Walk<S> = { source, io: ask.io, naming, pending: new Map() }
+    const walk: Walk<S> = {
+      source,
+      io: ask.io,
+      naming: table,
+      named: naming.named,
+      pending: new Map()
+    }
 
     const term = at(ask.schema, walk, new Set())
     if (isError(term)) {
@@ -161,7 +183,7 @@ export function describeAll<S>(
     described.push({ term, io: ask.io })
   }
 
-  return settle(naming, described, names)
+  return settle(table, described, naming.sides)
 }
 
 /**
@@ -181,7 +203,7 @@ const oneSide: SideNames = { input: (name) => name, output: (name) => name }
  * it has to be bound.
  */
 export function describe<S>(schema: S, source: Source<S>, io: Io): Describing {
-  const described = describeAll([{ schema, io }], source, oneSide)
+  const described = describeAll([{ schema, io }], source, { sides: oneSide })
   if (isError(described)) {
     return described
   }
@@ -205,7 +227,7 @@ function at<S>(
   ancestors: ReadonlySet<S>
 ): Described | UndescribableSchema {
   const { source, naming, io } = walk
-  const name = source.nameOf(schema)
+  const name = walk.named?.get(schema) ?? source.nameOf(schema)
 
   if (name === undefined) {
     return body(schema, walk, ancestors)
@@ -321,7 +343,7 @@ function other(io: Io): Io {
  * both are described. Nothing depends on which side was asked for first.
  */
 function settle<S>(
-  naming: Naming<S>,
+  naming: Table<S>,
   described: readonly { readonly term: Described; readonly io: Io }[],
   names: SideNames
 ): Descriptions | UndescribableSchema {

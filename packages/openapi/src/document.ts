@@ -1,7 +1,7 @@
 import type {
   Ask,
   Departure,
-  SideNames,
+  Naming,
   Source,
   Spelled,
   Spelling,
@@ -82,7 +82,7 @@ export type OperationSpelling = Spelling<V31.Document> | UndescribableSchema
 export function spellOpenApi<S>(
   operations: readonly Operation<S>[],
   source: Source<S>,
-  names: SideNames,
+  naming: Naming<S>,
   info: V31.InfoObject,
   version: Version = '3.1'
 ): OperationSpelling {
@@ -91,7 +91,7 @@ export function spellOpenApi<S>(
   const described = describeAll(
     positions.map((position) => position.ask),
     source,
-    names
+    naming
   )
   if (isError(described)) {
     return described

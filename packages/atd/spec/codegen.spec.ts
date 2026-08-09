@@ -24,7 +24,7 @@ import * as z from 'zod'
 const sides: SideNames = { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
 
 function appOf(procedures: Record<string, Procedure<z.core.$ZodType>>) {
-  const spelled = spellAtdApp(procedures, zodSource, sides, { title: 'Users', version: '1' })
+  const spelled = spellAtdApp(procedures, zodSource, { sides }, { title: 'Users', version: '1' })
   if (isError(spelled)) {
     throw new Error(spelled.message)
   }
