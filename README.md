@@ -2,16 +2,24 @@
 
 Describe a schema once. Write it as anything.
 
-```
-zod ─┐                                    ┌─ JSON Schema 2020-12
-arktype ─┤                                ├─ OpenAPI 3.1 and 3.0
-effect ─┼──▶  what is true of the value  ─┼─ Arri Type Definition
-valibot ─┘                                ├─ Model Context Protocol
-                                          └─ DynamoDB AttributeValue
+```mermaid
+flowchart LR
+  zod([zod]) --> term
+  arktype([arktype]) --> term
+  effect([effect]) --> term
+  valibot([valibot]) --> term
+
+  term{{"what is true of the value"}}
+
+  term --> jsonschema[JSON Schema 2020-12]
+  term --> openapi[OpenAPI 3.1 and 3.0]
+  term --> atd[Arri Type Definition]
+  term --> mcp[Model Context Protocol]
+  term --> dynamodb[DynamoDB AttributeValue]
 ```
 
-Four validators and five targets are nine packages, not twenty. A frontend reads a schema into one
-term and a target writes that term down. Neither knows the other exists.
+Four validators and five targets: nine packages and a core, rather than twenty. A frontend reads a
+schema into one term and a target writes that term down. Neither knows the other exists.
 
 ## The term holds no target's vocabulary
 
