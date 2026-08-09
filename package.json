@@ -24,6 +24,7 @@
     "@ark/attest": "^0.56.3",
     "@ark/schema": "^0.56.2",
     "@arrirpc/codegen-dart": "^0.84.1",
+    "@arrirpc/codegen-rust": "^0.84.1",
     "@arrirpc/codegen-ts": "^0.84.1",
     "@arrirpc/schema": "^0.84.1",
     "@biomejs/biome": "^2.5.6",

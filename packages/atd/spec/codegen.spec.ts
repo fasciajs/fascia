@@ -1,4 +1,5 @@
 import { createDartClient } from '@arrirpc/codegen-dart'
+import { createRustClient } from '@arrirpc/codegen-rust'
 import { createTypescriptClient } from '@arrirpc/codegen-ts'
 import type { Procedure } from '@fasciajs/atd'
 import { spellAtdApp } from '@fasciajs/atd'
@@ -36,6 +37,17 @@ async function generated(procedures: Record<string, Procedure<z.core.$ZodType>>)
 
 function generatedDart(procedures: Record<string, Procedure<z.core.$ZodType>>): string {
   return createDartClient(appOf(procedures), { clientName: 'UsersClient', outputFile: '' })
+}
+
+function generatedRust(procedures: Record<string, Procedure<z.core.$ZodType>>): string {
+  return createRustClient(appOf(procedures), {
+    clientName: 'UsersClient',
+    typeNamePrefix: '',
+    instancePath: '',
+    schemaPath: '',
+    generatedTypes: [],
+    rootService: undefined
+  })
 }
 
 describe('arri writes a client from what this library wrote', () => {
@@ -184,5 +196,78 @@ describe('arri writes a Dart client from the same document', () => {
     })
 
     expect(source).toContain('class UsersClientUsersService')
+  })
+})
+
+describe('arri writes a Rust client from the same document', () => {
+  /**
+   * The harshest of the three, and the only one whose compiler would refuse a wrong answer outright.
+   *
+   * Rust has no structural typing, no implicit nullability and no way to ignore a case. A term that
+   * reached the document wrong shows up here as a field of the wrong type or a sum with a missing
+   * variant, rather than as a shape that reads plausibly.
+   */
+  const User = z.object({ id: z.string(), role: z.string().default('reader') }).meta({ id: 'User' })
+
+  it('carries the side as an option rather than as a missing field', () => {
+    const source = generatedRust({
+      'users.create': {
+        transport: 'http',
+        method: 'post',
+        path: '/users/create',
+        params: User,
+        response: User
+      }
+    })
+
+    expect(source).toMatch(
+      /pub struct UserInput \{\n\s*pub id: String,\n\s*pub role: Option<String>,/
+    )
+    expect(source).toMatch(/pub struct UserOutput \{\n\s*pub id: String,\n\s*pub role: String,/)
+  })
+
+  it('resolves a reference, which Rust boxes because a struct owns what it holds', () => {
+    const Address = z.object({ city: z.string() }).meta({ id: 'Address' })
+    const Person = z.object({ name: z.string(), home: Address }).meta({ id: 'Person' })
+
+    const source = generatedRust({
+      'people.get': { transport: 'http', method: 'get', path: '/people/get', response: Person }
+    })
+
+    expect(source).toContain('pub struct Address')
+    expect(source).toMatch(/pub struct Person \{[\s\S]*?pub home: Box<Address>,/)
+  })
+
+  it('escapes a key Rust reserves, as a raw identifier', () => {
+    // A third language and a third answer to one question. TypeScript leaves `type` alone, Dart
+    // writes `k_type`, and Rust writes `r#type`. None of that is this library's decision.
+    const Reserved = z.object({ type: z.string(), fn: z.number() }).meta({ id: 'Reserved' })
+
+    const source = generatedRust({
+      'reserved.get': { transport: 'http', method: 'get', path: '/reserved', response: Reserved }
+    })
+
+    expect(source).toMatch(/pub struct Reserved \{\n\s*pub r#type: String,\n\s*pub r#fn: f64,/)
+  })
+
+  it('writes a tagged disjunction as a sum type the compiler makes exhaustive', () => {
+    // The longest journey anything here takes. zod states a discriminated union, the term states
+    // `exactlyOne` with the property that tells the members apart, ATD states the discriminator
+    // form, and Rust states an enum whose variants carry their own fields. A match over it that
+    // misses a case does not compile.
+    const Shape = z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('circle'), r: z.number() }),
+        z.object({ kind: z.literal('square'), side: z.number() })
+      ])
+      .meta({ id: 'Shape' })
+
+    const source = generatedRust({
+      'shapes.get': { transport: 'http', method: 'get', path: '/shapes/get', response: Shape }
+    })
+
+    expect(source).toMatch(
+      /pub enum Shape \{[\s\S]*?Circle \{[\s\S]*?r: f64,[\s\S]*?Square \{[\s\S]*?side: f64,/
+    )
   })
 })
