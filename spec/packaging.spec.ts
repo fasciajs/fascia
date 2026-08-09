@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -65,6 +65,20 @@ beforeAll(() => {
     rmSync(out, { recursive: true, force: true })
   }
 }, 120_000)
+
+describe('the suite reads the source rather than the build', () => {
+  it('resolves a package to the file its own condition names', async () => {
+    // This was wrong once and nothing said so. Setting the condition on one side of vitest left
+    // every package resolving to whatever was last built, so a spec would have passed over an edit
+    // until somebody rebuilt. The import below is the same one every spec makes, and the assertion
+    // is that what answered it is a file under `src`.
+    const core = await import('@fasciajs/core')
+    const at = import.meta.resolve('@fasciajs/core')
+
+    expect(at, 'a package resolved to its build output').toContain('/src/')
+    expect(typeof core.isError).toBe('function')
+  })
+})
 
 describe('a package ships every file it says it has', () => {
   it('packs one tarball per package', () => {

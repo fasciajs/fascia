@@ -1,0 +1,27 @@
+{
+  "name": "@fasciajs/mcp",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "A set of tools, written as Model Context Protocol tool definitions.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": {
+      "fascia-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "dependencies": {
+    "@fasciajs/core": "0.0.0",
+    "@fasciajs/json-schema": "0.0.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

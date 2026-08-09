@@ -11,7 +11,11 @@ export default defineConfig({
   // The condition is named for this library rather than `development`, which anyone may set for
   // their own reasons. A consumer who set that one would have resolved a package to source this
   // repository compiles under its own flags and theirs may not.
+  // Both, because vitest runs modules through the server pipeline and each side asks separately.
+  // Setting only the first left every package resolving to whatever was last built: the suite ran
+  // against the build and would have passed over an edit until somebody rebuilt.
   resolve: { conditions: ['fascia-source'] },
+  ssr: { resolve: { conditions: ['fascia-source'] } },
 
   test: {
     environment: 'node',

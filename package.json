@@ -29,7 +29,8 @@
     "@arrirpc/codegen-rust": "^0.84.1",
     "@arrirpc/codegen-ts": "^0.84.1",
     "@arrirpc/schema": "^0.84.1",
-    "@biomejs/biome": "^2.5.6",
+    "@biomejs/biome": "2.5.6",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@seriousme/openapi-schema-validator": "^2.9.1",
     "@types/node": "^24.13.3",
     "ajv": "^8.20.0",
@@ -38,11 +39,11 @@
     "effect": "^3.22.1",
     "json-schema-typed": "^8.0.2",
     "openapi-types": "^12.1.3",
-    "rolldown": "^1.2.3",
-    "rolldown-plugin-dts": "^0.28.0",
-    "typescript": "^5.9.3",
+    "rolldown": "1.2.3",
+    "rolldown-plugin-dts": "0.28.0",
+    "typescript": "5.9.3",
     "valibot": "^1.1.0",
-    "vitest": "^4.1.10",
+    "vitest": "4.1.10",
     "zod": "^4.4.3"
   }
 }

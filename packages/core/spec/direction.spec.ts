@@ -330,3 +330,76 @@ describe('a document holds both sides, and a name states one shape', () => {
     )
   })
 })
+
+describe('a schema that holds itself, described from both sides', () => {
+  const sides: SideNames = { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
+
+  it('splits a recursive name whose sides differ, and points the body at itself', () => {
+    // The two mechanisms meeting: a name bound before its body is walked, and a name split because
+    // its two sides say different things. A recursive name that splits refers to a split name, which
+    // is itself, so the closure has to reach a fixed point rather than run forever.
+    const Node: z.ZodType = z
+      .lazy(() =>
+        z.object({
+          name: z.string(),
+          depth: z.number().default(0),
+          children: z.array(Node)
+        })
+      )
+      .meta({ id: 'Node' })
+
+    const described = describeAll(
+      [
+        { schema: Node, io: 'input' },
+        { schema: Node, io: 'output' }
+      ],
+      zodSource,
+      { sides }
+    )
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    expect([...described.definitions.keys()].sort()).toEqual(['NodeInput', 'NodeOutput'])
+    expect(described.terms).toEqual([
+      { kind: 'ref', name: 'NodeInput', admitsNull: false, meta: {} },
+      { kind: 'ref', name: 'NodeOutput', admitsNull: false, meta: {} }
+    ])
+
+    // Each side's body refers to its own side, not to the other one. A body pointing at the wrong
+    // side would state that a request holds responses.
+    const inside = (name: string): string => {
+      const body = described.definitions.get(name)
+      if (body?.kind !== 'typed' || body.name !== 'object') {
+        throw new Error(`${name} is not an object`)
+      }
+      const children = body.assertions.properties.get('children')?.term
+      if (children?.kind !== 'typed' || children.name !== 'array') {
+        throw new Error(`${name} states no list of children`)
+      }
+      const item = children.assertions.items
+      return item.kind === 'ref' ? item.name : item.kind
+    }
+
+    expect(inside('NodeInput')).toBe('NodeInput')
+    expect(inside('NodeOutput')).toBe('NodeOutput')
+  })
+
+  it('keeps one name for a recursive schema whose sides agree', () => {
+    const Chain: z.ZodType = z.lazy(() => z.object({ next: z.array(Chain) })).meta({ id: 'Chain' })
+
+    const described = describeAll(
+      [
+        { schema: Chain, io: 'input' },
+        { schema: Chain, io: 'output' }
+      ],
+      zodSource,
+      { sides }
+    )
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+
+    expect([...described.definitions.keys()]).toEqual(['Chain'])
+  })
+})

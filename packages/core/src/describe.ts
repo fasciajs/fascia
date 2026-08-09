@@ -425,7 +425,7 @@ function splitting(
 }
 
 /** Every name a term refers to. */
-function refsIn(term: Described): ReadonlySet<string> {
+export function refsIn(term: Described): ReadonlySet<string> {
   const seen = new Set<string>()
   mapRefs(term, (name) => {
     seen.add(name)

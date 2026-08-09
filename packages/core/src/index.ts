@@ -15,7 +15,7 @@ export type {
   Naming,
   SideNames
 } from './describe.js'
-export { describe, describeAll, UndescribableSchema } from './describe.js'
+export { describe, describeAll, refsIn, UndescribableSchema } from './describe.js'
 export type {
   Described,
   DescribedKind,
