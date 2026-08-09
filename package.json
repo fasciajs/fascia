@@ -15,6 +15,7 @@
     "internal/*"
   ],
   "scripts": {
+    "build": "rolldown -c rolldown.config.mjs",
     "check": "npm run check:types && npm run check:lint && npm run check:unit",
     "check:types": "tsc -p tsconfig.json",
     "check:lint": "biome check .",
@@ -37,6 +38,8 @@
     "effect": "^3.22.1",
     "json-schema-typed": "^8.0.2",
     "openapi-types": "^12.1.3",
+    "rolldown": "^1.2.3",
+    "rolldown-plugin-dts": "^0.28.0",
     "typescript": "^5.9.3",
     "valibot": "^1.1.0",
     "vitest": "^4.1.10",

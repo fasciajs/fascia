@@ -6,9 +6,14 @@
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "fascia-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ]
 }
