@@ -1,3 +1,4 @@
+import { createDartClient } from '@arrirpc/codegen-dart'
 import { createTypescriptClient } from '@arrirpc/codegen-ts'
 import type { Procedure } from '@fasciajs/atd'
 import { spellAtdApp } from '@fasciajs/atd'
@@ -21,13 +22,20 @@ import * as z from 'zod'
 
 const sides: SideNames = { input: (name) => `${name}Input`, output: (name) => `${name}Output` }
 
-async function generated(procedures: Record<string, Procedure<z.core.$ZodType>>): Promise<string> {
+function appOf(procedures: Record<string, Procedure<z.core.$ZodType>>) {
   const spelled = spellAtdApp(procedures, zodSource, sides, { title: 'Users', version: '1' })
   if (isError(spelled)) {
     throw new Error(spelled.message)
   }
+  return spelled.written
+}
 
-  return createTypescriptClient(spelled.written, { clientName: 'UsersClient', outputFile: '' })
+async function generated(procedures: Record<string, Procedure<z.core.$ZodType>>): Promise<string> {
+  return createTypescriptClient(appOf(procedures), { clientName: 'UsersClient', outputFile: '' })
+}
+
+function generatedDart(procedures: Record<string, Procedure<z.core.$ZodType>>): string {
+  return createDartClient(appOf(procedures), { clientName: 'UsersClient', outputFile: '' })
 }
 
 describe('arri writes a client from what this library wrote', () => {
@@ -104,5 +112,77 @@ describe('arri writes a client from what this library wrote', () => {
     })
 
     expect(source).toContain('UsersClient')
+  })
+})
+
+describe('arri writes a Dart client from the same document', () => {
+  /**
+   * A second target language, and the reason to run one.
+   *
+   * TypeScript is forgiving: it has no reserved word this library can produce and its optional
+   * fields read almost like the term. Dart is another matter, and a document that generates for one
+   * and not for the other is a document that only looked right.
+   */
+  const User = z.object({ id: z.string(), role: z.string().default('reader') }).meta({ id: 'User' })
+
+  it('carries the side into a second language', () => {
+    const source = generatedDart({
+      'users.create': {
+        transport: 'http',
+        method: 'post',
+        path: '/users/create',
+        params: User,
+        response: User
+      }
+    })
+
+    expect(source).toMatch(
+      /class UserInput implements ArriModel \{\n {2}final String id;\n {2}final String\? role;/
+    )
+    expect(source).toMatch(
+      /class UserOutput implements ArriModel \{\n {2}final String id;\n {2}final String role;/
+    )
+  })
+
+  it('resolves a reference to the class it names', () => {
+    const Address = z.object({ city: z.string() }).meta({ id: 'Address' })
+    const Person = z.object({ name: z.string(), home: Address }).meta({ id: 'Person' })
+
+    const source = generatedDart({
+      'people.get': { transport: 'http', method: 'get', path: '/people/get', response: Person }
+    })
+
+    expect(source).toContain('class Address implements ArriModel')
+    expect(source).toMatch(/class Person implements ArriModel \{[\s\S]*?final Address home;/)
+  })
+
+  it('escapes a key Dart reserves, which arri does and this library does not need to', () => {
+    // A prediction that measuring refuted. A target language's reserved words looked like something
+    // the naming layer would have to filter, and arri's own generator already does it: `class`
+    // becomes `k_class` in Dart and stays `class` in TypeScript, where it is legal. So a name
+    // travels as the caller wrote it and each generator decides what its own language can take.
+    const Reserved = z.object({ class: z.string(), is: z.number() }).meta({ id: 'Class' })
+
+    const source = generatedDart({
+      'reserved.get': { transport: 'http', method: 'get', path: '/reserved', response: Reserved }
+    })
+
+    expect(source).toMatch(
+      /class Class implements ArriModel \{\n {2}final String k_class;\n {2}final double k_is;/
+    )
+  })
+
+  it('writes a service for each part of a procedure key', () => {
+    const source = generatedDart({
+      'users.create': {
+        transport: 'http',
+        method: 'post',
+        path: '/users/create',
+        params: User,
+        response: User
+      }
+    })
+
+    expect(source).toContain('class UsersClientUsersService')
   })
 })
