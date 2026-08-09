@@ -118,6 +118,14 @@ describe('a package ships every file it says it has', () => {
     }
   })
 
+  it('ships a README, which npm includes whether files names it or not', () => {
+    // A package added without one publishes a page that says only its name. npm puts a README in
+    // the tarball on its own, so nothing about `files` would have said this was missing.
+    for (const one of packed) {
+      expect(one.files, `${one.name} ships no README`).toContain('README.md')
+    }
+  })
+
   it('ships a private package to nobody', () => {
     // `internal/grammar` is a workspace and not a package, so nothing above ever reaches it.
     expect(readdirSync('internal')).toContain('grammar')
