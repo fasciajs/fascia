@@ -1,6 +1,24 @@
-# fascia
+<p align="center">
+  <img src="assets/fascia-avatar-transparent.png" alt="" width="160" height="160" />
+</p>
 
-Describe a schema once. Write it as anything.
+<h1 align="center">fascia</h1>
+
+<p align="center"><strong>Describe a schema once. Write it as anything.</strong></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/4%20frontends%20%C2%B7%205%20targets-ff9100?style=flat-square" alt="Four frontends and five targets" />
+  <img src="https://img.shields.io/badge/narrower-0-04736a?style=flat-square" alt="Zero narrower departures" />
+  <img src="https://img.shields.io/badge/licence-MIT-04736a?style=flat-square" alt="MIT licence" />
+</p>
+
+<p align="center">
+  <a href="#a-schema-has-two-sides">Two sides</a> ·
+  <a href="#three-outcomes-not-two">Three outcomes</a> ·
+  <a href="#what-it-refuses">What it refuses</a> ·
+  <a href="#the-numbers">The numbers</a> ·
+  <a href="#the-packages">The packages</a>
+</p>
 
 ```mermaid
 flowchart LR
