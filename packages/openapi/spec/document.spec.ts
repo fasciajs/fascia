@@ -207,3 +207,104 @@ describe('one document from three validators', () => {
     expect((await validator.validate(fromZod.written as never)).valid).toBe(true)
   })
 })
+
+describe('3.0 is a different dialect of one target', () => {
+  /**
+   * The first time two dialects of one target have met here.
+   *
+   * 3.1 holds a 2020-12 schema unchanged. 3.0 has a schema of its own that says four things another
+   * way and one thing not at all, so a schema is translated once and nothing downstream asks which
+   * dialect it is writing for.
+   *
+   * Both are read by the OpenAPI meta-schema, which knows both versions.
+   */
+  async function documentIn30(operations: readonly Operation<z.core.$ZodType>[]) {
+    const spelled = spellOpenApi(operations, zodSource, sides, info, '3.0')
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    const verdict = await validator.validate(spelled.written as unknown as Record<string, unknown>)
+    expect(verdict.errors ?? [], JSON.stringify(verdict.errors)).toEqual([])
+    return spelled
+  }
+
+  function schemaIn30(schema: z.core.$ZodType) {
+    return async () => {
+      const document = await documentIn30([
+        { path: '/x', method: 'get', responses: { '200': schema } }
+      ])
+      const response = document.written.paths?.['/x']?.get?.responses?.['200']
+      return {
+        written: (response as { content?: Record<string, { schema?: unknown }> })?.content?.[
+          'application/json'
+        ]?.schema,
+        departures: document.departures
+      }
+    }
+  }
+
+  it('says null with a flag beside one type, where 3.1 names two', async () => {
+    // A fifth spelling of the one fact, and the first this library reaches by translating rather
+    // than by writing. A flag in ATD, a type list in 2020-12, a joined branch where there is no type
+    // to widen, a member of the coproduct in DynamoDB, and here a flag again with one type beside it.
+    const { written } = await schemaIn30(z.string().nullable())()
+    expect(written).toEqual({ type: 'string', nullable: true })
+  })
+
+  it('folds a null branch of a disjunction into the branches that are left', async () => {
+    const { written } = await schemaIn30(z.union([z.string(), z.number()]).nullable())()
+    expect(written).toEqual({
+      anyOf: [
+        { type: 'string', nullable: true },
+        { type: 'number', nullable: true }
+      ]
+    })
+  })
+
+  it('states an exclusive bound under the inclusive keyword with a flag', async () => {
+    const { written } = await schemaIn30(z.number().gt(1).lte(9))()
+    expect(written).toEqual({
+      type: 'number',
+      minimum: 1,
+      exclusiveMinimum: true,
+      maximum: 9
+    })
+  })
+
+  it('has no positional form, and says what that gives up', async () => {
+    const { written, departures } = await schemaIn30(z.tuple([z.string(), z.number()]))()
+
+    expect(written).toMatchObject({
+      type: 'array',
+      items: { anyOf: [{ type: 'string' }, { type: 'number' }] }
+    })
+    expect(departures.map((one) => one.said)).toContainEqual(
+      expect.stringContaining('which shape stands where')
+    )
+  })
+
+  it('states one example where a term states several', async () => {
+    const { written, departures } = await schemaIn30(z.string().meta({ examples: ['a', 'b'] }))()
+
+    expect(written).toMatchObject({ example: 'a' })
+    expect(written).not.toHaveProperty('examples')
+    expect(departures.map((one) => one.direction)).toContain('neither')
+  })
+
+  it('writes the same references and the same split', async () => {
+    const User = z
+      .object({ id: z.string(), role: z.string().default('reader') })
+      .meta({ id: 'User' })
+
+    const document = await documentIn30([
+      { path: '/users', method: 'post', body: User, responses: { '200': User } }
+    ])
+
+    expect(Object.keys(document.written.components?.schemas ?? {}).sort()).toEqual([
+      'UserInput',
+      'UserOutput'
+    ])
+    expect(document.written.openapi).toBe('3.0.3')
+  })
+})

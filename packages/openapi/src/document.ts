@@ -3,6 +3,7 @@ import type {
   Departure,
   SideNames,
   Source,
+  Spelled,
   Spelling,
   UndescribableSchema
 } from '@fasciajs/core'
@@ -10,6 +11,7 @@ import { describeAll, isError, UnsayableTerm, under } from '@fasciajs/core'
 import { refsAt, spellJsonSchema } from '@fasciajs/json-schema'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
 import type { V31 } from './openapi.js'
+import { toV30 } from './v30.js'
 
 /**
  * A set of operations, written as an OpenAPI 3.1 document.
@@ -42,6 +44,15 @@ export const COMPONENTS = '#/components/schemas/'
 /** What a name may be, which OpenAPI states as a pattern on the keys of `components.schemas`. */
 const NAME = /^[a-zA-Z0-9._-]+$/
 
+/**
+ * Which dialect a document is written in.
+ *
+ * The one place this library chooses between them. 3.1 holds a 2020-12 schema unchanged and 3.0
+ * holds one of its own, so a schema is translated once, here, and nothing below this line asks which
+ * dialect it is writing for.
+ */
+export type Version = '3.1' | '3.0'
+
 /** The schemas an operation answers with, keyed by status. */
 export type Responses<S> = Readonly<Record<string, S>>
 
@@ -72,7 +83,8 @@ export function spellOpenApi<S>(
   operations: readonly Operation<S>[],
   source: Source<S>,
   names: SideNames,
-  info: V31.InfoObject
+  info: V31.InfoObject,
+  version: Version = '3.1'
 ): OperationSpelling {
   const positions = positionsOf(operations)
 
@@ -100,8 +112,10 @@ export function spellOpenApi<S>(
     if (isError(spelled)) {
       return spelled
     }
-    schemas[name] = asSchemaObject(refsAt(spelled.written, COMPONENTS))
-    departures.push(...under(name, spelled.departures))
+
+    const said = inDialect(refsAt(spelled.written, COMPONENTS), version)
+    schemas[name] = asSchemaObject(said.written)
+    departures.push(...under(name, [...spelled.departures, ...said.departures]))
   }
 
   const written: V31.SchemaObject[] = []
@@ -115,13 +129,17 @@ export function spellOpenApi<S>(
     if (isError(spelled)) {
       return spelled
     }
-    written.push(asSchemaObject(refsAt(spelled.written, COMPONENTS)))
-    departures.push(...under(`${position.method} ${position.path}`, spelled.departures))
+
+    const said = inDialect(refsAt(spelled.written, COMPONENTS), version)
+    written.push(asSchemaObject(said.written))
+    departures.push(
+      ...under(`${position.method} ${position.path}`, [...spelled.departures, ...said.departures])
+    )
   }
 
   return {
     written: {
-      openapi: '3.1.0',
+      openapi: version === '3.1' ? '3.1.0' : '3.0.3',
       info,
       paths: pathsOf(operations, positions, written),
       ...(Object.keys(schemas).length > 0 && { components: { schemas } })
@@ -161,6 +179,11 @@ function positionsOf<S>(operations: readonly Operation<S>[]): Position<S>[] {
   }
 
   return positions
+}
+
+/** A schema as the chosen dialect says it. 3.1 says what 2020-12 says, so it says nothing more. */
+function inDialect(written: JSONSchema, version: Version): Spelled<JSONSchema> {
+  return version === '3.1' ? { written, departures: [] } : toV30(written)
 }
 
 /** The operations, grouped under the path each one is reached at. */
