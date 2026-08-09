@@ -1,0 +1,20 @@
+{
+  "name": "@fasciajs/valibot",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A valibot schema, read as a Node.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@fasciajs/core": "0.0.0"
+  },
+  "peerDependencies": {
+    "valibot": "^1.0.0"
+  }
+}

@@ -1,7 +1,8 @@
 import { compile, nullable, schemaToJsonSchema, stringEnum } from '@arrirpc/schema'
-import { arkGrammar, effectGrammar, zodGrammar } from '@fascia-internal/grammar'
+import { arkGrammar, effectGrammar, valibotGrammar, zodGrammar } from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
 import { effectSource } from '@fasciajs/effect'
+import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'
@@ -33,7 +34,8 @@ describe('an ATD document never rejects what its schema accepts', () => {
   const cases = [
     ['zod', () => measure(zodSource, zodGrammar, run)],
     ['arktype', () => measure(arktypeSource, arkGrammar, run)],
-    ['effect', () => measure(effectSource, effectGrammar, run)]
+    ['effect', () => measure(effectSource, effectGrammar, run)],
+    ['valibot', () => measure(valibotSource, valibotGrammar, run)]
   ] as const
 
   for (const [what, measured] of cases) {

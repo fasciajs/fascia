@@ -1,9 +1,10 @@
 import type { BaseRoot } from '@ark/schema'
-import { arkGrammar, effectGrammar, zodGrammar } from '@fascia-internal/grammar'
+import { arkGrammar, effectGrammar, valibotGrammar, zodGrammar } from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
 import { describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
+import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { type } from 'arktype'
@@ -43,7 +44,8 @@ describe('the document never rejects what the schema accepts', () => {
   const cases = [
     ['zod', () => measure(zodSource, zodGrammar, run)],
     ['arktype', () => measure(arktypeSource, arkGrammar, run)],
-    ['effect', () => measure(effectSource, effectGrammar, run)]
+    ['effect', () => measure(effectSource, effectGrammar, run)],
+    ['valibot', () => measure(valibotSource, valibotGrammar, run)]
   ] as const
 
   for (const [what, measured] of cases) {
