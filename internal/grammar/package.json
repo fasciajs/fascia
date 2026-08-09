@@ -1,0 +1,12 @@
+{
+  "name": "@fascia-internal/grammar",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Schemas drawn from a grammar, and the values that tell two readings apart. Nothing here is published: every target draws from it so two targets are measured over one set of schemas.",
+  "license": "MIT",
+  "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

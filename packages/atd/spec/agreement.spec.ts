@@ -1,7 +1,7 @@
 import { compile, nullable, schemaToJsonSchema, stringEnum } from '@arrirpc/schema'
+import { arkGrammar, effectGrammar, zodGrammar } from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
 import { effectSource } from '@fasciajs/effect'
-import { arkGrammar, effectGrammar, zodGrammar } from '@fasciajs/grammar'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { describe, expect, it } from 'vitest'

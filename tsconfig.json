@@ -22,5 +22,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["packages/*/src/**/*.ts", "packages/*/spec/**/*.ts", "*.mts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/spec/**/*.ts",
+    "internal/*/src/**/*.ts",
+    "*.mts"
+  ]
 }

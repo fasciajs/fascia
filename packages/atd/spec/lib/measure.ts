@@ -1,10 +1,10 @@
 import { schemaToJsonSchema } from '@arrirpc/schema'
+import type { Grammar } from '@fascia-internal/grammar'
+import { numbers, VALUES } from '@fascia-internal/grammar'
 import type { AtdSchema } from '@fasciajs/atd'
 import { spellAtdAll } from '@fasciajs/atd'
 import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
-import type { Grammar } from '@fasciajs/grammar'
-import { numbers, VALUES } from '@fasciajs/grammar'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 
 /**
