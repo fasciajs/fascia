@@ -1,0 +1,51 @@
+name: pr
+
+on:
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Types, lint, and the suite, on the Node version the devcontainer pins.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: npm run check
+
+  # A different OS and a different Node version change what the code does at run time. Neither
+  # changes what `tsc` and Biome answer, so this job runs the suite alone. The suite still makes
+  # every claim about a type, because @ark/attest runs inside it.
+  compatibility:
+    needs: check
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        node: ['24']
+        include:
+          - os: ubuntu-latest
+            node: lts/-1
+          - os: ubuntu-latest
+            node: latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          node: ${{ matrix.node }}
+      - run: npm run check:unit
+
+  # The one job the branch rule names. A leg added to the matrix above needs no change to the rule.
+  pr:
+    needs: [check, compatibility]
+    timeout-minutes: 1
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Every check passed.'

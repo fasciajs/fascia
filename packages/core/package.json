@@ -1,11 +1,16 @@
 {
   "name": "@fasciajs/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "sideEffects": false,
   "description": "The waist. What a schema is once read, and the term between the two trees.",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fasciajs/fascia.git",
+    "directory": "packages/core"
+  },
   "exports": {
     ".": {
       "fascia-source": "./src/index.ts",
@@ -16,5 +21,8 @@
   "files": [
     "dist",
     "src"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

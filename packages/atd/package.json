@@ -1,11 +1,16 @@
 {
   "name": "@fasciajs/atd",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as Arri Type Definition.",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fasciajs/fascia.git",
+    "directory": "packages/atd"
+  },
   "exports": {
     ".": {
       "fascia-source": "./src/index.ts",
@@ -17,7 +22,10 @@
     "dist",
     "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@fasciajs/core": "0.0.0"
+    "@fasciajs/core": "0.1.0"
   }
 }

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -17,9 +17,14 @@ import { beforeAll, describe, expect, it } from 'vitest'
  * rely on it doing so when it publishes.
  */
 
+const declares = (at: string): { private?: boolean } => JSON.parse(readFileSync(at, 'utf8'))
+
+// A private package reaches no registry, and `rolldown.config.mjs` reads the same flag to decide
+// what to build. Packing one asks what a consumer receives of a package no consumer receives.
 const packages = readdirSync('packages', { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
+  .filter((name) => declares(`packages/${name}/package.json`).private !== true)
 
 interface Packed {
   readonly name: string
@@ -33,7 +38,20 @@ interface Packed {
 
 let packed: Packed[] = []
 
+/**
+ * npm on windows is a `.cmd` shim. `execFileSync` resolves the file itself rather than through a
+ * shell, and Node refuses to spawn a `.cmd` without one since it closed CVE-2024-27980. Passing
+ * `shell: true` answers that and then splits an argument on a space, which a temporary path holds
+ * on a developer's machine.
+ *
+ * A tarball does not vary by the OS that packed it, and publishing runs on linux. So this asks its
+ * question where the question is asked for real, and the rest of the suite still runs everywhere.
+ */
+const packs = describe.skipIf(process.platform === 'win32')
+
 beforeAll(() => {
+  if (process.platform === 'win32') return
+
   const out = mkdtempSync(join(tmpdir(), 'fascia-pack-'))
 
   try {
@@ -80,7 +98,7 @@ describe('the suite reads the source rather than the build', () => {
   })
 })
 
-describe('a package ships every file it says it has', () => {
+packs('a package ships every file it says it has', () => {
   it('packs one tarball per package', () => {
     expect(packed).toHaveLength(packages.length)
   })
@@ -128,7 +146,12 @@ describe('a package ships every file it says it has', () => {
 
   it('ships a private package to nobody', () => {
     // `internal/grammar` is a workspace and not a package, so nothing above ever reaches it.
+    // `packages/dynamodb` is a package that is not ready, and `private` is the whole of what holds
+    // it back. A package sitting beside nine that publish is the case where the flag is easy to
+    // drop by accident.
     expect(readdirSync('internal')).toContain('grammar')
+    expect(readdirSync('packages')).toContain('dynamodb')
     expect(packed.map((one) => one.name)).not.toContain('grammar')
+    expect(packed.map((one) => one.name)).not.toContain('dynamodb')
   })
 })

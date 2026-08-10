@@ -1,0 +1,36 @@
+name: Setup
+description: Install Node, install npm 12, install the workspace from the lockfile, and build.
+
+inputs:
+  node:
+    default: '24'
+    description: The Node version to install.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Node ${{ inputs.node }}
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node }}
+        registry-url: https://registry.npmjs.org
+
+    # npm 12 runs no install script from a dependency unless the workspace allows the script by
+    # name. The Node images ship an older npm, and an older npm runs every such script.
+    - name: Install npm 12
+      shell: bash
+      run: npm install -g npm@12
+
+    # `npm ci` installs the lockfile and nothing else. A version that entered the registry after
+    # the lockfile was written is not resolved here, so `min-release-age` in .npmrc is a rule for
+    # the developer who adds a dependency rather than a rule for this job.
+    - name: Install the workspace
+      shell: bash
+      run: npm ci
+
+    # `dist` is not in git, and `spec/packaging.spec.ts` packs each package to ask what a consumer
+    # receives. Without this step the suite reads a tarball that holds no build, and every package
+    # names a file under `exports` that the tarball does not carry.
+    - name: Build
+      shell: bash
+      run: npm run build
