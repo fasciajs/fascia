@@ -38,12 +38,16 @@ interface Packed {
 
 let packed: Packed[] = []
 
+// `execFileSync` resolves the file itself rather than through a shell, and a shell is what reads
+// PATHEXT. npm on windows is `npm.cmd`, and the bare name finds nothing there.
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+
 beforeAll(() => {
   const out = mkdtempSync(join(tmpdir(), 'fascia-pack-'))
 
   try {
     packed = packages.map((name) => {
-      execFileSync('npm', ['pack', `./packages/${name}`, '--pack-destination', out, '--silent'], {
+      execFileSync(npm, ['pack', `./packages/${name}`, '--pack-destination', out, '--silent'], {
         encoding: 'utf8'
       })
 
