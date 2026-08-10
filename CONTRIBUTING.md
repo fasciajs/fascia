@@ -72,7 +72,10 @@ moved from that entry alone.
 node bump.mjs 0.2.0     # ten versions, eleven pins, and the lockfile
 ```
 
-Read the diff. Commit. Merge. Then start `publish.yml` from the Actions tab.
+Read the diff. Commit. Merge. The merge releases, because `publish.yml` runs on a push to `main`.
+So merging the bump is the last step a person takes, and the diff is the last chance to read it.
+
+A merge that carries no bump publishes nothing, because every version already has a tag.
 
 `npm version --workspaces` raises each version and leaves the pins behind, which points the
 workspace at a version the registry does not hold. Use `bump.mjs` instead.
@@ -81,29 +84,33 @@ workspace at a version the registry does not hold. Use `bump.mjs` instead.
 each tag as soon as the package it names is published. A run that changed no version publishes
 nothing. A run that failed halfway resumes rather than repeats.
 
-## Before the first release
+## How the workflow authenticates
 
-The workflow publishes through an OIDC token that GitHub gives it, so no secret is stored anywhere.
-npm configures a trusted publisher only for a package that exists, and none of these names exists
-yet. So a person publishes each name one time, and the workflow does every release after that.
+No secret exists. The workflow publishes through an OIDC token that GitHub mints for it, and npm
+accepts that token only from `publish.yml` in `fasciajs/fascia`. Each of the nine packages names
+that pair as its trusted publisher.
 
 ```sh
-npm login                 # the @fasciajs scope has to exist, and you have to own it
-npm run build
-node publish.mjs          # the same script, from your machine
+npm trust list @fasciajs/core     # type, file, repository, permissions
 ```
 
-`publish.mjs` publishes the nine, writes the nine tags, pushes them, and creates the releases. It
-reads `gh` for the releases, so log in there as well. npm prompts for a one-time password, and the
-prompt reaches you because the publish step inherits stdio.
+`publish.yml` declares no `environment`, and the trusted publisher registers none. Adding one on
+either side alone makes every release fail the check.
 
-Then open `npmjs.com/package/<name>/access` for each package. Add a trusted publisher, and name the
-repository `fasciajs/fascia` and the workflow `publish.yml`. Leave the environment empty, because
-the workflow declares none. Set "Require two-factor authentication and disallow tokens" if you want
-the workflow to be the only thing that can publish.
+## Adding a package to the registry
+
+npm configures a trusted publisher only for a package that exists. So a new name is published one
+time by a person, and the workflow does every release after that.
+
+```sh
+npm login
+npm run build
+npm publish -w @fasciajs/<name>
+npm trust github @fasciajs/<name> --file publish.yml --repository fasciajs/fascia --allow-publish
+```
+
+Run `npm trust` in a terminal. npm needs a second factor for the call, and it cannot ask for one
+where there is no terminal to ask in.
 
 That first publish carries no provenance attestation, because provenance needs the OIDC token that
 only the workflow holds. Every release after it carries one.
-
-Change `on: workflow_dispatch` in `publish.yml` to `push: branches: [main]` when you want a merge to
-release. Do this after the versions leave `0.0.0`.

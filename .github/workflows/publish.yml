@@ -1,9 +1,14 @@
 name: publish
 
 # A publish cannot be undone. A version that reached the registry stays there under that number,
-# even after an unpublish, so this workflow starts when a person starts it and at no other time.
-# Change this to `push: branches: [main]` once every package holds a version you mean to release.
+# even after an unpublish. So the version in each manifest is the whole decision: a merge whose
+# version already has a tag publishes nothing, and a merge that carries a bump publishes it.
+# Review the diff that bump.mjs writes, because merging it is the last step a person takes.
+#
+# workflow_dispatch stays, so a run that failed halfway can be started again without a commit.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Two runs at once would each read `git tag`, each find the same version untagged, and each try to
