@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/arktype",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "sideEffects": false,
   "description": "An arktype schema, read as a Node.",
@@ -16,7 +16,8 @@
       "fascia-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -26,7 +27,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.0"
+    "@fasciajs/core": "0.1.1"
   },
   "peerDependencies": {
     "@ark/schema": "^0.56.0",

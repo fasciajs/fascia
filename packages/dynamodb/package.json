@@ -17,7 +17,8 @@
       "fascia-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -27,6 +28,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.0"
+    "@fasciajs/core": "0.1.1"
   }
 }

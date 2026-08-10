@@ -4,6 +4,14 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.1.1
+
+### Fixed
+
+Every package names `./package.json` in its `exports`. A subpath a package does not name is a
+subpath Node refuses, so a build tool that read a dependency's version or its `type` threw
+`ERR_PACKAGE_PATH_NOT_EXPORTED`.
+
 ## 0.1.0
 
 The first published version.

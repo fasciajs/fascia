@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "sideEffects": false,
   "description": "The waist. What a schema is once read, and the term between the two trees.",
@@ -16,7 +16,8 @@
       "fascia-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
