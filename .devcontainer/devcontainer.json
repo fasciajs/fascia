@@ -2,7 +2,7 @@
   "name": "fascia",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
   "workspaceFolder": "/workspaces/fascia",
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "npm install -g npm@12 && npm install",
   "customizations": {
     "vscode": {
       "extensions": ["biomejs.biome", "vitest.explorer"],
