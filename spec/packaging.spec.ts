@@ -34,6 +34,7 @@ interface Packed {
     exports: Record<string, Record<string, string> | string>
     files: string[]
     sideEffects?: boolean
+    keywords?: string[]
   }
   readonly files: readonly string[]
 }
@@ -151,6 +152,18 @@ packs('a package ships every file it says it has', () => {
     // here because a package added without it would quietly stop being droppable.
     for (const one of packed) {
       expect(one.manifest.sideEffects, `${one.name} does not say`).toBe(false)
+    }
+  })
+
+  it('states the words somebody would search for', () => {
+    // Registry search reads `keywords` and reads no other field this way. A package published
+    // without them is a package nobody reaches except by its exact name, and `0.1.0` went out that
+    // way. The two shared words put every package in one result, and the rest name what this one
+    // package reads or writes.
+    for (const one of packed) {
+      expect(one.manifest.keywords ?? [], `${one.name} states none`).toEqual(
+        expect.arrayContaining(['schema', 'fascia'])
+      )
     }
   })
 

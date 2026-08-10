@@ -4,6 +4,16 @@
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as JSON Schema 2020-12.",
+  "keywords": [
+    "schema",
+    "typescript",
+    "fascia",
+    "json-schema",
+    "json-schema-2020-12",
+    "jsonschema"
+  ],
+  "homepage": "https://github.com/fasciajs/fascia#readme",
+  "bugs": "https://github.com/fasciajs/fascia/issues",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {

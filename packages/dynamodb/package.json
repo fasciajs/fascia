@@ -5,6 +5,16 @@
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as the AttributeValue members a value may take.",
+  "keywords": [
+    "schema",
+    "typescript",
+    "fascia",
+    "dynamodb",
+    "attributevalue",
+    "aws"
+  ],
+  "homepage": "https://github.com/fasciajs/fascia#readme",
+  "bugs": "https://github.com/fasciajs/fascia/issues",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {

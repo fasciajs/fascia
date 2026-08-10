@@ -4,6 +4,17 @@
   "type": "module",
   "sideEffects": false,
   "description": "A set of tools, written as Model Context Protocol tool definitions.",
+  "keywords": [
+    "schema",
+    "typescript",
+    "fascia",
+    "mcp",
+    "model-context-protocol",
+    "tools",
+    "ai"
+  ],
+  "homepage": "https://github.com/fasciajs/fascia#readme",
+  "bugs": "https://github.com/fasciajs/fascia/issues",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {

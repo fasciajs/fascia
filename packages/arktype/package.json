@@ -4,6 +4,15 @@
   "type": "module",
   "sideEffects": false,
   "description": "An arktype schema, read as a Node.",
+  "keywords": [
+    "schema",
+    "typescript",
+    "fascia",
+    "arktype",
+    "arktype-to-json-schema"
+  ],
+  "homepage": "https://github.com/fasciajs/fascia#readme",
+  "bugs": "https://github.com/fasciajs/fascia/issues",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {

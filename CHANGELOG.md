@@ -12,6 +12,9 @@ Every package names `./package.json` in its `exports`. A subpath a package does 
 subpath Node refuses, so a build tool that read a dependency's version or its `type` threw
 `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
+Every package states `keywords`, `homepage`, and `bugs`. Registry search reads `keywords` and reads
+no other field that way, so `0.1.0` was reachable by its exact name and by nothing else.
+
 ## 0.1.0
 
 The first published version.
