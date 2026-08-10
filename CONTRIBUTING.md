@@ -65,6 +65,9 @@ When the package is ready, delete the `private` line, then delete those two asse
 Every published package carries one version, and a dependency between two of them states that same
 version exactly. Ten packages that are ten readings of one core have nothing to say by moving apart.
 
+Write the entry in `CHANGELOG.md` first. One entry covers every package, and a reader learns what
+moved from that entry alone.
+
 ```sh
 node bump.mjs 0.2.0     # ten versions, eleven pins, and the lockfile
 ```

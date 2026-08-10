@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/json-schema",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as JSON Schema 2020-12.",
@@ -26,7 +26,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.0.0"
+    "@fasciajs/core": "0.1.0"
   },
   "peerDependencies": {
     "json-schema-typed": "^8.0.0"
