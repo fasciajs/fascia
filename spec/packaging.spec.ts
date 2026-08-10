@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -17,9 +17,14 @@ import { beforeAll, describe, expect, it } from 'vitest'
  * rely on it doing so when it publishes.
  */
 
+const declares = (at: string): { private?: boolean } => JSON.parse(readFileSync(at, 'utf8'))
+
+// A private package reaches no registry, and `rolldown.config.mjs` reads the same flag to decide
+// what to build. Packing one asks what a consumer receives of a package no consumer receives.
 const packages = readdirSync('packages', { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
+  .filter((name) => declares(`packages/${name}/package.json`).private !== true)
 
 interface Packed {
   readonly name: string
@@ -128,7 +133,12 @@ describe('a package ships every file it says it has', () => {
 
   it('ships a private package to nobody', () => {
     // `internal/grammar` is a workspace and not a package, so nothing above ever reaches it.
+    // `packages/dynamodb` is a package that is not ready, and `private` is the whole of what holds
+    // it back. A package sitting beside nine that publish is the case where the flag is easy to
+    // drop by accident.
     expect(readdirSync('internal')).toContain('grammar')
+    expect(readdirSync('packages')).toContain('dynamodb')
     expect(packed.map((one) => one.name)).not.toContain('grammar')
+    expect(packed.map((one) => one.name)).not.toContain('dynamodb')
   })
 })

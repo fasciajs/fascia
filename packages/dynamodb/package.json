@@ -1,11 +1,17 @@
 {
   "name": "@fasciajs/dynamodb",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as the AttributeValue members a value may take.",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fasciajs/fascia",
+    "directory": "packages/dynamodb"
+  },
   "exports": {
     ".": {
       "fascia-source": "./src/index.ts",
@@ -17,6 +23,9 @@
     "dist",
     "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@fasciajs/core": "0.0.0"
   }
