@@ -2,6 +2,9 @@
   "name": "fascia",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
   "workspaceFolder": "/workspaces/fascia",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
   "postCreateCommand": "npm install -g npm@12 && npm install",
   "customizations": {
     "vscode": {
