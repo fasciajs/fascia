@@ -36,7 +36,13 @@ jobs:
 
       # publish.mjs writes a lightweight tag, which is a ref and holds no author. So this step needs
       # no git identity. `gh release create` is the one command that reads GITHUB_TOKEN.
+      #
+      # Provenance is asked for here rather than in publish.mjs, because provenance needs the OIDC
+      # token that only this workflow holds. The same script publishes the first version of a name
+      # from a person's machine, where the flag would fail. npm attests provenance on a trusted
+      # publish without being asked, and reports say the flag is what makes it happen.
       - name: Publish
         run: node publish.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

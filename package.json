@@ -8,7 +8,7 @@
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fasciajs/fascia"
+    "url": "git+https://github.com/fasciajs/fascia.git"
   },
   "workspaces": [
     "packages/*",

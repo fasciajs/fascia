@@ -83,14 +83,27 @@ nothing. A run that failed halfway resumes rather than repeats.
 
 ## Before the first release
 
-Three things, one time.
+The workflow publishes through an OIDC token that GitHub gives it, so no secret is stored anywhere.
+npm configures a trusted publisher only for a package that exists, and none of these names exists
+yet. So a person publishes each name one time, and the workflow does every release after that.
 
-Configure trusted publishing on npmjs.com for each package. Name the repository `fasciajs/fascia`
-and the workflow `publish.yml`. The workflow then publishes through an OIDC token, and no secret is
-stored anywhere.
+```sh
+npm login                 # the @fasciajs scope has to exist, and you have to own it
+npm run build
+node publish.mjs          # the same script, from your machine
+```
 
-npm configures a trusted publisher only for a package that exists. So the first publish of each name
-needs a token, or a publish from your machine.
+`publish.mjs` publishes the nine, writes the nine tags, pushes them, and creates the releases. It
+reads `gh` for the releases, so log in there as well. npm prompts for a one-time password, and the
+prompt reaches you because the publish step inherits stdio.
+
+Then open `npmjs.com/package/<name>/access` for each package. Add a trusted publisher, and name the
+repository `fasciajs/fascia` and the workflow `publish.yml`. Leave the environment empty, because
+the workflow declares none. Set "Require two-factor authentication and disallow tokens" if you want
+the workflow to be the only thing that can publish.
+
+That first publish carries no provenance attestation, because provenance needs the OIDC token that
+only the workflow holds. Every release after it carries one.
 
 Change `on: workflow_dispatch` in `publish.yml` to `push: branches: [main]` when you want a merge to
 release. Do this after the versions leave `0.0.0`.
