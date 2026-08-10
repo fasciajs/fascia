@@ -29,9 +29,12 @@ const packages = readdirSync('packages', { withFileTypes: true })
 interface Packed {
   readonly name: string
   readonly manifest: {
-    exports: Record<string, Record<string, string>>
+    // A subpath states a file directly or states one per condition. `./package.json` is the first
+    // kind, because a reader of a manifest asks for the file and not for a build of it.
+    exports: Record<string, Record<string, string> | string>
     files: string[]
     sideEffects?: boolean
+    keywords?: string[]
   }
   readonly files: readonly string[]
 }
@@ -108,13 +111,29 @@ packs('a package ships every file it says it has', () => {
     // tarball does not hold is a package that installs and fails on the first import, and neither
     // list says so on its own.
     for (const one of packed) {
-      for (const conditions of Object.values(one.manifest.exports)) {
-        for (const [condition, at] of Object.entries(conditions)) {
+      for (const [subpath, target] of Object.entries(one.manifest.exports)) {
+        const named =
+          typeof target === 'string'
+            ? [[subpath, target] as const]
+            : Object.entries(target).map(([condition, at]) => [condition, at] as const)
+
+        for (const [condition, at] of named) {
           expect(one.files, `${one.name} names ${at} under ${condition}`).toContain(
             at.replace(/^\.\//, '')
           )
         }
       }
+    }
+  })
+
+  it('lets a reader ask for the manifest, which tooling does', () => {
+    // A subpath a package does not name is a subpath Node refuses. A build tool that reads a
+    // dependency's version or its `type` reads `package.json`, and without this every such read
+    // throws ERR_PACKAGE_PATH_NOT_EXPORTED.
+    for (const one of packed) {
+      expect(one.manifest.exports['./package.json'], `${one.name} hides its manifest`).toBe(
+        './package.json'
+      )
     }
   })
 
@@ -133,6 +152,18 @@ packs('a package ships every file it says it has', () => {
     // here because a package added without it would quietly stop being droppable.
     for (const one of packed) {
       expect(one.manifest.sideEffects, `${one.name} does not say`).toBe(false)
+    }
+  })
+
+  it('states the words somebody would search for', () => {
+    // Registry search reads `keywords` and reads no other field this way. A package published
+    // without them is a package nobody reaches except by its exact name, and `0.1.0` went out that
+    // way. The two shared words put every package in one result, and the rest name what this one
+    // package reads or writes.
+    for (const one of packed) {
+      expect(one.manifest.keywords ?? [], `${one.name} states none`).toEqual(
+        expect.arrayContaining(['schema', 'fascia'])
+      )
     }
   })
 

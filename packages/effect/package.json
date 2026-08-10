@@ -1,9 +1,18 @@
 {
   "name": "@fasciajs/effect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "sideEffects": false,
   "description": "An effect Schema, read as a Node.",
+  "keywords": [
+    "schema",
+    "typescript",
+    "fascia",
+    "effect",
+    "effect-schema"
+  ],
+  "homepage": "https://github.com/fasciajs/fascia#readme",
+  "bugs": "https://github.com/fasciajs/fascia/issues",
   "license": "MIT",
   "author": "Joshua Hernandez <josher8a@gmail.com>",
   "repository": {
@@ -16,7 +25,8 @@
       "fascia-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -26,7 +36,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.0"
+    "@fasciajs/core": "0.1.1"
   },
   "peerDependencies": {
     "effect": "^3.0.0"
