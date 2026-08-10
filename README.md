@@ -170,7 +170,7 @@ places and a number moving is what a reader watches.
 | `@fasciajs/openapi` | operations, written as an OpenAPI 3.1 or 3.0 document |
 | `@fasciajs/atd` | a term and a set of procedures, written for arri |
 | `@fasciajs/mcp` | tools, written as Model Context Protocol definitions |
-| `@fasciajs/dynamodb` | a term, written as the AttributeValue members a value may take |
+| `@fasciajs/dynamodb` | a term, written as the AttributeValue members a value may take. Not published yet |
 
 Install the frontend you use and the target you want. Nothing pulls in a validator you do not have.
 
@@ -191,6 +191,9 @@ npm run format    # apply the formatter
 `CLAUDE.md` states the rules this code is written under. They are worth reading before changing
 anything: a failure is a value, a switch over a sum ends in `satisfies never`, and a claim about
 behaviour comes from output somebody saw.
+
+`CONTRIBUTING.md` states the rest: what a new package's manifest holds, what the two npm settings
+change about adding a dependency, and how a release is numbered and published.
 
 ## Licence
 
