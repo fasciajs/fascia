@@ -38,16 +38,25 @@ interface Packed {
 
 let packed: Packed[] = []
 
-// `execFileSync` resolves the file itself rather than through a shell, and a shell is what reads
-// PATHEXT. npm on windows is `npm.cmd`, and the bare name finds nothing there.
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+/**
+ * npm on windows is a `.cmd` shim. `execFileSync` resolves the file itself rather than through a
+ * shell, and Node refuses to spawn a `.cmd` without one since it closed CVE-2024-27980. Passing
+ * `shell: true` answers that and then splits an argument on a space, which a temporary path holds
+ * on a developer's machine.
+ *
+ * A tarball does not vary by the OS that packed it, and publishing runs on linux. So this asks its
+ * question where the question is asked for real, and the rest of the suite still runs everywhere.
+ */
+const packs = describe.skipIf(process.platform === 'win32')
 
 beforeAll(() => {
+  if (process.platform === 'win32') return
+
   const out = mkdtempSync(join(tmpdir(), 'fascia-pack-'))
 
   try {
     packed = packages.map((name) => {
-      execFileSync(npm, ['pack', `./packages/${name}`, '--pack-destination', out, '--silent'], {
+      execFileSync('npm', ['pack', `./packages/${name}`, '--pack-destination', out, '--silent'], {
         encoding: 'utf8'
       })
 
@@ -89,7 +98,7 @@ describe('the suite reads the source rather than the build', () => {
   })
 })
 
-describe('a package ships every file it says it has', () => {
+packs('a package ships every file it says it has', () => {
   it('packs one tarball per package', () => {
     expect(packed).toHaveLength(packages.length)
   })
