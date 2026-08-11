@@ -51,7 +51,7 @@ describe('an operation names what it takes and what it answers with', () => {
         method: 'post',
         operationId: 'createUser',
         body: User,
-        responses: { '200': User }
+        responses: { '200': { schema: User } }
       }
     ])
 
@@ -67,7 +67,7 @@ describe('an operation names what it takes and what it answers with', () => {
 
   it('splits one schema at two positions, because a default differs', async () => {
     const document = await documentOf([
-      { path: '/users', method: 'post', body: User, responses: { '200': User } }
+      { path: '/users', method: 'post', body: User, responses: { '200': { schema: User } } }
     ])
 
     const schemas = document.written.components?.schemas
@@ -85,7 +85,7 @@ describe('an operation names what it takes and what it answers with', () => {
       {
         path: '/users/{id}',
         method: 'get',
-        responses: { '200': User, '404': Problem }
+        responses: { '200': { schema: User }, '404': { schema: Problem } }
       }
     ])
 
@@ -98,8 +98,8 @@ describe('an operation names what it takes and what it answers with', () => {
 
   it('writes two methods under one path', async () => {
     const document = await documentOf([
-      { path: '/users', method: 'get', responses: { '200': User } },
-      { path: '/users', method: 'post', body: User, responses: { '200': User } }
+      { path: '/users', method: 'get', responses: { '200': { schema: User } } },
+      { path: '/users', method: 'post', body: User, responses: { '200': { schema: User } } }
     ])
 
     expect(Object.keys(document.written.paths?.['/users'] ?? {}).sort()).toEqual(['get', 'post'])
@@ -113,7 +113,7 @@ describe('an operation names what it takes and what it answers with', () => {
         summary: 'every user',
         description: 'in no order',
         deprecated: true,
-        responses: { '200': User }
+        responses: { '200': { schema: User } }
       }
     ])
 
@@ -129,7 +129,7 @@ describe('an operation names what it takes and what it answers with', () => {
       {
         path: '/ping',
         method: 'get',
-        responses: { '200': z.object({ at: z.string() }) }
+        responses: { '200': { schema: z.object({ at: z.string() }) } }
       }
     ])
 
@@ -147,7 +147,7 @@ describe('what OpenAPI refuses, and what this says instead', () => {
     const Spaced = z.object({ a: z.string() }).meta({ id: 'a user' })
 
     const spelled = spellOpenApi(
-      [{ path: '/x', method: 'get', responses: { '200': Spaced } }],
+      [{ path: '/x', method: 'get', responses: { '200': { schema: Spaced } } }],
       zodSource,
       { sides },
       info
@@ -158,13 +158,392 @@ describe('what OpenAPI refuses, and what this says instead', () => {
 
   it('reports what the schema half gave up, at the position that gave it up', async () => {
     const document = await documentOf([
-      { path: '/t', method: 'get', responses: { '200': z.tuple([z.string()]) } }
+      { path: '/t', method: 'get', responses: { '200': { schema: z.tuple([z.string()]) } } }
     ])
 
     // The tuple widening the 2020-12 target reports, reaching a caller with the operation that
     // produced it in its path.
     expect(document.departures[0]).toMatchObject({ direction: 'wider' })
     expect(document.departures[0]?.at[0]).toBe('get /t')
+  })
+})
+
+describe('a response states what no schema carries', () => {
+  /**
+   * **A description, the headers, the links and the media type are facts about the response.** None of
+   * them is a fact about the value, so no validator holds any of them and a document that invents one
+   * says something the caller did not. Each is stated beside the schema instead.
+   */
+  it('writes the description the caller gave, rather than one built from the status', async () => {
+    const document = await documentOf([
+      {
+        path: '/w',
+        method: 'get',
+        responses: { '200': { schema: z.string(), description: 'the wallet, as stored' } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w']?.get?.responses?.['200']).toMatchObject({
+      description: 'the wallet, as stored'
+    })
+  })
+
+  it('names the status where a caller describes nothing, because OpenAPI requires a description', async () => {
+    const document = await documentOf([
+      { path: '/w', method: 'get', responses: { '404': { schema: z.string() } } }
+    ])
+
+    expect(document.written.paths?.['/w']?.get?.responses?.['404']).toMatchObject({
+      description: 'the 404 response'
+    })
+  })
+
+  it('carries the headers a response sets', async () => {
+    const document = await documentOf([
+      {
+        path: '/w',
+        method: 'get',
+        responses: {
+          '200': {
+            schema: z.string(),
+            headers: { 'Cache-Control': { schema: { type: 'string' } } }
+          }
+        }
+      }
+    ])
+
+    expect(document.written.paths?.['/w']?.get?.responses?.['200']).toMatchObject({
+      headers: { 'Cache-Control': { schema: { type: 'string' } } }
+    })
+  })
+
+  it('writes a body in the media type the caller named', async () => {
+    // A text response is a string, and the header the service sends says so. A document naming JSON
+    // for it contradicts the response the service actually writes.
+    const document = await documentOf([
+      {
+        path: '/page',
+        method: 'get',
+        responses: { '200': { schema: z.string(), mediaType: 'text/html' } }
+      }
+    ])
+
+    // Stated whole, so the assertion also says no JSON media type stands beside it.
+    expect(document.written.paths?.['/page']?.get?.responses?.['200']).toEqual({
+      description: 'the 200 response',
+      content: { 'text/html': { schema: { type: 'string' } } }
+    })
+  })
+
+  it('writes a response with no content where it carries no body', async () => {
+    // A 204 answers with nothing. A schema here would be a body that never arrives.
+    const document = await documentOf([
+      { path: '/w', method: 'delete', responses: { '204': { description: 'gone' } } }
+    ])
+
+    const response = document.written.paths?.['/w']?.delete?.responses?.['204']
+    expect(response).toEqual({ description: 'gone' })
+    expect(document.written.components).toBeUndefined()
+  })
+
+  it('writes a request body in the media type the caller named', async () => {
+    const document = await documentOf([
+      {
+        path: '/page',
+        method: 'post',
+        body: z.string(),
+        bodyMediaType: 'text/html',
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/page']?.post?.requestBody).toEqual({
+      required: true,
+      content: { 'text/html': { schema: { type: 'string' } } }
+    })
+  })
+})
+
+describe('whether a request must carry a body is stated, never defaulted', () => {
+  /**
+   * **OpenAPI reads an absent `required` as false, which is the one wrong answer.** A caller who
+   * states a body schema means a request carries one. A document that stays quiet tells a generated
+   * client the body may be omitted, and the client then holds a call the service refuses every time.
+   *
+   * No departure could report this. A departure says what a target cannot state, and OpenAPI states
+   * this in one keyword. Leaving it out drops a fact the caller gave.
+   */
+  it('says a stated body is required, because a caller who states one means it', async () => {
+    const document = await documentOf([
+      {
+        path: '/w',
+        method: 'post',
+        body: z.object({ note: z.string() }),
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w']?.post?.requestBody).toMatchObject({ required: true })
+  })
+
+  it('says a body may be omitted where the caller says so', async () => {
+    const document = await documentOf([
+      {
+        path: '/w',
+        method: 'patch',
+        body: z.object({ note: z.string() }),
+        bodyRequired: false,
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w']?.patch?.requestBody).toMatchObject({ required: false })
+  })
+
+  it('writes the keyword either way, so no reader supplies the default', async () => {
+    // The point of writing it when it is false as well. A reader that had to know OpenAPI's default
+    // is a reader that can disagree with this document about what the service accepts.
+    const document = await documentOf([
+      {
+        path: '/w',
+        method: 'post',
+        body: z.string(),
+        bodyRequired: false,
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w']?.post?.requestBody).toHaveProperty('required')
+  })
+})
+
+describe('a caller sends part of a request outside the body', () => {
+  /**
+   * **A parameter is a name, a place and a schema, and no validator holds that shape.** What a caller
+   * has is an object whose keys are the names and whose edge says which may be absent. So an object
+   * is stated for each place, and the properties are the parameters there.
+   *
+   * The whole request half of an operation depends on this. A document missing them describes
+   * endpoints that take no path parameter, no query string and no header, which is a different
+   * service from the one that runs.
+   */
+  it('writes one parameter for each property, at the place the caller put it', async () => {
+    const document = await documentOf([
+      {
+        path: '/wallets/{salt}',
+        method: 'get',
+        parameters: {
+          path: z.object({ salt: z.string() }),
+          query: z.object({ limit: z.number().optional(), status: z.enum(['open', 'shut']) }),
+          header: z.object({ authorization: z.string() })
+        },
+        responses: { '200': { schema: z.object({ id: z.string() }) } }
+      }
+    ])
+
+    expect(document.written.paths?.['/wallets/{salt}']?.get?.parameters).toEqual([
+      { name: 'salt', in: 'path', required: true, schema: { type: 'string' } },
+      { name: 'limit', in: 'query', required: false, schema: { type: 'number' } },
+      {
+        name: 'status',
+        in: 'query',
+        required: true,
+        schema: { enum: ['open', 'shut'] }
+      },
+      { name: 'authorization', in: 'header', required: true, schema: { type: 'string' } }
+    ])
+  })
+
+  it('says a key may be absent as the parameter not being required', async () => {
+    // The one fact stated twice by two shapes. A validator puts it on the edge of the object and
+    // OpenAPI puts it beside the parameter, so the object is the shorter of the two.
+    const document = await documentOf([
+      {
+        path: '/x',
+        method: 'get',
+        parameters: { query: z.object({ a: z.string(), b: z.string().optional() }) },
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    const parameters = document.written.paths?.['/x']?.get?.parameters
+    expect(parameters).toMatchObject([
+      { name: 'a', required: true },
+      { name: 'b', required: false }
+    ])
+  })
+
+  it('keeps a parameter whose schema has a name as a reference to the component', async () => {
+    // A property with a name of its own is a component, and a parameter holds the reference. The
+    // container is unnamed, so it is divided rather than written.
+    const Salt = z.string().meta({ id: 'WalletSalt' })
+
+    const document = await documentOf([
+      {
+        path: '/wallets/{salt}',
+        method: 'get',
+        parameters: { path: z.object({ salt: Salt }) },
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/wallets/{salt}']?.get?.parameters).toEqual([
+      {
+        name: 'salt',
+        in: 'path',
+        required: true,
+        schema: { $ref: '#/components/schemas/WalletSalt' }
+      }
+    ])
+  })
+
+  it('carries the value that stands in where a key is absent', async () => {
+    // The 2020-12 target puts a default on the key's own schema, and dividing what it wrote keeps
+    // that decision in one place rather than restating it here.
+    const document = await documentOf([
+      {
+        path: '/x',
+        method: 'get',
+        parameters: { query: z.object({ limit: z.number().default(20) }) },
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/x']?.get?.parameters?.[0]).toMatchObject({
+      name: 'limit',
+      schema: { type: 'number', default: 20 }
+    })
+  })
+
+  it('divides a container the caller named, and keeps the name as a component', async () => {
+    // A shared header set has a name of its own, so the term is a reference and the properties are in
+    // the body it names. The component stays, because the name was the caller's to give and nothing
+    // here can tell whether something else refers to it.
+    const AuthorizationHeaders = z
+      .object({ authorization: z.string() })
+      .meta({ id: 'AuthorizationHeaders' })
+
+    const document = await documentOf([
+      {
+        path: '/x',
+        method: 'get',
+        parameters: { header: AuthorizationHeaders },
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.written.paths?.['/x']?.get?.parameters).toEqual([
+      { name: 'authorization', in: 'header', required: true, schema: { type: 'string' } }
+    ])
+    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual([
+      'AuthorizationHeaders'
+    ])
+  })
+
+  it('writes no parameters key for an operation that states none', async () => {
+    const document = await documentOf([
+      { path: '/ping', method: 'get', responses: { '200': { schema: z.string() } } }
+    ])
+
+    expect(document.written.paths?.['/ping']?.get).not.toHaveProperty('parameters')
+  })
+
+  it('states parameters in 3.0, which reads them the same way', async () => {
+    const spelled = spellOpenApi(
+      [
+        {
+          path: '/x',
+          method: 'get',
+          parameters: { query: z.object({ a: z.string().nullable() }) },
+          responses: { '200': { schema: z.string() } }
+        }
+      ],
+      zodSource,
+      { sides },
+      info,
+      '3.0'
+    )
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
+    // The 3.0 dialect reaches the parameter's schema too, so null is a flag rather than a type.
+    expect(spelled.written.paths?.['/x']?.get?.parameters?.[0]).toMatchObject({
+      schema: { type: 'string', nullable: true }
+    })
+  })
+
+  it('reports what a parameter schema gave up, under the operation', async () => {
+    const document = await documentOf([
+      {
+        path: '/x',
+        method: 'get',
+        parameters: { query: z.object({ a: z.tuple([z.string()]) }) },
+        responses: { '200': { schema: z.string() } }
+      }
+    ])
+
+    expect(document.departures[0]).toMatchObject({ direction: 'wider' })
+    expect(document.departures[0]?.at[0]).toBe('get /x')
+  })
+})
+
+describe('what a request outside the body cannot say', () => {
+  it('refuses a path parameter that may be absent, because a path has no form without it', async () => {
+    const spelled = spellOpenApi(
+      [
+        {
+          path: '/wallets/{salt}',
+          method: 'get',
+          parameters: { path: z.object({ salt: z.string().optional() }) },
+          responses: { '200': { schema: z.string() } }
+        }
+      ],
+      zodSource,
+      { sides },
+      info
+    )
+
+    expect(isError(spelled) ? spelled.message : 'written').toContain('Make salt required')
+  })
+
+  it('refuses a path parameter the path holds no expression for', async () => {
+    // A parameter naming nothing is read by nobody, and the expression it was written for stays
+    // unfilled. The typo is the whole defect and nothing downstream would report it.
+    const spelled = spellOpenApi(
+      [
+        {
+          path: '/wallets/{salt}',
+          method: 'get',
+          parameters: { path: z.object({ slat: z.string() }) },
+          responses: { '200': { schema: z.string() } }
+        }
+      ],
+      zodSource,
+      { sides },
+      info
+    )
+
+    expect(isError(spelled) ? spelled.message : 'written').toContain('no {slat}')
+  })
+
+  it('refuses a place that states anything but an object', async () => {
+    const spelled = spellOpenApi(
+      [
+        {
+          path: '/x',
+          method: 'get',
+          parameters: { query: z.string() },
+          responses: { '200': { schema: z.string() } }
+        }
+      ],
+      zodSource,
+      { sides },
+      info
+    )
+
+    expect(isError(spelled) ? spelled.message : 'written').toContain('the query parameters are')
   })
 })
 
@@ -186,7 +565,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('maps each value of the tag to the member that states it', async () => {
     const document = await documentOf([
-      { path: '/b', method: 'get', responses: { '200': Beneficiary } }
+      { path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }
     ])
 
     // The mapping is written rather than left implicit. OpenAPI resolves a value to a component of
@@ -208,7 +587,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('reports no loss, because this dialect stated the tag the other could not', async () => {
     const document = await documentOf([
-      { path: '/b', method: 'get', responses: { '200': Beneficiary } }
+      { path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }
     ])
 
     // The 2020-12 target gives the discriminant up and says so. A caller who refuses every loss
@@ -218,7 +597,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('states the tag in 3.0 too, which has the same keyword', async () => {
     const spelled = spellOpenApi(
-      [{ path: '/b', method: 'get', responses: { '200': Beneficiary } }],
+      [{ path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }],
       zodSource,
       { sides },
       info,
@@ -243,7 +622,9 @@ describe('a tagged disjunction states the tag, which only this target has a word
       ])
       .meta({ id: 'Inline' })
 
-    const document = await documentOf([{ path: '/i', method: 'get', responses: { '200': Inline } }])
+    const document = await documentOf([
+      { path: '/i', method: 'get', responses: { '200': { schema: Inline } } }
+    ])
 
     expect(document.written.components?.schemas?.['Inline']).not.toHaveProperty('discriminator')
     expect(document.departures[0]).toMatchObject({ direction: 'neither', cause: 'noWordForIt' })
@@ -251,7 +632,9 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('writes no tag for a disjunction that names no property to choose by', async () => {
     const Plain = z.union([Business, Individual]).meta({ id: 'Plain' })
-    const document = await documentOf([{ path: '/p', method: 'get', responses: { '200': Plain } }])
+    const document = await documentOf([
+      { path: '/p', method: 'get', responses: { '200': { schema: Plain } } }
+    ])
 
     expect(document.written.components?.schemas?.['Plain']).not.toHaveProperty('discriminator')
     expect(document.departures).toEqual([])
@@ -263,7 +646,7 @@ describe('one document from three validators', () => {
     const operation = { path: '/users', method: 'get' } as const
 
     const fromZod = spellOpenApi(
-      [{ ...operation, responses: { '200': z.object({ id: z.string() }) } }],
+      [{ ...operation, responses: { '200': { schema: z.object({ id: z.string() }) } } }],
       zodSource,
       { sides },
       info
@@ -273,7 +656,11 @@ describe('one document from three validators', () => {
         {
           ...operation,
           responses: {
-            '200': type.raw({ id: 'string' }) as unknown as Parameters<typeof arktypeSource.read>[0]
+            '200': {
+              schema: type.raw({ id: 'string' }) as unknown as Parameters<
+                typeof arktypeSource.read
+              >[0]
+            }
           }
         }
       ],
@@ -282,7 +669,9 @@ describe('one document from three validators', () => {
       info
     )
     const fromEffect = spellOpenApi(
-      [{ ...operation, responses: { '200': Schema.Struct({ id: Schema.String }).ast } }],
+      [
+        { ...operation, responses: { '200': { schema: Schema.Struct({ id: Schema.String }).ast } } }
+      ],
       effectSource,
       { sides },
       info
@@ -322,7 +711,7 @@ describe('3.0 is a different dialect of one target', () => {
   function schemaIn30(schema: z.core.$ZodType) {
     return async () => {
       const document = await documentIn30([
-        { path: '/x', method: 'get', responses: { '200': schema } }
+        { path: '/x', method: 'get', responses: { '200': { schema: schema } } }
       ])
       const response = document.written.paths?.['/x']?.get?.responses?.['200']
       return {
@@ -388,7 +777,7 @@ describe('3.0 is a different dialect of one target', () => {
       .meta({ id: 'User' })
 
     const document = await documentIn30([
-      { path: '/users', method: 'post', body: User, responses: { '200': User } }
+      { path: '/users', method: 'post', body: User, responses: { '200': { schema: User } } }
     ])
 
     expect(Object.keys(document.written.components?.schemas ?? {}).sort()).toEqual([

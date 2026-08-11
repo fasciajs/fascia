@@ -1,6 +1,7 @@
 import type {
   Ask,
   Departure,
+  Described,
   Naming,
   Source,
   Spelled,
@@ -22,9 +23,10 @@ import { toV30 } from './v30.js'
  * the references to where a document keeps them. What is here is the envelope, which is the same job
  * the arri app definition does and a different shape.
  *
- * Two things OpenAPI states that arri does not. An operation has one request body and several
- * responses, so a position is not one of a pair. And a name in `components.schemas` is held to a
- * pattern, so this is the first target that refuses a name.
+ * Three things OpenAPI states that arri does not. An operation has one request body and several
+ * responses, so a position is not one of a pair. A name in `components.schemas` is held to a
+ * pattern, so this is the first target that refuses a name. And a caller sends part of a request
+ * outside the body, in the path, the query string, a header or a cookie.
  */
 
 /**
@@ -37,6 +39,24 @@ import { toV30 } from './v30.js'
  */
 function asSchemaObject(written: JSONSchema): V31.SchemaObject {
   return written as V31.SchemaObject
+}
+
+/**
+ * A parameter, holding the schema the 2020-12 target wrote.
+ *
+ * **One cast, here, because the declaration is wrong about one field.** openapi-types declares the
+ * 3.1 parameter as the 3.0 one, so its `schema` is a 3.0 schema and refuses an exclusive bound
+ * written as a number. A 3.1 parameter holds a 2020-12 schema, which is the same value this file
+ * already puts under `content` without a cast. Nothing is widened, and the fields OpenAPI states
+ * about a parameter rather than about its schema are named here.
+ */
+function asParameter(stated: {
+  readonly name: string
+  readonly in: Location
+  readonly required: boolean
+  readonly schema: V31.SchemaObject | V31.ReferenceObject
+}): V31.ParameterObject {
+  return stated as V31.ParameterObject
 }
 
 /** Where an OpenAPI document keeps the schemas its operations refer to. */
@@ -54,8 +74,61 @@ const NAME = /^[a-zA-Z0-9._-]+$/
  */
 export type Version = '3.1' | '3.0'
 
-/** The schemas an operation answers with, keyed by status. */
-export type Responses<S> = Readonly<Record<string, S>>
+/** What a media type is where a caller states none. */
+const JSON_MEDIA_TYPE = 'application/json'
+
+/**
+ * One response, and everything OpenAPI states beside its schema.
+ *
+ * **Every field here is a fact a caller holds and no schema carries.** A description, the headers a
+ * response sets, the links it offers and the media type it is written in are about the response
+ * rather than about the value, so nothing in a validator states any of them. A document that invents
+ * them says something the caller did not.
+ *
+ * `schema` is optional because a response may carry no body. A 204 states a description and nothing
+ * under `content`, and a schema would be a body that never arrives.
+ */
+export interface ResponseSpec<S> {
+  /** What comes back. Described as the output side. Absent where the response carries no body. */
+  readonly schema?: S
+  /**
+   * What this response is, which OpenAPI requires of every response.
+   *
+   * Where a caller states none, the status is written instead. That is uninformative and true, which
+   * is the most a document can say about a response nobody described.
+   */
+  readonly description?: string
+  /** The media type the body is written in. `application/json` where a caller states none. */
+  readonly mediaType?: string
+  readonly headers?: Record<string, V31.ReferenceObject | V31.HeaderObject>
+  readonly links?: Record<string, V31.ReferenceObject | V31.LinkObject>
+}
+
+/** The responses an operation answers with, keyed by status. */
+export type Responses<S> = Readonly<Record<string, ResponseSpec<S>>>
+
+/**
+ * What a caller sends outside the body, grouped by where a caller puts it.
+ *
+ * **One object for each place, rather than a list of parameters.** OpenAPI states a name, a place and
+ * a schema for every parameter, and no validator holds that shape. What a caller has is an object
+ * whose keys are the names and whose edge says which of them may be absent, which is every part but
+ * the place. The place is the key here, so nothing is stated twice.
+ *
+ * Each is described as the input side, because a parameter is something a caller sends.
+ */
+export interface RequestParameters<S> {
+  readonly path?: S
+  readonly query?: S
+  readonly header?: S
+  readonly cookie?: S
+}
+
+/** The four places OpenAPI reads a parameter from, in the order a document writes them. */
+const LOCATIONS = ['path', 'query', 'header', 'cookie'] as const
+
+/** One of the four places. */
+type Location = (typeof LOCATIONS)[number]
 
 /** One operation, and the schemas at its ends. */
 export interface Operation<S> {
@@ -71,8 +144,23 @@ export interface Operation<S> {
   readonly summary?: string
   readonly description?: string
   readonly deprecated?: boolean
+  /** What a caller sends outside the body. Each object's properties are the parameters. */
+  readonly parameters?: RequestParameters<S>
   /** What a caller sends. Described as the input side. */
   readonly body?: S
+  /**
+   * Whether a request must carry a body.
+   *
+   * **A stated body is required unless a caller says otherwise.** OpenAPI reads an absent `required`
+   * as false, so a document that says nothing says a request may omit the body. A caller who states
+   * a body schema and nothing else means the other thing, and a generated client built from the
+   * default holds a call that the service refuses every time.
+   *
+   * Written whichever way it lands, so no reader has to know which way OpenAPI defaults.
+   */
+  readonly bodyRequired?: boolean
+  /** The media type the body is written in. `application/json` where a caller states none. */
+  readonly bodyMediaType?: string
   /** What comes back, keyed by status. Each is described as the output side. */
   readonly responses?: Responses<S>
 }
@@ -126,11 +214,22 @@ export function spellOpenApi<S>(
     departures.push(...under(name, [...shown.departures, ...said.departures]))
   }
 
-  const written: V31.SchemaObject[] = []
+  const written: AtPosition[] = []
   for (const [index, position] of positions.entries()) {
     const term = described.terms[index]
     if (term === undefined) {
       throw new Error('a position was described as nothing')
+    }
+
+    if (position.in !== undefined) {
+      const built = parametersOf(term, position.in, position.path, described.definitions, version)
+      if (isError(built)) {
+        return built
+      }
+
+      written.push({ of: 'parameters', parameters: built.written })
+      departures.push(...under(`${position.method} ${position.path}`, built.departures))
+      continue
     }
 
     const spelled = spellJsonSchema(term)
@@ -146,7 +245,7 @@ export function spellOpenApi<S>(
       COMPONENTS
     )
 
-    written.push(shown.written)
+    written.push({ of: 'schema', schema: shown.written })
     departures.push(
       ...under(`${position.method} ${position.path}`, [...shown.departures, ...said.departures])
     )
@@ -166,10 +265,27 @@ export function spellOpenApi<S>(
 interface Position<S> {
   readonly path: string
   readonly method: string
-  /** The request body, or the status a response answers under. */
+  /** The request body, the status a response answers under, or the place a parameter stands. */
   readonly at: string
+  /**
+   * Set where this position holds parameters rather than one schema.
+   *
+   * The place is what tells the two apart, and a position holding parameters is divided into several
+   * where one holding a body stays one.
+   */
+  readonly in?: Location
   readonly ask: Ask<S>
 }
+
+/**
+ * What a position put in the document.
+ *
+ * A body and a response each hold one schema. A place a parameter stands holds a list, because the
+ * properties of one object are several parameters.
+ */
+type AtPosition =
+  | { readonly of: 'schema'; readonly schema: V31.SchemaObject }
+  | { readonly of: 'parameters'; readonly parameters: readonly V31.ParameterObject[] }
 
 /**
  * Every schema a document holds, with the side its position gives it.
@@ -184,12 +300,22 @@ function positionsOf<S>(operations: readonly Operation<S>[]): Position<S>[] {
   for (const operation of operations) {
     const where = { path: operation.path, method: operation.method }
 
+    for (const location of LOCATIONS) {
+      const schema = operation.parameters?.[location]
+      if (schema !== undefined) {
+        positions.push({ ...where, at: location, in: location, ask: { schema, io: 'input' } })
+      }
+    }
+
     if (operation.body !== undefined) {
       positions.push({ ...where, at: 'body', ask: { schema: operation.body, io: 'input' } })
     }
 
-    for (const [status, schema] of Object.entries(operation.responses ?? {})) {
-      positions.push({ ...where, at: status, ask: { schema, io: 'output' } })
+    // A response carrying no body is described as nothing, because there is no value to describe.
+    for (const [status, response] of Object.entries(operation.responses ?? {})) {
+      if (response.schema !== undefined) {
+        positions.push({ ...where, at: status, ask: { schema: response.schema, io: 'output' } })
+      }
     }
   }
 
@@ -201,32 +327,136 @@ function inDialect(written: JSONSchema, version: Version): Spelled<JSONSchema> {
   return version === '3.1' ? { written, departures: [] } : toV30(written)
 }
 
+/**
+ * The parameters one object states, one for each property the object names.
+ *
+ * **The object is spelled whole and then divided, rather than a property at a time.** A value that
+ * stands in where a key is absent belongs on that key's schema, and the 2020-12 target decided that
+ * already. Dividing what it wrote keeps the decision in one place, and a property whose own schema
+ * has a name stays a reference to the component holding it.
+ *
+ * A caller who named the object gets a component for it as well. The name was theirs to give, and
+ * nothing here can tell whether something else refers to it.
+ */
+function parametersOf(
+  term: Described,
+  location: Location,
+  path: string,
+  definitions: ReadonlyMap<string, Described>,
+  version: Version
+): Spelling<readonly V31.ParameterObject[]> {
+  // A caller who named the object gets a reference, and the properties are in the body it names.
+  const stated = term.kind === 'ref' ? definitions.get(term.name) : term
+
+  if (stated === undefined || stated.kind !== 'typed' || stated.name !== 'object') {
+    const said = stated === undefined ? 'a reference to nothing' : `a ${stated.kind}`
+    return new UnsayableTerm(
+      [location],
+      `the ${location} parameters are the properties of an object, and this states ${said}. Describe an object whose keys are the parameter names`
+    )
+  }
+
+  if (stated.admitsNull) {
+    return new UnsayableTerm(
+      [location],
+      `the ${location} parameters admit null, and a request carries no null where a list of parameters stands. Describe an object whose properties may be absent instead`
+    )
+  }
+
+  const spelled = spellJsonSchema(stated)
+  if (isError(spelled)) {
+    return spelled
+  }
+
+  const said = inDialect(refsAt(spelled.written, COMPONENTS), version)
+  const object = asSchemaObject(said.written)
+  const required = new Set(object.required ?? [])
+  const templated = templateOf(path)
+
+  const parameters: V31.ParameterObject[] = []
+  for (const [name, schema] of Object.entries(object.properties ?? {})) {
+    // OpenAPI states that a path parameter is required, and a reader meeting an absent one would have
+    // no path to read. A key that may be absent says the other thing, so the two disagree.
+    if (location === 'path' && !required.has(name)) {
+      return new UnsayableTerm(
+        [location, name],
+        `${name} stands in the path and may be absent, and a path has no form without it. Make ${name} required`
+      )
+    }
+
+    // A path parameter fills a template expression. One that fills nothing is read by nobody, and the
+    // expression it was written for stays in the path unfilled.
+    if (location === 'path' && !templated.has(name)) {
+      return new UnsayableTerm(
+        [location, name],
+        `${name} stands in the path and ${path} holds no {${name}} for it to fill. Name the parameter as the path writes it`
+      )
+    }
+
+    parameters.push(asParameter({ name, in: location, required: required.has(name), schema }))
+  }
+
+  return { written: parameters, departures: [...spelled.departures, ...said.departures] }
+}
+
+/** The names a path holds as template expressions, which a path parameter fills one of. */
+function templateOf(path: string): ReadonlySet<string> {
+  const names = new Set<string>()
+  for (const match of path.matchAll(/\{([^{}]+)\}/g)) {
+    const name = match[1]
+    if (name !== undefined) {
+      names.add(name)
+    }
+  }
+  return names
+}
+
 /** The operations, grouped under the path each one is reached at. */
 function pathsOf<S>(
   operations: readonly Operation<S>[],
   positions: readonly Position<S>[],
-  written: readonly V31.SchemaObject[]
+  written: readonly AtPosition[]
 ): V31.PathsObject {
-  const at = new Map<string, V31.SchemaObject>()
+  const at = new Map<string, AtPosition>()
   for (const [index, position] of positions.entries()) {
-    const schema = written[index]
-    if (schema !== undefined) {
-      at.set(`${position.method} ${position.path} ${position.at}`, schema)
+    const one = written[index]
+    if (one !== undefined) {
+      at.set(`${position.method} ${position.path} ${position.at}`, one)
     }
+  }
+
+  /** The one schema a position holds, where the position holds a schema at all. */
+  const schemaAt = (key: string): V31.SchemaObject | undefined => {
+    const one = at.get(key)
+    return one?.of === 'schema' ? one.schema : undefined
   }
 
   const paths: Record<string, V31.PathItemObject> = {}
   for (const operation of operations) {
-    const body = at.get(`${operation.method} ${operation.path} body`)
+    const body = schemaAt(`${operation.method} ${operation.path} body`)
+
+    // The four places in one list, in the order the constant names them, so a document does not
+    // reorder itself when a caller states them another way.
+    const parameters: V31.ParameterObject[] = []
+    for (const location of LOCATIONS) {
+      const one = at.get(`${operation.method} ${operation.path} ${location}`)
+      if (one?.of === 'parameters') {
+        parameters.push(...one.parameters)
+      }
+    }
 
     const responses: Record<string, V31.ResponseObject> = {}
-    for (const status of Object.keys(operation.responses ?? {})) {
-      const schema = at.get(`${operation.method} ${operation.path} ${status}`)
+    for (const [status, response] of Object.entries(operation.responses ?? {})) {
+      const schema = schemaAt(`${operation.method} ${operation.path} ${status}`)
       responses[status] = {
         // OpenAPI requires a description on a response, and a document without one is refused by
-        // the meta-schema. The status is what a caller was told, so it is what is written.
-        description: `the ${status} response`,
-        ...(schema !== undefined && { content: { 'application/json': { schema } } })
+        // the meta-schema. The status is what a caller was told, so it stands where they said nothing.
+        description: response.description ?? `the ${status} response`,
+        ...(response.headers !== undefined && { headers: response.headers }),
+        ...(response.links !== undefined && { links: response.links }),
+        ...(schema !== undefined && {
+          content: { [response.mediaType ?? JSON_MEDIA_TYPE]: { schema } }
+        })
       }
     }
 
@@ -237,8 +467,12 @@ function pathsOf<S>(
         ...(operation.summary !== undefined && { summary: operation.summary }),
         ...(operation.description !== undefined && { description: operation.description }),
         ...(operation.deprecated !== undefined && { deprecated: operation.deprecated }),
+        ...(parameters.length > 0 && { parameters }),
         ...(body !== undefined && {
-          requestBody: { content: { 'application/json': { schema: body } } }
+          requestBody: {
+            required: operation.bodyRequired ?? true,
+            content: { [operation.bodyMediaType ?? JSON_MEDIA_TYPE]: { schema: body } }
+          }
         }),
         responses
       }
