@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/atd",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as Arri Type Definition.",
@@ -38,6 +38,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.1"
+    "@fasciajs/core": "0.2.0"
   }
 }

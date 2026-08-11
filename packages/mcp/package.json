@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "sideEffects": false,
   "description": "A set of tools, written as Model Context Protocol tool definitions.",
@@ -38,8 +38,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.1",
-    "@fasciajs/json-schema": "0.1.1"
+    "@fasciajs/core": "0.2.0",
+    "@fasciajs/json-schema": "0.2.0"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"

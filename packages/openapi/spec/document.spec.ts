@@ -168,6 +168,96 @@ describe('what OpenAPI refuses, and what this says instead', () => {
   })
 })
 
+describe('a tagged disjunction states the tag, which only this target has a word for', () => {
+  /**
+   * **The one place this target writes a keyword 2020-12 does not have.** A generator reads
+   * `discriminator` and emits a sealed hierarchy over the members. It reads a bare `oneOf` and emits
+   * an untagged union, so a consumer of the generated client loses the tag the schema was built on.
+   */
+  const Business = z
+    .object({ kind: z.literal('business'), name: z.string() })
+    .meta({ id: 'BusinessBeneficiary' })
+  const Individual = z
+    .object({ kind: z.literal('individual'), name: z.string() })
+    .meta({ id: 'IndividualBeneficiary' })
+  const Beneficiary = z
+    .discriminatedUnion('kind', [Business, Individual])
+    .meta({ id: 'Beneficiary' })
+
+  it('maps each value of the tag to the member that states it', async () => {
+    const document = await documentOf([
+      { path: '/b', method: 'get', responses: { '200': Beneficiary } }
+    ])
+
+    // The mapping is written rather than left implicit. OpenAPI resolves a value to a component of
+    // that name where no mapping stands, and no component here is called `business`.
+    expect(document.written.components?.schemas?.['Beneficiary']).toMatchObject({
+      oneOf: [
+        { $ref: '#/components/schemas/BusinessBeneficiary' },
+        { $ref: '#/components/schemas/IndividualBeneficiary' }
+      ],
+      discriminator: {
+        propertyName: 'kind',
+        mapping: {
+          business: '#/components/schemas/BusinessBeneficiary',
+          individual: '#/components/schemas/IndividualBeneficiary'
+        }
+      }
+    })
+  })
+
+  it('reports no loss, because this dialect stated the tag the other could not', async () => {
+    const document = await documentOf([
+      { path: '/b', method: 'get', responses: { '200': Beneficiary } }
+    ])
+
+    // The 2020-12 target gives the discriminant up and says so. A caller who refuses every loss
+    // publishes this document, so the report must not survive into it.
+    expect(document.departures).toEqual([])
+  })
+
+  it('states the tag in 3.0 too, which has the same keyword', async () => {
+    const spelled = spellOpenApi(
+      [{ path: '/b', method: 'get', responses: { '200': Beneficiary } }],
+      zodSource,
+      { sides },
+      info,
+      '3.0'
+    )
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
+    expect(spelled.written.components?.schemas?.['Beneficiary']).toMatchObject({
+      discriminator: { propertyName: 'kind' }
+    })
+  })
+
+  it('gives up the tag where a member has no name to map the value to', async () => {
+    // The members are unnamed, so each is written in place and a mapping has no reference to hold.
+    const Inline = z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('a') }),
+        z.object({ kind: z.literal('b') })
+      ])
+      .meta({ id: 'Inline' })
+
+    const document = await documentOf([{ path: '/i', method: 'get', responses: { '200': Inline } }])
+
+    expect(document.written.components?.schemas?.['Inline']).not.toHaveProperty('discriminator')
+    expect(document.departures[0]).toMatchObject({ direction: 'neither', cause: 'noWordForIt' })
+  })
+
+  it('writes no tag for a disjunction that names no property to choose by', async () => {
+    const Plain = z.union([Business, Individual]).meta({ id: 'Plain' })
+    const document = await documentOf([{ path: '/p', method: 'get', responses: { '200': Plain } }])
+
+    expect(document.written.components?.schemas?.['Plain']).not.toHaveProperty('discriminator')
+    expect(document.departures).toEqual([])
+  })
+})
+
 describe('one document from three validators', () => {
   it('reaches the same document from zod, arktype and effect', async () => {
     const operation = { path: '/users', method: 'get' } as const

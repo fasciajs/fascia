@@ -38,6 +38,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.1.1"
+    "@fasciajs/core": "0.2.0"
   }
 }

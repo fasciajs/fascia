@@ -10,6 +10,7 @@ import type {
 import { describeAll, isError, UnsayableTerm, under } from '@fasciajs/core'
 import { refsAt, spellJsonSchema } from '@fasciajs/json-schema'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
+import { discriminating } from './discriminator.js'
 import type { V31 } from './openapi.js'
 import { toV30 } from './v30.js'
 
@@ -114,8 +115,15 @@ export function spellOpenApi<S>(
     }
 
     const said = inDialect(refsAt(spelled.written, COMPONENTS), version)
-    schemas[name] = asSchemaObject(said.written)
-    departures.push(...under(name, [...spelled.departures, ...said.departures]))
+    const shown = discriminating(
+      { written: asSchemaObject(said.written), departures: spelled.departures },
+      term,
+      described.definitions,
+      COMPONENTS
+    )
+
+    schemas[name] = shown.written
+    departures.push(...under(name, [...shown.departures, ...said.departures]))
   }
 
   const written: V31.SchemaObject[] = []
@@ -131,9 +139,16 @@ export function spellOpenApi<S>(
     }
 
     const said = inDialect(refsAt(spelled.written, COMPONENTS), version)
-    written.push(asSchemaObject(said.written))
+    const shown = discriminating(
+      { written: asSchemaObject(said.written), departures: spelled.departures },
+      term,
+      described.definitions,
+      COMPONENTS
+    )
+
+    written.push(shown.written)
     departures.push(
-      ...under(`${position.method} ${position.path}`, [...spelled.departures, ...said.departures])
+      ...under(`${position.method} ${position.path}`, [...shown.departures, ...said.departures])
     )
   }
 
