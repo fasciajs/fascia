@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/arktype",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "sideEffects": false,
   "description": "An arktype schema, read as a Node.",
@@ -36,7 +36,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.2.0"
+    "@fasciajs/core": "0.3.0"
   },
   "peerDependencies": {
     "@ark/schema": "^0.56.0",

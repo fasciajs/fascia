@@ -4,6 +4,28 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.3.0
+
+### Added
+
+`@fasciajs/openapi` states the parts of a request and a response that no schema carries.
+
+An operation states what a caller sends outside the body. A parameter is a name, a place, and a
+schema, and no validator holds that shape, so `parameters` states one object for each place and its
+properties are the parameters there. A key that may be absent is a parameter that is not required. A
+path parameter is required, and it fills a template expression the path holds, so a document refuses
+one that may be absent and one the path has no `{name}` for.
+
+A response states its description, the headers it sets, the links it offers, and the media type it
+is written in. None of those is a fact about a value. A response with no `schema` carries no body,
+which is what a 204 answers with.
+
+`bodyRequired` says whether a body is required, and the keyword is written either way, because
+OpenAPI reads an absent `required` as false. `bodyMediaType` and `mediaType` name the media type,
+and both are `application/json` where a caller states none.
+
+`RequestParameters` and `ResponseSpec` are exported.
+
 ## 0.1.1
 
 ### Fixed
