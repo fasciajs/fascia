@@ -84,6 +84,40 @@ workspace at a version the registry does not hold. Use `bump.mjs` instead.
 each tag as soon as the package it names is published. A run that changed no version publishes
 nothing. A run that failed halfway resumes rather than repeats.
 
+## Publishing a branch as an alpha
+
+Comment `/alpha` on the pull request. The workflow builds the branch, publishes every package under
+the `alpha` dist-tag, and replies with the version.
+
+```sh
+npm install @fasciajs/core@alpha @fasciajs/openapi@alpha
+```
+
+The version is the one the branch states, then the run number, then the commit: a branch at `0.2.0`
+publishes `0.2.0-alpha.7.gc8749a6`. That sorts below `0.2.0`, so the release that follows wins.
+`latest` does not move, and no tag and no release are written.
+
+The run number comes before the commit because a prerelease compares identifier by identifier, and
+a numeric one compares as a number. A commit alone would order two alphas by ASCII rather than by
+time. The `g` before the commit is what `git describe` writes, and it is load-bearing: a short hash
+of digits alone is a numeric identifier, and one leading zero makes the whole version invalid.
+
+Run `node bump.mjs <next version>` on the branch first. A branch that still states the last released
+version would publish an alpha that sorts below it, so the workflow refuses one and says so.
+
+Three conditions gate the comment, and each one is necessary. The comment is on a pull request. The
+commenter is an owner, a member, or a collaborator. The pull request comes from a branch of this
+repository rather than from a fork.
+
+The job builds and publishes the code on the branch, so a person who can start it can put code of
+their choosing on the registry. The three conditions are what stands there. GitHub reads
+`publish.yml` from `main` for a comment event, so a pull request cannot edit the conditions that
+gate itself.
+
+The alpha lives in `publish.yml` beside the release because npm registers a trusted publisher
+against a repository and a workflow file name. A second file would need its own registration on
+every package.
+
 ## How the workflow authenticates
 
 No secret exists. The workflow publishes through an OIDC token that GitHub mints for it, and npm
