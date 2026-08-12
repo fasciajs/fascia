@@ -88,13 +88,14 @@ const ordered = published.toSorted(
 const into = process.env.FASCIA_PACK
 if (into !== undefined) {
   const order = ordered.map((manifest) => {
-    const printed = read('npm', 'pack', '-w', manifest.name, '--pack-destination', into, '--silent')
-    const filename = printed.trim().split('\n').at(-1)
+    // `--json` states the name npm wrote, under the name of the package it wrote it for. Reading
+    // the directory instead would ask which file appeared, and nine packages pack into this one
+    // directory in turn.
+    const printed = read('npm', 'pack', '-w', manifest.name, '--pack-destination', into, '--json')
+    const filename = JSON.parse(printed)[manifest.name]?.filename
 
-    // `npm pack` prints the name it wrote. A version of npm that prints nothing would put an empty
-    // name in the list, and the job that publishes it would refuse a file this job never named.
-    if (filename === undefined || !/^[\w.-]+\.tgz$/.test(filename)) {
-      throw new Error(`npm pack wrote no tarball name for ${manifest.name}`)
+    if (typeof filename !== 'string' || !/^[\w.-]+\.tgz$/.test(filename)) {
+      throw new Error(`npm pack named no tarball for ${manifest.name}`)
     }
 
     console.log(`packed ${manifest.name}@${manifest.version} as ${filename}`)

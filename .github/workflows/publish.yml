@@ -91,6 +91,22 @@ jobs:
       # where the branch moves between the answer and the checkout.
       #
       # This job checks out nothing and runs nothing off the branch.
+      # `startsWith` in the `if:` above takes `/alphabet` as well, and a GitHub expression has no
+      # word boundary to say otherwise. So the `if:` is the prefilter and this is the decision. The
+      # body reaches the shell as a variable, because a comment is text a person outside the
+      # repository can write.
+      - name: Refuse a word that only begins with the command
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          case "$BODY" in
+            /alpha | /alpha[[:space:]]*) ;;
+            *)
+              echo "::error::The comment starts with a word that is not /alpha."
+              exit 1
+              ;;
+          esac
+
       - name: Read the pull request
         id: pr
         env:
