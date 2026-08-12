@@ -200,7 +200,7 @@ export function spellOpenApi<S>(
   const departures: Departure[] = []
   const schemas: Record<string, V31.SchemaObject> = {}
 
-  for (const [name, term] of described.definitions) {
+  for (const [name, term] of byName(described.definitions)) {
     if (!NAME.test(name)) {
       return new UnsayableTerm(
         [name],
@@ -331,6 +331,23 @@ function positionsOf<S>(operations: readonly Operation<S>[]): Position<S>[] {
   }
 
   return positions
+}
+
+/**
+ * The definitions in the order a document writes them, which is by name.
+ *
+ * **A component block is a lookup table, and the order of a lookup table states nothing.** What the
+ * walk produced is the order it met each name, with one whole side before the other, so two names
+ * that split sit apart and a name's two sides do not.
+ *
+ * Sorted because this document is generated and kept. Insertion order is stable for one input and
+ * moves for another: adding an operation, or moving one, reorders names that did not change, and a
+ * diff then shows work nobody did. By name, a diff holds what a caller altered and nothing else.
+ *
+ * By code point rather than by locale, so the order does not follow the machine that wrote it.
+ */
+function byName(definitions: ReadonlyMap<string, Described>): [string, Described][] {
+  return [...definitions].sort(([one], [other]) => (one < other ? -1 : one > other ? 1 : 0))
 }
 
 /** A schema as the chosen dialect says it. 3.1 says what 2020-12 says, so it says nothing more. */

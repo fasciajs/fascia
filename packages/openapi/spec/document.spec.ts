@@ -169,6 +169,47 @@ describe('what OpenAPI refuses, and what this says instead', () => {
   })
 })
 
+describe('a generated document is kept, so its order is its own', () => {
+  /**
+   * **A component block is a lookup table and its order states nothing, so a diff of one should hold
+   * only what a caller altered.** The walk produces the order it met each name, one whole side before
+   * the other. That is stable for one input and moves for another: an operation added or moved
+   * reorders names nobody touched, and whoever reviews the document reads a change that is not one.
+   */
+  const Zebra = z.object({ a: z.string() }).meta({ id: 'Zebra' })
+  const Apple = z.object({ a: z.string() }).meta({ id: 'Apple' })
+  const Middle = z.object({ a: z.string(), d: z.string().default('x') }).meta({ id: 'Middle' })
+
+  const zebra = {
+    path: '/z',
+    method: 'post',
+    body: Zebra,
+    responses: { '200': { schema: Apple } }
+  } as const
+  const middle = {
+    path: '/m',
+    method: 'post',
+    body: Middle,
+    responses: { '200': { schema: Middle } }
+  } as const
+
+  it('names the components in one order whatever order the operations arrive in', async () => {
+    const one = await documentOf([zebra, middle])
+    const other = await documentOf([middle, zebra])
+
+    const names = ['Apple', 'MiddleInput', 'MiddleOutput', 'Zebra']
+    expect(Object.keys(one.written.components?.schemas ?? {})).toEqual(names)
+    expect(Object.keys(other.written.components?.schemas ?? {})).toEqual(names)
+  })
+
+  it('keeps the paths in the order the caller stated them, which is the callers to choose', async () => {
+    // The other half of the same decision. A path order is a reading order somebody chose, and a
+    // component order is not, so only the second is taken out of a caller's hands.
+    const document = await documentOf([middle, zebra])
+    expect(Object.keys(document.written.paths ?? {})).toEqual(['/m', '/z'])
+  })
+})
+
 describe('the type system refuses a response that describes nothing', () => {
   /**
    * **The shape a caller reaches for first is the one that must not compile.** A response held a
