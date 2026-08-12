@@ -6,27 +6,33 @@ name: publish
 # Review the diff that bump.mjs writes, because merging it is the last step a person takes.
 #
 # workflow_dispatch stays, so a run that failed halfway can be started again without a commit.
+#
+# `/alpha` in a comment on a pull request publishes that branch under the `alpha` dist-tag. Both
+# live in this one file because npm registers a trusted publisher against a repository and a
+# workflow file name. A second file would need its own registration on all nine packages.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  issue_comment:
+    types: [created]
 
-# Two runs at once would each read `git tag`, each find the same version untagged, and each try to
-# publish it. The second run reaches a registry that already holds the version and stops there.
+# A release and an alpha do not queue behind each other, and two alphas on one pull request do.
 concurrency:
-  group: publish
+  group: publish-${{ github.event.issue.number || 'main' }}
   cancel-in-progress: false
 
-permissions:
-  # `id-token` is what npm reads instead of a stored token. `contents` is for the tag and the
-  # release that publish.mjs writes.
-  id-token: write
-  contents: write
-
 jobs:
+  # Everything that reaches `latest`.
   release:
+    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      # `id-token` is what npm reads instead of a stored token. `contents` is for the tag and the
+      # release that publish.mjs writes.
+      id-token: write
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,3 +57,207 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
+
+
+  # `/alpha` on a pull request, from somebody who can already push to this repository.
+  #
+  # Three conditions stand between a comment and a publish, and each one is necessary:
+  #
+  #   - the comment is on a pull request, and not on an issue;
+  #   - `author_association` is a role GitHub assigns, and a person outside the repository has none
+  #     of the three named here;
+  #   - the pull request comes from a branch of this repository, which the job below checks.
+  #
+  # GitHub reads this file from the default branch for an `issue_comment` event whatever the pull
+  # request holds, so a pull request cannot edit the conditions that gate itself.
+  gate:
+    if: >-
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/alpha') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.pr.outputs.sha }}
+    steps:
+      # The event says a comment arrived on a pull request and says nothing else about it.
+      # `issue.pull_request` in the payload holds five URLs: diff, html, merged_at, patch, url. No
+      # head, no repository, no commit. So one read of the API answers all three questions at once,
+      # and the commit it returns is the commit the next job builds. Two reads would leave a gap
+      # where the branch moves between the answer and the checkout.
+      #
+      # This job checks out nothing and runs nothing off the branch.
+      - name: Read the pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.issue.number }}
+        run: |
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")
+          repo=$(printf '%s' "$pr" | jq -r '.head.repo.full_name')
+          sha=$(printf '%s' "$pr" | jq -r '.head.sha')
+          state=$(printf '%s' "$pr" | jq -r '.state')
+
+          # A fork is the one case the role check does not cover. Anybody opens a pull request from
+          # a fork, and a member commenting `/alpha` on it would publish a stranger's code.
+          if [ "$repo" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::This pull request comes from $repo. Push the branch to this repository to publish an alpha of it."
+            exit 1
+          fi
+
+          if [ "$state" != "open" ]; then
+            echo "::error::This pull request is $state."
+            exit 1
+          fi
+
+          # The value reaches a later job, so it is refused unless it is a commit and nothing else.
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::The API returned no commit for this pull request."
+            exit 1
+          fi
+
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  # Everything the branch decides, and nothing the registry trusts.
+  #
+  # This job runs the branch's build, the branch's suite, and the branch's copy of the setup action.
+  # It holds no token: no `id-token`, and no `GH_TOKEN` in any step. What it produces is nine
+  # tarballs, which are data. `/usr/local/bin` is writable on a runner, so a step that runs code off
+  # a branch reaches every later step in its own job, and that is why the publish is not one of them.
+  build:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.choose.outputs.version }}
+      commit: ${{ steps.choose.outputs.commit }}
+    steps:
+      # The commit rather than the branch. A branch is a name that moves, and this names what the
+      # gate read and refused to move on from.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Check
+        run: npm run check
+
+      # The branch states the version it is working towards, and what follows says which alpha of it
+      # this is. `0.2.0-alpha.7.g8a9b797` sorts below `0.2.0`, so the release that follows wins.
+      #
+      # The run number comes first because a prerelease compares identifier by identifier, and a
+      # numeric one compares as a number. A hash alone would order two alphas by ASCII rather than
+      # by time. The `g` in front of the hash is what `git describe` writes, and it is load-bearing:
+      # a short hash of digits alone is a numeric identifier, and one leading zero makes the whole
+      # version invalid. That is about one commit in 270.
+      #
+      # The branch wrote the manifest this reads, so the value is refused unless it is three numbers
+      # and nothing else. A value holding a quote reaches the next step as shell, and a value holding
+      # a newline writes a second output that no step here declares.
+      - name: Choose the version
+        id: choose
+        run: |
+          base=$(node -e '
+            const { version } = require("./packages/core/package.json")
+            const base = String(version).split("-")[0]
+            if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(base)) {
+              console.error("packages/core/package.json states no version an alpha can build on")
+              process.exit(1)
+            }
+            process.stdout.write(base)
+          ')
+          # git writes the hash, so it is hexadecimal and holds nothing a shell reads.
+          at=$(git rev-parse --short=7 HEAD)
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "version=$base-alpha.$GITHUB_RUN_NUMBER.g$at" >> "$GITHUB_OUTPUT"
+          echo "commit=$at" >> "$GITHUB_OUTPUT"
+
+      # An alpha of a version the registry already holds sorts below the release it claims to
+      # precede: `0.2.0-alpha.7` is older than `0.2.0`, whatever the branch does. A branch states
+      # the version it is working towards, so this refuses a branch that never moved off the last
+      # one. `npm view` answers 404 with a non-zero exit and needs no credential to ask.
+      - name: Refuse a version the registry already holds
+        env:
+          BASE: ${{ steps.choose.outputs.base }}
+        run: |
+          if npm view "@fasciajs/core@$BASE" version > /dev/null 2>&1; then
+            echo "::error::@fasciajs/core@$BASE is published. Run node bump.mjs <next version> on this branch, then comment /alpha again."
+            exit 1
+          fi
+
+      # The version reaches the command as an environment variable. A value substituted into the
+      # text of a `run` block is read as shell before the command starts.
+      - name: Write the version
+        env:
+          VERSION: ${{ steps.choose.outputs.version }}
+        run: node bump.mjs "$VERSION"
+
+      - name: Pack
+        env:
+          FASCIA_PACK: ${{ runner.temp }}/alpha
+        run: |
+          mkdir -p "$FASCIA_PACK"
+          node publish.mjs
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: alpha
+          path: ${{ runner.temp }}/alpha
+          retention-days: 1
+
+  # The half that holds the token.
+  #
+  # It checks out the default branch, which is this file's own commit and not the pull request's. It
+  # never reads `packages`, and `npm publish` on a tarball reads the tarball and runs nothing inside
+  # it. So the branch reaches the registry as data and reaches this job as nothing.
+  publish-alpha:
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm 12
+        run: npm install -g npm@12
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: alpha
+          path: ${{ runner.temp }}/alpha
+
+      - name: Publish
+        env:
+          FASCIA_CHANNEL: alpha
+          FASCIA_FROM: ${{ runner.temp }}/alpha
+          NPM_CONFIG_PROVENANCE: true
+        run: node publish.mjs
+
+      - name: Say where it went
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.issue.number }}
+          VERSION: ${{ needs.build.outputs.version }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+          WHO: ${{ github.event.comment.user.login }}
+        run: |
+          gh pr comment "$PR" --body "Published \`$VERSION\` from \`$COMMIT\` under the \`alpha\` dist-tag, on \`/alpha\` from @$WHO.
+
+          \`\`\`sh
+          npm install @fasciajs/core@alpha @fasciajs/openapi@alpha
+          \`\`\`
+
+          No tag and no release were written, and \`latest\` did not move."
