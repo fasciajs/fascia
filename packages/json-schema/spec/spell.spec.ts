@@ -74,7 +74,7 @@ describe('what ATD refuses, 2020-12 states', () => {
   })
 
   it('writes an enum that admits something other than strings', () => {
-    expect(writtenOf(z.literal(1))).toEqual({ enum: [1] })
+    expect(writtenOf(z.literal(1))).toEqual({ type: 'number', enum: [1] })
   })
 
   it('writes a tuple at its positions, where ATD writes a list of anything', () => {
@@ -105,7 +105,12 @@ describe('nullability is one fact and each target has its own word', () => {
   })
 
   it('states it beside the values of an enum, because a flag would not widen one', () => {
-    expect(writtenOf(z.enum(['a', 'b']).nullable())).toEqual({ enum: ['a', 'b', null] })
+    // Null reaches the values, which is the claim here. The type beside them carries it as well,
+    // because a type refuses null on its own and would turn away a value the list admits.
+    expect(writtenOf(z.enum(['a', 'b']).nullable())).toEqual({
+      type: ['string', 'null'],
+      enum: ['a', 'b', null]
+    })
   })
 
   it('joins a disjunction to null, having no type of its own to widen', () => {

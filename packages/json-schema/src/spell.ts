@@ -239,6 +239,8 @@ function restOf(rest: DescribedRest): Spelling<Record<string, JSONSchema>> {
 /** A fixed set of values. 2020-12 names any JSON value here, where ATD names strings only. */
 function values(term: DescribedOf<'values'>): Spelling<JSONSchema> {
   const admitted: (string | number | boolean | null)[] = []
+  const named = new Set<string>()
+  let admitsNullValue = false
 
   for (const value of term.admitted) {
     if (value.of === 'bigint') {
@@ -247,12 +249,37 @@ function values(term: DescribedOf<'values'>): Spelling<JSONSchema> {
         'this admits a bigint, and JSON has no form for one, so no document can name the value'
       )
     }
-    admitted.push(value.of === 'null' ? null : value.value)
+
+    if (value.of === 'null') {
+      admitted.push(null)
+      admitsNullValue = true
+    } else {
+      admitted.push(value.value)
+      named.add(value.of)
+    }
   }
 
+  // The type the values share, where they share one.
+  //
+  // **States nothing the values did not, and a generator reads it anyway.** A list of admitted values
+  // fixes the type by itself, so this is the same claim written twice, and this target says a thing
+  // once everywhere else. What buys the repetition is what a client generator does without it: it
+  // keys on `type` to choose a form, and a list of strings under no type becomes an opaque value of
+  // whatever the target language calls unknown. The named alternatives and the exhaustiveness go with
+  // it. That is worse code from a document that gave up nothing, so the type is written.
+  //
+  // Left off where the values disagree about it. Two types would be a claim about which value is
+  // which, and the list already refuses everything but the values.
+  const [only, ...rest] = [...named]
+  const shared = rest.length === 0 ? only : undefined
+
   // A term admitting null states it beside the values rather than as a flag, because a flag written
-  // next to an enum widens nothing: both have to hold.
-  return faithful({ enum: term.admitsNull ? [...admitted, null] : admitted })
+  // next to an enum widens nothing: both have to hold. The type beside them says it as well, because
+  // a type list is where this target puts null and a value of null is not of the shared type.
+  return faithful({
+    ...(shared !== undefined && { type: typeOf(shared, term.admitsNull || admitsNullValue) }),
+    enum: term.admitsNull ? [...admitted, null] : admitted
+  })
 }
 
 function composed(

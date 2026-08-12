@@ -430,7 +430,7 @@ describe('a caller sends part of a request outside the body', () => {
         name: 'status',
         in: 'query',
         required: true,
-        schema: { enum: ['open', 'shut'] }
+        schema: { type: 'string', enum: ['open', 'shut'] }
       },
       { name: 'authorization', in: 'header', required: true, schema: { type: 'string' } }
     ])

@@ -188,10 +188,16 @@ function admittingNull(written: unknown, departures: Departure[]): unknown {
 
   const stated = written as Record<string, unknown>
 
-  // A list of admitted values states what it admits, and a flag beside it states nothing. Null is
-  // added to the list, which is the same trap arri's own converter falls into the other way.
+  // A list of admitted values states what it admits, so null is added to the list. The flag goes on
+  // as well wherever a type stands beside the list, because a type refuses null on its own and the
+  // two would then disagree: the list would admit a value the type turned away. Where no type stands
+  // the flag states nothing and is left off.
   if (Array.isArray(stated['enum'])) {
-    return { ...stated, enum: [...stated['enum'], null] }
+    return {
+      ...stated,
+      ...(stated['type'] !== undefined && { nullable: true }),
+      enum: [...stated['enum'], null]
+    }
   }
 
   // Beside a conjunction the flag is read nowhere either. Pushed onto each member it says the same
