@@ -9,7 +9,8 @@
  * **A channel other than `latest` writes no ref.** `FASCIA_CHANNEL` names the npm dist-tag. An alpha
  * carries the run number in its version, so no two runs collide and the tag check has nothing to
  * decide. It also comes off a branch, and a branch has no business writing a tag or a release on
- * `main`. `npm install <package>` reaches `latest` and reaches an alpha never.
+ * `main`. `npm install <package>` reaches `latest` only. A consumer asks for the `alpha` tag by
+ * name.
  *
  * **Packing and publishing separate, so the job that holds the token runs no code off a branch.**
  * `FASCIA_PACK` names a directory to write a tarball into for each package, in the order they
@@ -48,8 +49,14 @@ const from = process.env.FASCIA_FROM
 if (from !== undefined) {
   const order = JSON.parse(readFileSync(`${from}/order.json`, 'utf8'))
 
+  // The shape first, then each name. A file holding an object or a string reaches the loop below as
+  // something that iterates or does not, and the throw would name neither the file nor the cause.
+  if (!Array.isArray(order)) {
+    throw new Error(`order.json holds ${typeof order} rather than a list of tarballs`)
+  }
+
   for (const filename of order) {
-    if (!/^[\w.-]+\.tgz$/.test(filename)) {
+    if (typeof filename !== 'string' || !/^[\w.-]+\.tgz$/.test(filename)) {
       throw new Error(`order.json names ${JSON.stringify(filename)}, which is no tarball`)
     }
   }
@@ -83,6 +90,13 @@ if (into !== undefined) {
   const order = ordered.map((manifest) => {
     const printed = read('npm', 'pack', '-w', manifest.name, '--pack-destination', into, '--silent')
     const filename = printed.trim().split('\n').at(-1)
+
+    // `npm pack` prints the name it wrote. A version of npm that prints nothing would put an empty
+    // name in the list, and the job that publishes it would refuse a file this job never named.
+    if (filename === undefined || !/^[\w.-]+\.tgz$/.test(filename)) {
+      throw new Error(`npm pack wrote no tarball name for ${manifest.name}`)
+    }
+
     console.log(`packed ${manifest.name}@${manifest.version} as ${filename}`)
     return filename
   })

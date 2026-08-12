@@ -78,7 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      # `contents` reads commits and does not read a pull request. The endpoint below is under the
+      # `pull-requests` scope, and a token without it answers 403.
+      pull-requests: read
     outputs:
       sha: ${{ steps.pr.outputs.sha }}
     steps:
