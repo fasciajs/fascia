@@ -77,25 +77,14 @@ export type Version = '3.1' | '3.0'
 /** What a media type is where a caller states none. */
 const JSON_MEDIA_TYPE = 'application/json'
 
-/**
- * One response, and everything OpenAPI states beside its schema.
- *
- * **Every field here is a fact a caller holds and no schema carries.** A description, the headers a
- * response sets, the links it offers and the media type it is written in are about the response
- * rather than about the value, so nothing in a validator states any of them. A document that invents
- * them says something the caller did not.
- *
- * `schema` is optional because a response may carry no body. A 204 states a description and nothing
- * under `content`, and a schema would be a body that never arrives.
- */
-export interface ResponseSpec<S> {
-  /** What comes back. Described as the output side. Absent where the response carries no body. */
-  readonly schema?: S
+/** What OpenAPI states about a response rather than about the value it carries. */
+interface ResponseFacts {
   /**
    * What this response is, which OpenAPI requires of every response.
    *
-   * Where a caller states none, the status is written instead. That is uninformative and true, which
-   * is the most a document can say about a response nobody described.
+   * Where a response carries a body, the body is what a caller was mainly saying, so this may stay
+   * unstated and the status is written instead. Where a response carries no body, this is all there
+   * is, so a caller states it.
    */
   readonly description?: string
   /** The media type the body is written in. `application/json` where a caller states none. */
@@ -103,6 +92,28 @@ export interface ResponseSpec<S> {
   readonly headers?: Record<string, V31.ReferenceObject | V31.HeaderObject>
   readonly links?: Record<string, V31.ReferenceObject | V31.LinkObject>
 }
+
+/**
+ * One response, and everything OpenAPI states beside its schema.
+ *
+ * **Every field but `schema` is a fact a caller holds and no schema carries.** A description, the
+ * headers a response sets, the links it offers and the media type it is written in are about the
+ * response rather than about the value, so nothing in a validator states any of them. A document that
+ * invents one says something the caller did not.
+ *
+ * **A response either carries a body or describes itself, and the two arms say which.** A response
+ * with no body is a real thing: a 204 states a description and nothing under `content`. Written as
+ * one shape with both fields optional, this would be a weak type, and a validator's own schema
+ * satisfies a weak type by carrying a `description` of its own. A caller handing over the schema
+ * where this stands would compile, describe nothing, and produce a response with no content and no
+ * departure to report it. The arms make that call a type error instead.
+ */
+export type ResponseSpec<S> =
+  | ({ readonly schema: S } & ResponseFacts)
+  | ({ readonly schema?: undefined; readonly description: string } & Omit<
+      ResponseFacts,
+      'description'
+    >)
 
 /** The responses an operation answers with, keyed by status. */
 export type Responses<S> = Readonly<Record<string, ResponseSpec<S>>>

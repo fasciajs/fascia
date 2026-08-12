@@ -1,8 +1,9 @@
+import { attest } from '@ark/attest'
 import { arktypeSource } from '@fasciajs/arktype'
 import type { SideNames } from '@fasciajs/core'
 import { isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
-import type { Operation, V31 } from '@fasciajs/openapi'
+import type { Operation, Responses, V31 } from '@fasciajs/openapi'
 import { spellOpenApi } from '@fasciajs/openapi'
 import { zodSource } from '@fasciajs/zod'
 import { Validator } from '@seriousme/openapi-schema-validator'
@@ -165,6 +166,46 @@ describe('what OpenAPI refuses, and what this says instead', () => {
     // produced it in its path.
     expect(document.departures[0]).toMatchObject({ direction: 'wider' })
     expect(document.departures[0]?.at[0]).toBe('get /t')
+  })
+})
+
+describe('the type system refuses a response that describes nothing', () => {
+  /**
+   * **The shape a caller reaches for first is the one that must not compile.** A response held a
+   * schema before this, so `responses: { '200': User }` is what an existing caller writes and what
+   * anybody writes from memory.
+   *
+   * Written as one shape with `schema` and `description` both optional, `ResponseSpec` would be a weak
+   * type, and a validator's schema satisfies a weak type by carrying a `description` of its own. That
+   * call compiled, described nothing, and produced a response with no `content`. Every response-side
+   * component vanished with it and no departure said so, because nothing was given up: nothing was
+   * ever asked for.
+   *
+   * Through `attest` rather than `@ts-expect-error` alone, so the claim names the clause and a rename
+   * cannot satisfy it.
+   */
+  it('refuses a schema where a response stands, which is the shape before this one', () => {
+    const User = z.object({ id: z.string() })
+
+    attest(() => {
+      const responses = {
+        // @ts-expect-error
+        '200': User
+      } satisfies Responses<z.core.$ZodType>
+      return responses
+    }).type.errors("Property 'schema' is missing")
+  })
+
+  it('refuses a response that carries neither a body nor a description', () => {
+    // Nothing to write. OpenAPI requires a description, and a response with no schema has nothing
+    // else to say, so the arms make the empty object a type error rather than an empty response.
+    attest(() => {
+      const responses = {
+        // @ts-expect-error
+        '204': {}
+      } satisfies Responses<z.core.$ZodType>
+      return responses
+    }).type.errors("not assignable to type 'ResponseSpec")
   })
 })
 
