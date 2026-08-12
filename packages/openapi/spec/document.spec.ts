@@ -3,7 +3,7 @@ import { arktypeSource } from '@fasciajs/arktype'
 import type { SideNames } from '@fasciajs/core'
 import { isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
-import type { Operation, Responses, V31 } from '@fasciajs/openapi'
+import type { DocumentSpec, Operation, Responses, V31 } from '@fasciajs/openapi'
 import { spellOpenApi } from '@fasciajs/openapi'
 import { zodSource } from '@fasciajs/zod'
 import { Validator } from '@seriousme/openapi-schema-validator'
@@ -29,8 +29,11 @@ const info: V31.InfoObject = { title: 'Users', version: '1' }
 
 const validator = new Validator()
 
-async function documentOf(operations: readonly Operation<z.core.$ZodType>[]) {
-  const spelled = spellOpenApi(operations, zodSource, { sides }, info)
+async function documentOf(
+  operations: readonly Operation<z.core.$ZodType>[],
+  document?: DocumentSpec<z.core.$ZodType>
+) {
+  const spelled = spellOpenApi(operations, zodSource, { sides }, info, '3.1', document)
   if (isError(spelled)) {
     throw new Error(spelled.message)
   }
@@ -166,6 +169,119 @@ describe('what OpenAPI refuses, and what this says instead', () => {
     // produced it in its path.
     expect(document.departures[0]).toMatchObject({ direction: 'wider' })
     expect(document.departures[0]?.at[0]).toBe('get /t')
+  })
+})
+
+describe('a document states what a service needs and how a client divides', () => {
+  /**
+   * **A credential, a group and a webhook are facts about the service.** No validator holds any of
+   * them, so a document without them describes a service that needs no credential, has one flat
+   * client, and calls nobody. The first is the one with teeth: a generated client with no scheme has
+   * no way to authenticate at all.
+   */
+  const Wallet = z.object({ id: z.string() }).meta({ id: 'Wallet' })
+
+  const bearer: V31.SecuritySchemeObject = { type: 'http', scheme: 'bearer' }
+
+  it('divides the operations into the groups a generator makes files from', async () => {
+    const document = await documentOf([
+      {
+        path: '/wallets',
+        method: 'get',
+        tags: ['wallets'],
+        responses: { '200': { schema: Wallet } }
+      }
+    ])
+
+    expect(document.written.paths?.['/wallets']?.get).toMatchObject({ tags: ['wallets'] })
+  })
+
+  it('names the schemes a requirement resolves against', async () => {
+    const document = await documentOf(
+      [{ path: '/wallets', method: 'get', responses: { '200': { schema: Wallet } } }],
+      { security: [{ bearer: [] }], securitySchemes: { bearer } }
+    )
+
+    expect(document.written.security).toEqual([{ bearer: [] }])
+    expect(document.written.components?.securitySchemes).toEqual({ bearer })
+    // The schemas stay where they were. `components` holds two maps and neither displaces the other.
+    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Wallet'])
+  })
+
+  it('lets one operation require nothing where the document requires something', async () => {
+    // An empty list is a statement rather than an absence, so the key is written whatever its length.
+    // This is how a document exempts a login from what the rest of it demands.
+    const document = await documentOf(
+      [
+        { path: '/login', method: 'post', security: [], responses: { '200': { schema: Wallet } } },
+        { path: '/wallets', method: 'get', responses: { '200': { schema: Wallet } } }
+      ],
+      { security: [{ bearer: [] }], securitySchemes: { bearer } }
+    )
+
+    expect(document.written.paths?.['/login']?.post).toMatchObject({ security: [] })
+    expect(document.written.paths?.['/wallets']?.get).not.toHaveProperty('security')
+  })
+
+  it('describes a webhook the same way, under a name instead of a path', async () => {
+    const document = await documentOf([], {
+      webhooks: {
+        walletReady: {
+          method: 'post',
+          body: Wallet,
+          responses: { '204': { description: 'taken' } }
+        }
+      }
+    })
+
+    // The body is described, so the schema is a component and the webhook refers to it like any
+    // other operation. A webhook a caller wrote by hand would hold a schema nothing described.
+    expect(document.written.webhooks?.['walletReady']).toMatchObject({
+      post: {
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Wallet' } } }
+        }
+      }
+    })
+    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Wallet'])
+  })
+
+  it('keeps a webhook apart from a path of the same name', async () => {
+    // Both maps hold one shape under a caller's own key, so a name may stand in each. The two would
+    // be one entry if a position were keyed by name and method alone.
+    const document = await documentOf(
+      [
+        { path: '/ready', method: 'post', body: Wallet, responses: { '204': { description: 'p' } } }
+      ],
+      {
+        webhooks: {
+          '/ready': { method: 'post', body: Wallet, responses: { '204': { description: 'w' } } }
+        }
+      }
+    )
+
+    expect(document.written.paths?.['/ready']?.post?.responses?.['204']).toMatchObject({
+      description: 'p'
+    })
+    expect(document.written.webhooks?.['/ready']).toMatchObject({
+      post: { responses: { '204': { description: 'w' } } }
+    })
+  })
+
+  it('refuses a webhook in 3.0, which has no keyword for one', async () => {
+    // Written nowhere, a caller publishes a document describing a service half its size. 3.1 states
+    // webhooks and 3.0 does not, so this is the dialect refusing rather than the target giving up.
+    const spelled = spellOpenApi(
+      [{ path: '/w', method: 'get', responses: { '200': { schema: Wallet } } }],
+      zodSource,
+      { sides },
+      info,
+      '3.0',
+      { webhooks: { ready: { method: 'post', responses: { '204': { description: 'x' } } } } }
+    )
+
+    expect(isError(spelled) ? spelled.message : 'written').toContain('3.0 has no keyword for one')
   })
 })
 

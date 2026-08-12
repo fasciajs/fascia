@@ -174,6 +174,52 @@ export interface Operation<S> {
   readonly bodyMediaType?: string
   /** What comes back, keyed by status. Each is described as the output side. */
   readonly responses?: Responses<S>
+  /**
+   * The groups this operation belongs to.
+   *
+   * A generator reads these to divide a client into one file per group. An operation naming none
+   * lands in whatever the generator calls the rest, so a document that states no tag at all becomes
+   * one flat client.
+   */
+  readonly tags?: readonly string[]
+  /**
+   * What a caller must present, as an alternative list: any one of these admits the request.
+   *
+   * Each names a scheme under `securitySchemes` and states the scopes it needs. An empty list here
+   * says this one operation needs nothing, which is how a document exempts a login from the
+   * requirement the rest of it states.
+   */
+  readonly security?: readonly V31.SecurityRequirementObject[]
+}
+
+/**
+ * An operation a service calls rather than one it answers.
+ *
+ * A webhook is a path item under a name of its own, so it is an operation with the name where the
+ * path stood. Everything else about it is the same, and it is described the same way.
+ */
+export type Webhook<S> = Omit<Operation<S>, 'path'>
+
+/** The webhooks a service calls, keyed by the name a document holds each one under. */
+export type Webhooks<S> = Readonly<Record<string, Webhook<S>>>
+
+/**
+ * What a document states about itself, beside the operations it holds.
+ *
+ * **Each of these is a fact a caller holds and no schema carries.** A scheme a request authenticates
+ * under, the groups a client divides itself by, and the operations a service calls rather than
+ * answers are all about the service. Nothing in a validator states any of them, and a document
+ * without them describes a service that needs no credential and has one flat client.
+ */
+export interface DocumentSpec<S> {
+  /** The groups an operation names, with a description of each. */
+  readonly tags?: readonly V31.TagObject[]
+  /** What every operation requires, where the operation states nothing of its own. */
+  readonly security?: readonly V31.SecurityRequirementObject[]
+  /** The schemes an operation's requirement names. A requirement naming no scheme resolves to none. */
+  readonly securitySchemes?: Record<string, V31.ReferenceObject | V31.SecuritySchemeObject>
+  /** The operations a service calls. 3.1 only, because 3.0 has no keyword for one. */
+  readonly webhooks?: Webhooks<S>
 }
 
 /** A document, or the reason there is none. */
@@ -184,9 +230,29 @@ export function spellOpenApi<S>(
   source: Source<S>,
   naming: Naming<S>,
   info: V31.InfoObject,
-  version: Version = '3.1'
+  version: Version = '3.1',
+  document: DocumentSpec<S> = {}
 ): OperationSpelling {
-  const positions = positionsOf(operations)
+  const hooks = Object.entries(document.webhooks ?? {})
+
+  // 3.0 has no `webhooks`, and a set of operations written nowhere is worse than a refusal: a caller
+  // who stated them would publish a document that describes a service half its size.
+  if (version === '3.0' && hooks.length > 0) {
+    return new UnsayableTerm(
+      ['webhooks'],
+      `this states ${hooks.length === 1 ? 'a webhook' : `${hooks.length} webhooks`}, and 3.0 has no keyword for one. Write the document as 3.1, or state the webhooks somewhere a 3.0 reader looks`
+    )
+  }
+
+  const held: Held<S>[] = [
+    ...operations.map((operation) => ({ holder: 'path' as const, operation })),
+    ...hooks.map(([name, webhook]) => ({
+      holder: 'webhook' as const,
+      operation: { ...webhook, path: name }
+    }))
+  ]
+
+  const positions = positionsOf(held)
 
   const described = describeAll(
     positions.map((position) => position.ask),
@@ -262,18 +328,46 @@ export function spellOpenApi<S>(
     )
   }
 
+  const webhooks = itemsOf(held, positions, written, 'webhook')
+
+  // `components` holds two maps now, so it is written where either has something in it. Written empty
+  // it would state that a document holds components and name none.
+  const components: V31.ComponentsObject = {
+    ...(Object.keys(schemas).length > 0 && { schemas }),
+    ...(document.securitySchemes !== undefined && { securitySchemes: document.securitySchemes })
+  }
+
   return {
     written: {
       openapi: version === '3.1' ? '3.1.0' : '3.0.3',
       info,
-      paths: pathsOf(operations, positions, written),
-      ...(Object.keys(schemas).length > 0 && { components: { schemas } })
+      ...(document.tags !== undefined && { tags: [...document.tags] }),
+      ...(document.security !== undefined && { security: [...document.security] }),
+      paths: itemsOf(held, positions, written, 'path'),
+      ...(Object.keys(webhooks).length > 0 && { webhooks }),
+      ...(Object.keys(components).length > 0 && { components })
     },
     departures
   }
 }
 
+/**
+ * Which of the two maps a path item belongs to.
+ *
+ * `paths` and `webhooks` hold the same shape under different keys, so one builder writes both and a
+ * position says which. Held in the key as well, because a webhook may be named for a path and the two
+ * would otherwise be one entry.
+ */
+type Holder = 'path' | 'webhook'
+
+/** One operation, with the name the document holds it under. */
+interface Held<S> {
+  readonly holder: Holder
+  readonly operation: Operation<S>
+}
+
 interface Position<S> {
+  readonly holder: Holder
   readonly path: string
   readonly method: string
   /** The request body, the status a response answers under, or the place a parameter stands. */
@@ -305,11 +399,11 @@ type AtPosition =
  * position. An operation has one of the first and any number of the second, which is where this
  * differs from a procedure.
  */
-function positionsOf<S>(operations: readonly Operation<S>[]): Position<S>[] {
+function positionsOf<S>(held: readonly Held<S>[]): Position<S>[] {
   const positions: Position<S>[] = []
 
-  for (const operation of operations) {
-    const where = { path: operation.path, method: operation.method }
+  for (const { holder, operation } of held) {
+    const where = { holder, path: operation.path, method: operation.method }
 
     for (const location of LOCATIONS) {
       const schema = operation.parameters?.[location]
@@ -439,17 +533,23 @@ function templateOf(path: string): ReadonlySet<string> {
   return names
 }
 
-/** The operations, grouped under the path each one is reached at. */
-function pathsOf<S>(
-  operations: readonly Operation<S>[],
+/**
+ * The operations of one holder, grouped under the name each is reached at.
+ *
+ * `paths` and `webhooks` are the same shape under different keys, so this writes either and the
+ * holder says which. A caller asking for both gets two calls and one set of positions.
+ */
+function itemsOf<S>(
+  held: readonly Held<S>[],
   positions: readonly Position<S>[],
-  written: readonly AtPosition[]
-): V31.PathsObject {
+  written: readonly AtPosition[],
+  holder: Holder
+): Record<string, V31.PathItemObject> {
   const at = new Map<string, AtPosition>()
   for (const [index, position] of positions.entries()) {
     const one = written[index]
     if (one !== undefined) {
-      at.set(`${position.method} ${position.path} ${position.at}`, one)
+      at.set(`${position.holder} ${position.method} ${position.path} ${position.at}`, one)
     }
   }
 
@@ -460,14 +560,15 @@ function pathsOf<S>(
   }
 
   const paths: Record<string, V31.PathItemObject> = {}
-  for (const operation of operations) {
-    const body = schemaAt(`${operation.method} ${operation.path} body`)
+  for (const { operation } of held.filter((one) => one.holder === holder)) {
+    const where = `${holder} ${operation.method} ${operation.path}`
+    const body = schemaAt(`${where} body`)
 
     // The four places in one list, in the order the constant names them, so a document does not
     // reorder itself when a caller states them another way.
     const parameters: V31.ParameterObject[] = []
     for (const location of LOCATIONS) {
-      const one = at.get(`${operation.method} ${operation.path} ${location}`)
+      const one = at.get(`${where} ${location}`)
       if (one?.of === 'parameters') {
         parameters.push(...one.parameters)
       }
@@ -475,7 +576,7 @@ function pathsOf<S>(
 
     const responses: Record<string, V31.ResponseObject> = {}
     for (const [status, response] of Object.entries(operation.responses ?? {})) {
-      const schema = schemaAt(`${operation.method} ${operation.path} ${status}`)
+      const schema = schemaAt(`${where} ${status}`)
       responses[status] = {
         // OpenAPI requires a description on a response, and a document without one is refused by
         // the meta-schema. The status is what a caller was told, so it stands where they said nothing.
@@ -495,6 +596,10 @@ function pathsOf<S>(
         ...(operation.summary !== undefined && { summary: operation.summary }),
         ...(operation.description !== undefined && { description: operation.description }),
         ...(operation.deprecated !== undefined && { deprecated: operation.deprecated }),
+        ...(operation.tags !== undefined && { tags: [...operation.tags] }),
+        // An empty list is a statement: this operation requires nothing where the document requires
+        // something. So the key is written wherever a caller stated one, and length decides nothing.
+        ...(operation.security !== undefined && { security: [...operation.security] }),
         ...(parameters.length > 0 && { parameters }),
         ...(body !== undefined && {
           requestBody: {

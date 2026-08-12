@@ -59,6 +59,22 @@ nothing tells a client the body may be omitted. `bodyRequired: false` says the o
 keyword is written either way. `bodyMediaType` names the media type, and `mediaType` does the same for
 a response. Both are `application/json` where a caller states none.
 
+A document states what a service needs and how a client divides. `tags` on an operation is what a
+generator makes one file per group from. A security requirement names a scheme, and an empty list on
+one operation says that operation needs nothing where the document needs something. A webhook is an
+operation a service calls rather than answers, so it is a path item under a name instead of a path,
+and it is described the same way. 3.0 has no `webhooks`, so stating one for a 3.0 document is refused
+rather than dropped.
+
+```ts
+spellOpenApi(operations, zodSource, naming, info, '3.1', {
+  tags: [{ name: 'wallets' }],
+  security: [{ bearer: [] }],
+  securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+  webhooks: { walletReady: { method: 'post', body: Wallet, responses: { '204': { description: 'taken' } } } }
+})
+```
+
 See the [root README](https://github.com/fasciajs/fascia#readme) for the whole shape, what it
 refuses, and the numbers.
 
