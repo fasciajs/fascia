@@ -552,6 +552,56 @@ describe('a caller sends part of a request outside the body', () => {
     ])
   })
 
+  it('moves an inline description to the parameter, which is where a generator reads it', async () => {
+    // A client's method takes an argument for the parameter, so the parameter is what a doc comment
+    // is written from. Left on the schema the sentence documents nothing.
+    const document = await documentOf([
+      {
+        path: '/w/{salt}',
+        method: 'get',
+        parameters: { path: z.object({ salt: z.string().describe('the wallet salt') }) },
+        responses: { '204': { description: 'x' } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w/{salt}']?.get?.parameters).toEqual([
+      {
+        name: 'salt',
+        in: 'path',
+        required: true,
+        description: 'the wallet salt',
+        schema: { type: 'string' }
+      }
+    ])
+  })
+
+  it('leaves a referenced component its own description, which is not the use site talking', async () => {
+    // A reference carries no metadata, so a description under one belongs to the component. Moving it
+    // up would give this parameter a sentence another use of the same schema wrote.
+    const Salt = z.string().describe('any wallet salt').meta({ id: 'WalletSalt' })
+
+    const document = await documentOf([
+      {
+        path: '/w/{salt}',
+        method: 'get',
+        parameters: { path: z.object({ salt: Salt }) },
+        responses: { '204': { description: 'x' } }
+      }
+    ])
+
+    expect(document.written.paths?.['/w/{salt}']?.get?.parameters).toEqual([
+      {
+        name: 'salt',
+        in: 'path',
+        required: true,
+        schema: { $ref: '#/components/schemas/WalletSalt' }
+      }
+    ])
+    expect(document.written.components?.schemas?.['WalletSalt']).toMatchObject({
+      description: 'any wallet salt'
+    })
+  })
+
   it('says a key may be absent as the parameter not being required', async () => {
     // The one fact stated twice by two shapes. A validator puts it on the edge of the object and
     // OpenAPI puts it beside the parameter, so the object is the shorter of the two.

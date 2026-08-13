@@ -54,6 +54,7 @@ function asParameter(stated: {
   readonly name: string
   readonly in: Location
   readonly required: boolean
+  readonly description?: string
   readonly schema: V31.SchemaObject | V31.ReferenceObject
 }): V31.ParameterObject {
   return stated as V31.ParameterObject
@@ -515,10 +516,37 @@ function parametersOf(
       )
     }
 
-    parameters.push(asParameter({ name, in: location, required: required.has(name), schema }))
+    parameters.push(
+      asParameter({ name, in: location, required: required.has(name), ...documented(schema) })
+    )
   }
 
   return { written: parameters, departures: [...spelled.departures, ...said.departures] }
+}
+
+/**
+ * A parameter's schema, with the description moved to the parameter.
+ *
+ * **OpenAPI holds a description in both places and a generator reads the parameter's own.** A
+ * description left on the schema documents nothing: it is the parameter that a client's method takes
+ * an argument for, so it is the parameter a generator writes a doc comment from.
+ *
+ * Moved rather than copied. Two copies of one sentence say what one says, and a reader that finds them
+ * disagreeing has nothing to choose by.
+ *
+ * A reference keeps whatever the component says. The description there belongs to the component
+ * rather than to this use of it, and no use site states one: a reference carries no metadata at all.
+ */
+function documented(schema: V31.SchemaObject | V31.ReferenceObject): {
+  readonly description?: string
+  readonly schema: V31.SchemaObject | V31.ReferenceObject
+} {
+  if ('$ref' in schema || typeof schema.description !== 'string') {
+    return { schema }
+  }
+
+  const { description, ...rest } = schema
+  return { description, schema: rest }
 }
 
 /** The names a path holds as template expressions, which a path parameter fills one of. */
