@@ -4,6 +4,15 @@ import { ReadZodChecks, zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
+/** The reason a schema has no reading, where it has none. */
+function refusalFor(schema: z.core.$ZodType): string {
+  const node: Node<z.core.$ZodType> | Error = zodSource.read(schema)
+  if (!isError(node)) {
+    throw new Error('this schema was read, and the spec expected a refusal')
+  }
+  return node.message
+}
+
 /** The assertions a schema reads as, or a failure if the schema reads as nothing. */
 function assertionsOf(schema: z.core.$ZodType): unknown {
   const node: Node<z.core.$ZodType> | Error = zodSource.read(schema)
@@ -112,6 +121,49 @@ describe('a pattern is carried as text', () => {
   it('carries every pattern a schema states, because each one holds', () => {
     const both = assertionsOf(z.string().regex(/^a/).regex(/z$/)) as { patterns: string[] }
     expect(both.patterns).toHaveLength(2)
+  })
+})
+
+/**
+ * **A document states a pattern as text and states no flag beside it.** So the source of a flagged
+ * expression is a narrower pattern than the schema holds: `/^ab$/i` accepts `AB` and `^ab$` refuses
+ * it, which is a document turning away a value the service takes.
+ *
+ * Refused here rather than reported later. A departure says what a target gave up, and a target cannot
+ * give up a flag: the source is all a term carries, so the flag is gone before any target sees one. The
+ * reader is the last place the flag is readable.
+ *
+ * The pattern generator behind the agreement specs emits no flag, so it measured `narrower: 0` over
+ * thousands of schemas and could never have reached this. Each flag is named below for that reason.
+ */
+describe('a flag that changes what a pattern matches is refused', () => {
+  it('refuses i, because folding case accepts what the source alone refuses', () => {
+    expect(z.string().regex(/^ab$/i).safeParse('AB').success).toBe(true)
+    expect(refusalFor(z.string().regex(/^ab$/i))).toContain('under the flag i')
+  })
+
+  it('refuses m, because it moves the anchors to every line', () => {
+    expect(refusalFor(z.string().regex(/^ab$/m))).toContain('under the flag m')
+  })
+
+  it('refuses s, because it gives the dot the newline', () => {
+    expect(refusalFor(z.string().regex(/^a.b$/s))).toContain('under the flag s')
+  })
+
+  it('names every flag it refused, so one message settles the rewrite', () => {
+    expect(refusalFor(z.string().regex(/^a.b$/ims))).toContain('under the flag i and m and s')
+  })
+
+  it('reads a flag that holds a position between calls, which matches nothing differently', () => {
+    // `g` and `y` carry a position for a repeated call. A test of one whole value never reads one, so
+    // the source states what the schema states and the pattern is carried.
+    expect(assertionsOf(z.string().regex(/^ab$/g))).toMatchObject({ patterns: ['^ab$'] })
+  })
+
+  it('names the rewrite, because a caller states case without a flag', () => {
+    expect(refusalFor(z.string().regex(/^ab$/i))).toContain(
+      'Write the pattern so it matches without the flag'
+    )
   })
 })
 

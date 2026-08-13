@@ -9,7 +9,7 @@ import type {
   Source,
   StringFormat
 } from '@fasciajs/core'
-import { metaFrom, UnreadableSchema } from '@fasciajs/core'
+import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
 import { ReadableValibotTypes, UnreadableValibotTypes } from './valibot-types.js'
 
 /**
@@ -141,8 +141,10 @@ function structural(
   name: ReadableValibotTypes
 ): Node<ValibotSchema> | UnreadableSchema {
   switch (name) {
-    case 'string':
-      return { kind: 'scalar', name: 'string', assertions: stringAssertions(schema) }
+    case 'string': {
+      const assertions = stringAssertions(schema)
+      return isError(assertions) ? assertions : { kind: 'scalar', name: 'string', assertions }
+    }
     case 'number':
       return { kind: 'scalar', name: 'number', assertions: numberAssertions(schema) }
     case 'boolean':
@@ -352,7 +354,17 @@ const FORMATS: Partial<Record<string, StringFormat>> = {
   iso_timestamp: 'date-time'
 }
 
-function stringAssertions(schema: Known): Extract<Scalar, { name: 'string' }>['assertions'] {
+/**
+ * The flags that change what a pattern matches.
+ *
+ * `i` folds case, `m` moves `^` and `$` to every line, and `s` gives `.` the newline. `g` and `y`
+ * hold a position between calls, which a test of one whole value never reads.
+ */
+const MATCHING_FLAGS = ['i', 'm', 's'] as const
+
+function stringAssertions(
+  schema: Known
+): Extract<Scalar, { name: 'string' }>['assertions'] | UnreadableSchema {
   let minLength: number | undefined
   let maxLength: number | undefined
   let format: StringFormat | undefined
@@ -370,7 +382,18 @@ function stringAssertions(schema: Known): Extract<Scalar, { name: 'string' }>['a
       minLength = requirement
       maxLength = requirement
     }
+    // A document carries a pattern as text with no flag beside it, so the source of a flagged
+    // expression states a narrower pattern than the schema holds: `/^ab$/i` accepts `AB` and `^ab$`
+    // refuses it. The flag is gone before a term exists, so no target could report the loss. Refused
+    // here, where the flag is still readable.
     if (action.type === 'regex' && requirement instanceof RegExp) {
+      const flags = MATCHING_FLAGS.filter((flag) => requirement.flags.includes(flag))
+      if (flags.length > 0) {
+        return new UnreadableSchema(
+          requirement,
+          `this states the pattern ${requirement.source} under the flag ${flags.join(' and ')}, and a document states a pattern with no flag beside it. Write the pattern so it matches without the flag`
+        )
+      }
       patterns.push(requirement.source)
     }
     format = FORMATS[action.type] ?? format

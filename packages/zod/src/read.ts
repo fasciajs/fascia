@@ -7,7 +7,7 @@ import type {
   Rest,
   Source
 } from '@fasciajs/core'
-import { metaFrom, UnreadableSchema } from '@fasciajs/core'
+import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
 import { globalRegistry } from 'zod/v4/core'
 import {
@@ -74,7 +74,8 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   // discriminates a union only on a property of the union itself, so a switch over it narrows
   // nothing and every case would need a cast.
   if (isZodType(schema, ['string'])) {
-    return { kind: 'scalar', name: 'string', assertions: stringAssertions(schema) }
+    const assertions = stringAssertions(schema)
+    return isError(assertions) ? assertions : { kind: 'scalar', name: 'string', assertions }
   }
   if (isZodType(schema, ['number'])) {
     return { kind: 'scalar', name: 'number', assertions: numberAssertions(schema) }

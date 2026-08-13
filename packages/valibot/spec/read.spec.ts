@@ -124,4 +124,20 @@ describe('an unreadable schema says why, rather than reading as something else',
     expect(said(v.blob())).toContain('sent as a body')
     expect(said(v.never())).toContain('describes nothing a caller could send')
   })
+
+  it('turns away a pattern whose flag changes what it matches', () => {
+    // valibot holds the expression itself, like zod does, so the source alone states a narrower
+    // pattern than the schema holds. A document carries no flag beside a pattern, and the flag is
+    // gone before a term exists, so no target could report the loss.
+    const node = read(v.pipe(v.string(), v.regex(/^ab$/i)))
+
+    expect(v.safeParse(v.pipe(v.string(), v.regex(/^ab$/i)), 'AB').success).toBe(true)
+    expect(isError(node) ? node.message : 'read').toContain('under the flag i')
+  })
+
+  it('reads a pattern whose flag matches nothing differently', () => {
+    expect(read(v.pipe(v.string(), v.regex(/^ab$/g)))).toMatchObject({
+      assertions: { patterns: ['^ab$'] }
+    })
+  })
 })
