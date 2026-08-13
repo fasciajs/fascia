@@ -285,6 +285,77 @@ describe('a document states what a service needs and how a client divides', () =
   })
 })
 
+describe('a use of a named schema may describe that use', () => {
+  /**
+   * **A shared type used in two places may want a sentence about one of them.** A service holds one
+   * `IsoDate` and one field of it is when a session expires. Put on the component the sentence
+   * describes every date, and dropped it describes nothing, so it stands beside the reference.
+   *
+   * 3.1 reads a keyword next to a `$ref` and 3.0 reads none, which is the one place these two dialects
+   * disagree about a reference.
+   */
+  const Name = z.string().min(2).meta({ id: 'Name' })
+  const described = z
+    .string()
+    .min(2)
+    .meta({ id: 'Name', description: 'the name this caller sends' })
+  const Holder = z.object({ plain: Name, said: described }).meta({ id: 'Holder' })
+
+  it('states the sentence beside the reference, which 3.1 reads', async () => {
+    const document = await documentOf([
+      { path: '/h', method: 'get', responses: { '200': { schema: Holder } } }
+    ])
+
+    expect(document.written.components?.schemas?.['Holder']).toMatchObject({
+      properties: {
+        plain: { $ref: '#/components/schemas/Name' },
+        said: { $ref: '#/components/schemas/Name', description: 'the name this caller sends' }
+      }
+    })
+    expect(document.written.components?.schemas?.['Name']).not.toHaveProperty('description')
+  })
+
+  it('moves it under a conjunction for 3.0, which reads no keyword beside a reference', async () => {
+    const spelled = spellOpenApi(
+      [{ path: '/h', method: 'get', responses: { '200': { schema: Holder } } }],
+      zodSource,
+      { sides },
+      info,
+      '3.0'
+    )
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
+    expect(spelled.written.components?.schemas?.['Holder']).toMatchObject({
+      properties: {
+        plain: { $ref: '#/components/schemas/Name' },
+        said: {
+          allOf: [{ $ref: '#/components/schemas/Name' }],
+          description: 'the name this caller sends'
+        }
+      }
+    })
+  })
+
+  it('reports the move, because the specification does not state it', async () => {
+    const spelled = spellOpenApi(
+      [{ path: '/h', method: 'get', responses: { '200': { schema: Holder } } }],
+      zodSource,
+      { sides },
+      info,
+      '3.0'
+    )
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.departures[0]).toMatchObject({ direction: 'neither', cause: 'noShapeForIt' })
+    expect(spelled.departures[0]?.said).toContain('3.0 reads no keyword there')
+  })
+})
+
 describe('a generated document is kept, so its order is its own', () => {
   /**
    * **A component block is a lookup table and its order states nothing, so a diff of one should hold
