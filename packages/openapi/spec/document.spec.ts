@@ -213,7 +213,12 @@ describe('a document states what a service needs and how a client divides', () =
     // This is how a document exempts a login from what the rest of it demands.
     const document = await documentOf(
       [
-        { path: '/login', method: 'post', security: [], responses: { '200': { schema: Pet } } },
+        {
+          path: '/login',
+          method: 'post',
+          security: [],
+          responses: { '200': { schema: z.string() } }
+        },
         { path: '/pets', method: 'get', responses: { '200': { schema: Pet } } }
       ],
       { security: [{ bearer: [] }], securitySchemes: { bearer } }
@@ -286,8 +291,9 @@ describe('a document states what a service needs and how a client divides', () =
 describe('a use of a named schema may describe that use', () => {
   /**
    * **A shared type used in two places may want a sentence about one of them.** A document holds one
-   * timestamp type, and one field of it is when a pet was last fed. Put on the component the sentence
-   * describes every timestamp, and dropped it describes nothing, so it stands beside the reference.
+   * timestamp type, and one field holding that type is when a pet was last fed. Put on the component
+   * the sentence describes every timestamp, and dropped it describes nothing, so it stands beside the
+   * reference.
    *
    * 3.1 reads a keyword next to a `$ref` and 3.0 reads none, which is the one place these two dialects
    * disagree about a reference.
@@ -446,12 +452,12 @@ describe('a response states what no schema carries', () => {
       {
         path: '/w',
         method: 'get',
-        responses: { '200': { schema: z.string(), description: 'the pet, as stored' } }
+        responses: { '200': { schema: z.string(), description: 'a pet name' } }
       }
     ])
 
     expect(document.written.paths?.['/w']?.get?.responses?.['200']).toMatchObject({
-      description: 'the pet, as stored'
+      description: 'a pet name'
     })
   })
 
@@ -870,9 +876,13 @@ describe('a tagged disjunction states the tag, which only this target has a word
    * `discriminator` and emits a sealed hierarchy over the members. It reads a bare `oneOf` and emits
    * an untagged union, so a consumer of the generated client loses the tag the schema was built on.
    */
-  const Cat = z.object({ kind: z.literal('cat'), name: z.string() }).meta({ id: 'CatDetails' })
-  const Dog = z.object({ kind: z.literal('dog'), name: z.string() }).meta({ id: 'DogDetails' })
-  const Animal = z.discriminatedUnion('kind', [Cat, Dog]).meta({ id: 'Animal' })
+  const CatDetails = z
+    .object({ kind: z.literal('cat'), name: z.string() })
+    .meta({ id: 'CatDetails' })
+  const DogDetails = z
+    .object({ kind: z.literal('dog'), name: z.string() })
+    .meta({ id: 'DogDetails' })
+  const Animal = z.discriminatedUnion('kind', [CatDetails, DogDetails]).meta({ id: 'Animal' })
 
   it('maps each value of the tag to the member that states it', async () => {
     const document = await documentOf([
@@ -881,7 +891,8 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
     // The mapping is written rather than left implicit. OpenAPI resolves a value to a component of
     // that name where no mapping stands, and no component here is called `cat`. The names and the
-    // values differ on purpose, because a bare `propertyName` resolves to nothing where they do.
+    // values differ on purpose, because a bare `propertyName` resolves to nothing where a name and a
+    // value differ.
     expect(document.written.components?.schemas?.['Animal']).toMatchObject({
       oneOf: [
         { $ref: '#/components/schemas/CatDetails' },
@@ -943,7 +954,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
   })
 
   it('writes no tag for a disjunction that names no property to choose by', async () => {
-    const Plain = z.union([Cat, Dog]).meta({ id: 'Plain' })
+    const Plain = z.union([CatDetails, DogDetails]).meta({ id: 'Plain' })
     const document = await documentOf([
       { path: '/p', method: 'get', responses: { '200': { schema: Plain } } }
     ])

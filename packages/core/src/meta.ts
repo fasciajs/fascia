@@ -38,8 +38,8 @@ export function outermost(outer: Meta, inner: Meta): Meta {
  * **A use of a named schema may describe that use, and a document holds the description beside the
  * reference.** Two schemas sharing a name are one shape, so the second is written as a reference to
  * the first. Where the second says something further about itself, that goes on the reference. A
- * caller who describes one use of a shared timestamp is saying what that field is, and not what every
- * timestamp is.
+ * caller who describes one use of a shared timestamp says what that one field holds, and not what
+ * every timestamp holds.
  *
  * A word the two already share is dropped rather than repeated. A reference and the schema it names
  * both carrying one sentence say what one says, and a reader that found them disagreeing would have
