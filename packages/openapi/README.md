@@ -30,18 +30,18 @@ parameter that is not required.
 
 ```ts
 {
-  path: '/wallets/{salt}',
+  path: '/pets/{petId}',
   method: 'post',
   parameters: {
-    path: z.object({ salt: WalletSalt }),
+    path: z.object({ petId: PetId }),
     query: z.object({ limit: z.number().optional() }),
     header: z.object({ authorization: z.string() })
   },
-  body: WalletDraft,
+  body: NewPet,
   responses: {
-    '200': { schema: Wallet, description: 'the wallet, as stored' },
+    '200': { schema: Pet, description: 'the pet, as stored' },
     '204': { description: 'gone' },
-    '404': { schema: Problem }
+    '404': { schema: ApiError }
   }
 }
 ```
@@ -68,10 +68,10 @@ rather than dropped.
 
 ```ts
 spellOpenApi(operations, zodSource, naming, info, '3.1', {
-  tags: [{ name: 'wallets' }],
+  tags: [{ name: 'pets' }],
   security: [{ bearer: [] }],
   securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
-  webhooks: { walletReady: { method: 'post', body: Wallet, responses: { '204': { description: 'taken' } } } }
+  webhooks: { petAdopted: { method: 'post', body: Pet, responses: { '204': { description: 'taken' } } } }
 })
 ```
 
