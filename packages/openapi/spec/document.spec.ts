@@ -179,33 +179,33 @@ describe('a document states what a service needs and how a client divides', () =
    * client, and calls nobody. The first is the one with teeth: a generated client with no scheme has
    * no way to authenticate at all.
    */
-  const Wallet = z.object({ id: z.string() }).meta({ id: 'Wallet' })
+  const Pet = z.object({ id: z.string() }).meta({ id: 'Pet' })
 
   const bearer: V31.SecuritySchemeObject = { type: 'http', scheme: 'bearer' }
 
   it('divides the operations into the groups a generator makes files from', async () => {
     const document = await documentOf([
       {
-        path: '/wallets',
+        path: '/pets',
         method: 'get',
-        tags: ['wallets'],
-        responses: { '200': { schema: Wallet } }
+        tags: ['pets'],
+        responses: { '200': { schema: Pet } }
       }
     ])
 
-    expect(document.written.paths?.['/wallets']?.get).toMatchObject({ tags: ['wallets'] })
+    expect(document.written.paths?.['/pets']?.get).toMatchObject({ tags: ['pets'] })
   })
 
   it('names the schemes a requirement resolves against', async () => {
     const document = await documentOf(
-      [{ path: '/wallets', method: 'get', responses: { '200': { schema: Wallet } } }],
+      [{ path: '/pets', method: 'get', responses: { '200': { schema: Pet } } }],
       { security: [{ bearer: [] }], securitySchemes: { bearer } }
     )
 
     expect(document.written.security).toEqual([{ bearer: [] }])
     expect(document.written.components?.securitySchemes).toEqual({ bearer })
     // The schemas stay where they were. `components` holds two maps and neither displaces the other.
-    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Wallet'])
+    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Pet'])
   })
 
   it('lets one operation require nothing where the document requires something', async () => {
@@ -213,22 +213,22 @@ describe('a document states what a service needs and how a client divides', () =
     // This is how a document exempts a login from what the rest of it demands.
     const document = await documentOf(
       [
-        { path: '/login', method: 'post', security: [], responses: { '200': { schema: Wallet } } },
-        { path: '/wallets', method: 'get', responses: { '200': { schema: Wallet } } }
+        { path: '/login', method: 'post', security: [], responses: { '200': { schema: Pet } } },
+        { path: '/pets', method: 'get', responses: { '200': { schema: Pet } } }
       ],
       { security: [{ bearer: [] }], securitySchemes: { bearer } }
     )
 
     expect(document.written.paths?.['/login']?.post).toMatchObject({ security: [] })
-    expect(document.written.paths?.['/wallets']?.get).not.toHaveProperty('security')
+    expect(document.written.paths?.['/pets']?.get).not.toHaveProperty('security')
   })
 
   it('describes a webhook the same way, under a name instead of a path', async () => {
     const document = await documentOf([], {
       webhooks: {
-        walletReady: {
+        petAdopted: {
           method: 'post',
-          body: Wallet,
+          body: Pet,
           responses: { '204': { description: 'taken' } }
         }
       }
@@ -236,27 +236,25 @@ describe('a document states what a service needs and how a client divides', () =
 
     // The body is described, so the schema is a component and the webhook refers to it like any
     // other operation. A webhook a caller wrote by hand would hold a schema nothing described.
-    expect(document.written.webhooks?.['walletReady']).toMatchObject({
+    expect(document.written.webhooks?.['petAdopted']).toMatchObject({
       post: {
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/Wallet' } } }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } }
         }
       }
     })
-    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Wallet'])
+    expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Pet'])
   })
 
   it('keeps a webhook apart from a path of the same name', async () => {
     // Both maps hold one shape under a caller's own key, so a name may stand in each. The two would
     // be one entry if a position were keyed by name and method alone.
     const document = await documentOf(
-      [
-        { path: '/ready', method: 'post', body: Wallet, responses: { '204': { description: 'p' } } }
-      ],
+      [{ path: '/ready', method: 'post', body: Pet, responses: { '204': { description: 'p' } } }],
       {
         webhooks: {
-          '/ready': { method: 'post', body: Wallet, responses: { '204': { description: 'w' } } }
+          '/ready': { method: 'post', body: Pet, responses: { '204': { description: 'w' } } }
         }
       }
     )
@@ -273,7 +271,7 @@ describe('a document states what a service needs and how a client divides', () =
     // Written nowhere, a caller publishes a document describing a service half its size. 3.1 states
     // webhooks and 3.0 does not, so this is the dialect refusing rather than the target giving up.
     const spelled = spellOpenApi(
-      [{ path: '/w', method: 'get', responses: { '200': { schema: Wallet } } }],
+      [{ path: '/w', method: 'get', responses: { '200': { schema: Pet } } }],
       zodSource,
       { sides },
       info,
@@ -448,12 +446,12 @@ describe('a response states what no schema carries', () => {
       {
         path: '/w',
         method: 'get',
-        responses: { '200': { schema: z.string(), description: 'the wallet, as stored' } }
+        responses: { '200': { schema: z.string(), description: 'the pet, as stored' } }
       }
     ])
 
     expect(document.written.paths?.['/w']?.get?.responses?.['200']).toMatchObject({
-      description: 'the wallet, as stored'
+      description: 'the pet, as stored'
     })
   })
 
@@ -599,10 +597,10 @@ describe('a caller sends part of a request outside the body', () => {
   it('writes one parameter for each property, at the place the caller put it', async () => {
     const document = await documentOf([
       {
-        path: '/wallets/{salt}',
+        path: '/pets/{petId}',
         method: 'get',
         parameters: {
-          path: z.object({ salt: z.string() }),
+          path: z.object({ petId: z.string() }),
           query: z.object({ limit: z.number().optional(), status: z.enum(['open', 'shut']) }),
           header: z.object({ authorization: z.string() })
         },
@@ -610,8 +608,8 @@ describe('a caller sends part of a request outside the body', () => {
       }
     ])
 
-    expect(document.written.paths?.['/wallets/{salt}']?.get?.parameters).toEqual([
-      { name: 'salt', in: 'path', required: true, schema: { type: 'string' } },
+    expect(document.written.paths?.['/pets/{petId}']?.get?.parameters).toEqual([
+      { name: 'petId', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'limit', in: 'query', required: false, schema: { type: 'number' } },
       {
         name: 'status',
@@ -628,19 +626,19 @@ describe('a caller sends part of a request outside the body', () => {
     // is written from. Left on the schema the sentence documents nothing.
     const document = await documentOf([
       {
-        path: '/w/{salt}',
+        path: '/pets/{petId}',
         method: 'get',
-        parameters: { path: z.object({ salt: z.string().describe('the wallet salt') }) },
+        parameters: { path: z.object({ petId: z.string().describe('the pet id') }) },
         responses: { '204': { description: 'x' } }
       }
     ])
 
-    expect(document.written.paths?.['/w/{salt}']?.get?.parameters).toEqual([
+    expect(document.written.paths?.['/pets/{petId}']?.get?.parameters).toEqual([
       {
-        name: 'salt',
+        name: 'petId',
         in: 'path',
         required: true,
-        description: 'the wallet salt',
+        description: 'the pet id',
         schema: { type: 'string' }
       }
     ])
@@ -649,27 +647,27 @@ describe('a caller sends part of a request outside the body', () => {
   it('leaves a referenced component its own description, which is not the use site talking', async () => {
     // A reference carries no metadata, so a description under one belongs to the component. Moving it
     // up would give this parameter a sentence another use of the same schema wrote.
-    const Salt = z.string().describe('any wallet salt').meta({ id: 'WalletSalt' })
+    const PetId = z.string().describe('any pet id').meta({ id: 'PetId' })
 
     const document = await documentOf([
       {
-        path: '/w/{salt}',
+        path: '/pets/{petId}',
         method: 'get',
-        parameters: { path: z.object({ salt: Salt }) },
+        parameters: { path: z.object({ petId: PetId }) },
         responses: { '204': { description: 'x' } }
       }
     ])
 
-    expect(document.written.paths?.['/w/{salt}']?.get?.parameters).toEqual([
+    expect(document.written.paths?.['/pets/{petId}']?.get?.parameters).toEqual([
       {
-        name: 'salt',
+        name: 'petId',
         in: 'path',
         required: true,
-        schema: { $ref: '#/components/schemas/WalletSalt' }
+        schema: { $ref: '#/components/schemas/PetId' }
       }
     ])
-    expect(document.written.components?.schemas?.['WalletSalt']).toMatchObject({
-      description: 'any wallet salt'
+    expect(document.written.components?.schemas?.['PetId']).toMatchObject({
+      description: 'any pet id'
     })
   })
 
@@ -695,23 +693,23 @@ describe('a caller sends part of a request outside the body', () => {
   it('keeps a parameter whose schema has a name as a reference to the component', async () => {
     // A property with a name of its own is a component, and a parameter holds the reference. The
     // container is unnamed, so it is divided rather than written.
-    const Salt = z.string().meta({ id: 'WalletSalt' })
+    const PetId = z.string().meta({ id: 'PetId' })
 
     const document = await documentOf([
       {
-        path: '/wallets/{salt}',
+        path: '/pets/{petId}',
         method: 'get',
-        parameters: { path: z.object({ salt: Salt }) },
+        parameters: { path: z.object({ petId: PetId }) },
         responses: { '200': { schema: z.string() } }
       }
     ])
 
-    expect(document.written.paths?.['/wallets/{salt}']?.get?.parameters).toEqual([
+    expect(document.written.paths?.['/pets/{petId}']?.get?.parameters).toEqual([
       {
-        name: 'salt',
+        name: 'petId',
         in: 'path',
         required: true,
-        schema: { $ref: '#/components/schemas/WalletSalt' }
+        schema: { $ref: '#/components/schemas/PetId' }
       }
     ])
   })
@@ -813,9 +811,9 @@ describe('what a request outside the body cannot say', () => {
     const spelled = spellOpenApi(
       [
         {
-          path: '/wallets/{salt}',
+          path: '/pets/{petId}',
           method: 'get',
-          parameters: { path: z.object({ salt: z.string().optional() }) },
+          parameters: { path: z.object({ petId: z.string().optional() }) },
           responses: { '200': { schema: z.string() } }
         }
       ],
@@ -824,7 +822,7 @@ describe('what a request outside the body cannot say', () => {
       info
     )
 
-    expect(isError(spelled) ? spelled.message : 'written').toContain('Make salt required')
+    expect(isError(spelled) ? spelled.message : 'written').toContain('Make petId required')
   })
 
   it('refuses a path parameter the path holds no expression for', async () => {
@@ -833,9 +831,9 @@ describe('what a request outside the body cannot say', () => {
     const spelled = spellOpenApi(
       [
         {
-          path: '/wallets/{salt}',
+          path: '/pets/{petId}',
           method: 'get',
-          parameters: { path: z.object({ slat: z.string() }) },
+          parameters: { path: z.object({ ptId: z.string() }) },
           responses: { '200': { schema: z.string() } }
         }
       ],
@@ -844,7 +842,7 @@ describe('what a request outside the body cannot say', () => {
       info
     )
 
-    expect(isError(spelled) ? spelled.message : 'written').toContain('no {slat}')
+    expect(isError(spelled) ? spelled.message : 'written').toContain('no {ptId}')
   })
 
   it('refuses a place that states anything but an object', async () => {
@@ -872,33 +870,28 @@ describe('a tagged disjunction states the tag, which only this target has a word
    * `discriminator` and emits a sealed hierarchy over the members. It reads a bare `oneOf` and emits
    * an untagged union, so a consumer of the generated client loses the tag the schema was built on.
    */
-  const Business = z
-    .object({ kind: z.literal('business'), name: z.string() })
-    .meta({ id: 'BusinessBeneficiary' })
-  const Individual = z
-    .object({ kind: z.literal('individual'), name: z.string() })
-    .meta({ id: 'IndividualBeneficiary' })
-  const Beneficiary = z
-    .discriminatedUnion('kind', [Business, Individual])
-    .meta({ id: 'Beneficiary' })
+  const Cat = z.object({ kind: z.literal('cat'), name: z.string() }).meta({ id: 'CatDetails' })
+  const Dog = z.object({ kind: z.literal('dog'), name: z.string() }).meta({ id: 'DogDetails' })
+  const Animal = z.discriminatedUnion('kind', [Cat, Dog]).meta({ id: 'Animal' })
 
   it('maps each value of the tag to the member that states it', async () => {
     const document = await documentOf([
-      { path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }
+      { path: '/b', method: 'get', responses: { '200': { schema: Animal } } }
     ])
 
     // The mapping is written rather than left implicit. OpenAPI resolves a value to a component of
-    // that name where no mapping stands, and no component here is called `business`.
-    expect(document.written.components?.schemas?.['Beneficiary']).toMatchObject({
+    // that name where no mapping stands, and no component here is called `cat`. The names and the
+    // values differ on purpose, because a bare `propertyName` resolves to nothing where they do.
+    expect(document.written.components?.schemas?.['Animal']).toMatchObject({
       oneOf: [
-        { $ref: '#/components/schemas/BusinessBeneficiary' },
-        { $ref: '#/components/schemas/IndividualBeneficiary' }
+        { $ref: '#/components/schemas/CatDetails' },
+        { $ref: '#/components/schemas/DogDetails' }
       ],
       discriminator: {
         propertyName: 'kind',
         mapping: {
-          business: '#/components/schemas/BusinessBeneficiary',
-          individual: '#/components/schemas/IndividualBeneficiary'
+          cat: '#/components/schemas/CatDetails',
+          dog: '#/components/schemas/DogDetails'
         }
       }
     })
@@ -906,7 +899,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('reports no loss, because this dialect stated the tag the other could not', async () => {
     const document = await documentOf([
-      { path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }
+      { path: '/b', method: 'get', responses: { '200': { schema: Animal } } }
     ])
 
     // The 2020-12 target gives the discriminant up and says so. A caller who refuses every loss
@@ -916,7 +909,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
 
   it('states the tag in 3.0 too, which has the same keyword', async () => {
     const spelled = spellOpenApi(
-      [{ path: '/b', method: 'get', responses: { '200': { schema: Beneficiary } } }],
+      [{ path: '/b', method: 'get', responses: { '200': { schema: Animal } } }],
       zodSource,
       { sides },
       info,
@@ -927,7 +920,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
     }
 
     expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
-    expect(spelled.written.components?.schemas?.['Beneficiary']).toMatchObject({
+    expect(spelled.written.components?.schemas?.['Animal']).toMatchObject({
       discriminator: { propertyName: 'kind' }
     })
   })
@@ -950,7 +943,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
   })
 
   it('writes no tag for a disjunction that names no property to choose by', async () => {
-    const Plain = z.union([Business, Individual]).meta({ id: 'Plain' })
+    const Plain = z.union([Cat, Dog]).meta({ id: 'Plain' })
     const document = await documentOf([
       { path: '/p', method: 'get', responses: { '200': { schema: Plain } } }
     ])
@@ -1011,7 +1004,7 @@ describe('3.0 is a different dialect of one target', () => {
    * The first time two dialects of one target have met here.
    *
    * 3.1 holds a 2020-12 schema unchanged. 3.0 has a schema of its own that says four things another
-   * way and one thing not at all, so a schema is translated once and nothing downstream asks which
+   * way and one thing not at all, so a schema is tranptIded once and nothing downstream asks which
    * dialect it is writing for.
    *
    * Both are read by the OpenAPI meta-schema, which knows both versions.
@@ -1043,7 +1036,7 @@ describe('3.0 is a different dialect of one target', () => {
   }
 
   it('says null with a flag beside one type, where 3.1 names two', async () => {
-    // A fifth spelling of the one fact, and the first this library reaches by translating rather
+    // A fifth spelling of the one fact, and the first this library reaches by tranptIding rather
     // than by writing. A flag in ATD, a type list in 2020-12, a joined branch where there is no type
     // to widen, a member of the coproduct in DynamoDB, and here a flag again with one type beside it.
     const { written } = await schemaIn30(z.string().nullable())()
