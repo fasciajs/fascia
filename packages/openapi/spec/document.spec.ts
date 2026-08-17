@@ -285,9 +285,9 @@ describe('a document states what a service needs and how a client divides', () =
 
 describe('a use of a named schema may describe that use', () => {
   /**
-   * **A shared type used in two places may want a sentence about one of them.** A service holds one
-   * `IsoDate` and one field of it is when a session expires. Put on the component the sentence
-   * describes every date, and dropped it describes nothing, so it stands beside the reference.
+   * **A shared type used in two places may want a sentence about one of them.** A document holds one
+   * timestamp type, and one field of it is when a pet was last fed. Put on the component the sentence
+   * describes every timestamp, and dropped it describes nothing, so it stands beside the reference.
    *
    * 3.1 reads a keyword next to a `$ref` and 3.0 reads none, which is the one place these two dialects
    * disagree about a reference.

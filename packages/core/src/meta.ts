@@ -37,9 +37,9 @@ export function outermost(outer: Meta, inner: Meta): Meta {
  *
  * **A use of a named schema may describe that use, and a document holds the description beside the
  * reference.** Two schemas sharing a name are one shape, so the second is written as a reference to
- * the first. Where the second says something further about itself, that goes on the reference: a
- * caller writing `withOpenApi(IsoDate(), { description: 'when the session expires' })` is describing
- * this use of the date and not every date.
+ * the first. Where the second says something further about itself, that goes on the reference. A
+ * caller who describes one use of a shared timestamp is saying what that field is, and not what every
+ * timestamp is.
  *
  * A word the two already share is dropped rather than repeated. A reference and the schema it names
  * both carrying one sentence say what one says, and a reader that found them disagreeing would have
