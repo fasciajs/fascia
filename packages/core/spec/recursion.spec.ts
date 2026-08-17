@@ -217,7 +217,14 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
       throw new Error('the schema is not an object')
     }
 
-    expect(body.assertions.properties.get('b')?.term).toMatchObject({ meta: {} })
+    // Compared exactly. `toMatchObject({ meta: {} })` states nothing, because an empty object matches
+    // a populated one, so it held whether the word was dropped or carried.
+    expect(body.assertions.properties.get('b')?.term).toEqual({
+      kind: 'ref',
+      name: 'Name',
+      admitsNull: false,
+      meta: {}
+    })
     expect(result.definitions.get('Name')?.meta).toEqual({ description: 'a name' })
   })
 

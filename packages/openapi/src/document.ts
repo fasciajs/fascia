@@ -534,14 +534,16 @@ function parametersOf(
  * Moved rather than copied. Two copies of one sentence say what one says, and a reader that finds them
  * disagreeing has nothing to choose by.
  *
- * A reference keeps whatever the component says. The description there belongs to the component
- * rather than to this use of it, and no use site states one: a reference carries no metadata at all.
+ * **A sentence beside a reference is moved as well.** A component's own description is under
+ * `components`, not here, so a description standing next to a `$ref` is what this use of the named
+ * schema says about itself. That is the parameter's sentence, and leaving it on the schema puts it
+ * where a generator does not look. The reference itself stays where it was.
  */
 function documented(schema: V31.SchemaObject | V31.ReferenceObject): {
   readonly description?: string
   readonly schema: V31.SchemaObject | V31.ReferenceObject
 } {
-  if ('$ref' in schema || typeof schema.description !== 'string') {
+  if (typeof schema.description !== 'string') {
     return { schema }
   }
 

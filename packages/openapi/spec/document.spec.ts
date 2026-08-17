@@ -653,6 +653,37 @@ describe('a caller sends part of a request outside the body', () => {
     ])
   })
 
+  it('moves a sentence standing beside a reference, which is the use site talking', async () => {
+    // A component's own description is under `components`, so a sentence next to a `$ref` came from
+    // this use of the named schema. The reference stays on the schema and the sentence goes up.
+    //
+    // Reachable only where the parameter is the second claimant of the name: the first one describes
+    // the component, so the plain use has to come first for the described use to become a reference.
+    const plain = z.string().meta({ id: 'PetId' })
+    const said = z.string().meta({ id: 'PetId', description: 'the pet this call is about' })
+
+    const document = await documentOf([
+      { path: '/pets', method: 'get', responses: { '200': { schema: plain } } },
+      {
+        path: '/pets/{petId}',
+        method: 'get',
+        parameters: { path: z.object({ petId: said }) },
+        responses: { '204': { description: 'x' } }
+      }
+    ])
+
+    expect(document.written.paths?.['/pets/{petId}']?.get?.parameters).toEqual([
+      {
+        name: 'petId',
+        in: 'path',
+        required: true,
+        description: 'the pet this call is about',
+        schema: { $ref: '#/components/schemas/PetId' }
+      }
+    ])
+    expect(document.written.components?.schemas?.['PetId']).toEqual({ type: 'string' })
+  })
+
   it('leaves a referenced component its own description, which is not the use site talking', async () => {
     // A reference carries no metadata, so a description under one belongs to the component. Moving it
     // up would give this parameter a sentence another use of the same schema wrote.
