@@ -112,6 +112,8 @@ describe('a Date states its bounds where arktype puts them', () => {
   })
 
   it('states nothing for a Date with no bound', () => {
-    expect(read(type('Date'))).toMatchObject({ kind: 'scalar', name: 'date', assertions: {} })
+    // Compared exactly. An empty object matches a populated one under `toMatchObject`, so stating
+    // nothing is the one claim that matcher cannot make.
+    expect(read(type('Date'))).toEqual({ kind: 'scalar', name: 'date', assertions: {} })
   })
 })

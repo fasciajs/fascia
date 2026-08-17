@@ -70,13 +70,21 @@ function requires(term: Described, key: string): boolean {
 
 describe('a conversion is described by the side that was asked for', () => {
   it('describes what zod checks before a pipe, and what it checks after', () => {
-    expect(fromZod(z.string().pipe(z.string().min(2)), 'input')).toMatchObject({
+    // Compared exactly. The claim about the input side is that it asserts nothing, and an empty
+    // object matches a populated one under `toMatchObject`, so that matcher could not make it.
+    expect(fromZod(z.string().pipe(z.string().min(2)), 'input')).toEqual({
+      kind: 'typed',
       name: 'string',
-      assertions: {}
+      assertions: {},
+      admitsNull: false,
+      meta: {}
     })
-    expect(fromZod(z.string().pipe(z.string().min(2)), 'output')).toMatchObject({
+    expect(fromZod(z.string().pipe(z.string().min(2)), 'output')).toEqual({
+      kind: 'typed',
       name: 'string',
-      assertions: { minLength: 2 }
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
     })
   })
 
