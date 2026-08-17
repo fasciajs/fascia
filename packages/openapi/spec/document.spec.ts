@@ -1004,7 +1004,7 @@ describe('3.0 is a different dialect of one target', () => {
    * The first time two dialects of one target have met here.
    *
    * 3.1 holds a 2020-12 schema unchanged. 3.0 has a schema of its own that says four things another
-   * way and one thing not at all, so a schema is tranptIded once and nothing downstream asks which
+   * way and one thing not at all, so a schema is translated once and nothing downstream asks which
    * dialect it is writing for.
    *
    * Both are read by the OpenAPI meta-schema, which knows both versions.
@@ -1036,7 +1036,7 @@ describe('3.0 is a different dialect of one target', () => {
   }
 
   it('says null with a flag beside one type, where 3.1 names two', async () => {
-    // A fifth spelling of the one fact, and the first this library reaches by tranptIding rather
+    // A fifth spelling of the one fact, and the first this library reaches by translating rather
     // than by writing. A flag in ATD, a type list in 2020-12, a joined branch where there is no type
     // to widen, a member of the coproduct in DynamoDB, and here a flag again with one type beside it.
     const { written } = await schemaIn30(z.string().nullable())()
