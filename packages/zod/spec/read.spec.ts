@@ -71,9 +71,10 @@ describe('an unreadable type says why, rather than reading as something else', (
 
 describe('a union is one of three things, and the reading says which', () => {
   it('reads a plain union as any of its members', () => {
-    expect(nodeOf(z.union([z.string(), z.number()]))).toMatchObject({
+    expect(nodeOf(z.union([z.string(), z.number()]))).toEqual({
       kind: 'combination',
       law: 'any',
+      members: [expect.any(z.ZodString), expect.any(z.ZodNumber)],
       discriminant: undefined
     })
   })
@@ -85,31 +86,48 @@ describe('a union is one of three things, and the reading says which', () => {
         z.object({ kind: z.literal('b') })
       ])
     )
-    expect(node).toMatchObject({ kind: 'combination', law: 'exactlyOne', discriminant: 'kind' })
+    expect(node).toEqual({
+      kind: 'combination',
+      law: 'exactlyOne',
+      members: [expect.any(z.ZodObject), expect.any(z.ZodObject)],
+      discriminant: 'kind'
+    })
   })
 
   it('reads an intersection as all of its members', () => {
     const node = nodeOf(z.intersection(z.object({ a: z.string() }), z.object({ b: z.string() })))
-    expect(node).toMatchObject({ kind: 'combination', law: 'all' })
+    expect(node).toEqual({
+      kind: 'combination',
+      law: 'all',
+      members: [expect.any(z.ZodObject), expect.any(z.ZodObject)],
+      discriminant: undefined
+    })
   })
 })
 
 describe('a pipe states what each of its sides says', () => {
   it('reads a checking pipe as both sides describing one value', () => {
-    expect(nodeOf(z.string().pipe(z.string()))).toMatchObject({ kind: 'conversion', how: 'checks' })
+    expect(nodeOf(z.string().pipe(z.string()))).toEqual({
+      kind: 'conversion',
+      how: 'checks',
+      sent: expect.any(z.ZodString),
+      produced: expect.any(z.ZodString)
+    })
   })
 
   it('reads a transform as a stated input and an unstated output', () => {
-    expect(nodeOf(z.string().transform((value) => value.length))).toMatchObject({
+    expect(nodeOf(z.string().transform((value) => value.length))).toEqual({
       kind: 'conversion',
-      how: 'unstatedOutput'
+      how: 'unstatedOutput',
+      sent: expect.any(z.ZodString)
     })
   })
 
   it('reads a preprocessor as an unstated input and a stated output', () => {
-    expect(nodeOf(z.preprocess((value) => String(value), z.string()))).toMatchObject({
+    expect(nodeOf(z.preprocess((value) => String(value), z.string()))).toEqual({
       kind: 'conversion',
-      how: 'unstatedInput'
+      how: 'unstatedInput',
+      produced: expect.any(z.ZodString)
     })
   })
 
@@ -121,22 +139,40 @@ describe('a pipe states what each of its sides says', () => {
           encode: (value) => String(value)
         })
       )
-    ).toMatchObject({ kind: 'conversion', how: 'codec' })
+    ).toEqual({
+      kind: 'conversion',
+      how: 'codec',
+      wire: expect.any(z.ZodString),
+      value: expect.any(z.ZodNumber)
+    })
   })
 })
 
 describe('an object says what it accepts at a key it does not name', () => {
   it('accepts an unnamed key, because zod removes one rather than refusing the value', () => {
-    expect(nodeOf(z.object({ a: z.string() }))).toMatchObject({ rest: { allows: 'anything' } })
+    expect(nodeOf(z.object({ a: z.string() }))).toEqual({
+      kind: 'structural',
+      of: 'object',
+      properties: expect.any(Map),
+      rest: { allows: 'anything' }
+    })
   })
 
   it('refuses an unnamed key where the schema does', () => {
-    expect(nodeOf(z.strictObject({ a: z.string() }))).toMatchObject({ rest: { allows: 'nothing' } })
+    expect(nodeOf(z.strictObject({ a: z.string() }))).toEqual({
+      kind: 'structural',
+      of: 'object',
+      properties: expect.any(Map),
+      rest: { allows: 'nothing' }
+    })
   })
 
   it('names the schema an unnamed key is held to', () => {
-    expect(nodeOf(z.object({ a: z.string() }).catchall(z.number()))).toMatchObject({
-      rest: { allows: 'schema' }
+    expect(nodeOf(z.object({ a: z.string() }).catchall(z.number()))).toEqual({
+      kind: 'structural',
+      of: 'object',
+      properties: expect.any(Map),
+      rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
     })
   })
 })
@@ -152,7 +188,8 @@ describe('an object states on the edge what zod states on the value', () => {
   }
 
   it('reads a plain key as required, holding the schema itself', () => {
-    expect(propertyAt(z.object({ a: z.string() }), 'a')).toMatchObject({
+    expect(propertyAt(z.object({ a: z.string() }), 'a')).toEqual({
+      schema: expect.any(z.ZodString),
       required: true,
       default: undefined
     })
@@ -161,7 +198,11 @@ describe('an object states on the edge what zod states on the value', () => {
   it('lifts optional onto the edge and keeps pointing at the schema a caller wrote', () => {
     const property = propertyAt(z.object({ a: z.string().optional() }), 'a')
 
-    expect(property).toMatchObject({ required: false, default: undefined })
+    expect(property).toEqual({
+      schema: expect.any(z.ZodOptional),
+      required: false,
+      default: undefined
+    })
 
     // The wrapper stays where a caller put it. It carries a caller's words, and pointing past it
     // left a description written on an optional property out of every document. Nothing downstream
@@ -171,30 +212,39 @@ describe('an object states on the edge what zod states on the value', () => {
   })
 
   it('lifts a default onto the edge, and a default makes a key absent-able', () => {
-    expect(propertyAt(z.object({ a: z.string().default('x') }), 'a')).toMatchObject({
+    expect(propertyAt(z.object({ a: z.string().default('x') }), 'a')).toEqual({
+      schema: expect.any(z.ZodDefault),
       required: false,
       default: 'x'
     })
   })
 
   it('lets the outermost wrapper decide, so nonoptional over optional is required', () => {
-    expect(propertyAt(z.object({ a: z.string().optional().nonoptional() }), 'a')).toMatchObject({
-      required: true
+    expect(propertyAt(z.object({ a: z.string().optional().nonoptional() }), 'a')).toEqual({
+      schema: expect.any(z.ZodNonOptional),
+      required: true,
+      default: undefined
     })
   })
 
   it('leaves nullable on the value, because null is about the value and not about the key', () => {
     const property = propertyAt(z.object({ a: z.string().nullable() }), 'a')
 
-    expect(property).toMatchObject({ required: true })
+    expect(property).toEqual({
+      schema: expect.any(z.ZodNullable),
+      required: true,
+      default: undefined
+    })
     expect(groupOf((property as { schema: z.core.$ZodType }).schema)).toBe('wrapper')
   })
 
   it('does not lift a presence wrapper hidden under a readonly', () => {
     // A stated limitation rather than a defect found late. Unwrapping the readonly would drop it
     // from the tree, and the edge has nowhere to put it.
-    expect(propertyAt(z.object({ a: z.string().optional().readonly() }), 'a')).toMatchObject({
-      required: true
+    expect(propertyAt(z.object({ a: z.string().optional().readonly() }), 'a')).toEqual({
+      schema: expect.any(z.ZodReadonly),
+      required: true,
+      default: undefined
     })
   })
 })
@@ -235,12 +285,20 @@ describe('a tuple says what it admits past its positions', () => {
     // objects do. A tuple means the opposite by the same absence, and reading it the object's way
     // made every document accept lists longer than the schema takes.
     expect(z.tuple([z.string()]).safeParse(['a', 'extra']).success).toBe(false)
-    expect(nodeOf(z.tuple([z.string()]))).toMatchObject({ rest: { allows: 'nothing' } })
+    expect(nodeOf(z.tuple([z.string()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodString)],
+      rest: { allows: 'nothing' }
+    })
   })
 
   it('names the schema a rest is held to where the tuple states one', () => {
-    expect(nodeOf(z.tuple([z.string()], z.number()))).toMatchObject({
-      rest: { allows: 'schema' }
+    expect(nodeOf(z.tuple([z.string()], z.number()))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodString)],
+      rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
     })
   })
 })

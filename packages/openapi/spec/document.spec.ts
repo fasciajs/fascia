@@ -61,10 +61,12 @@ describe('an operation names what it takes and what it answers with', () => {
 
     const operation = document.written.paths?.['/users']?.post
     expect(operation?.operationId).toBe('createUser')
-    expect(operation?.requestBody).toMatchObject({
+    expect(operation?.requestBody).toEqual({
+      required: true,
       content: { 'application/json': { schema: { $ref: '#/components/schemas/UserInput' } } }
     })
-    expect(operation?.responses?.['200']).toMatchObject({
+    expect(operation?.responses?.['200']).toEqual({
+      description: 'the 200 response',
       content: { 'application/json': { schema: { $ref: '#/components/schemas/UserOutput' } } }
     })
   })
@@ -76,8 +78,14 @@ describe('an operation names what it takes and what it answers with', () => {
 
     const schemas = document.written.components?.schemas
     expect(Object.keys(schemas ?? {}).sort()).toEqual(['UserInput', 'UserOutput'])
-    expect(schemas?.['UserInput']).toMatchObject({ required: ['id'] })
-    expect(schemas?.['UserOutput']).toMatchObject({ required: ['id', 'role'] })
+    // One body, and the two sides differ in `required` alone.
+    const properties = { id: { type: 'string' }, role: { type: 'string', default: 'reader' } }
+    expect(schemas?.['UserInput']).toEqual({ type: 'object', properties, required: ['id'] })
+    expect(schemas?.['UserOutput']).toEqual({
+      type: 'object',
+      properties,
+      required: ['id', 'role']
+    })
   })
 
   it('answers with several statuses, which a procedure has no room for', async () => {
@@ -95,7 +103,8 @@ describe('an operation names what it takes and what it answers with', () => {
 
     const responses = document.written.paths?.['/users/{id}']?.get?.responses
     expect(Object.keys(responses ?? {})).toEqual(['200', '404'])
-    expect(responses?.['404']).toMatchObject({
+    expect(responses?.['404']).toEqual({
+      description: 'the 404 response',
       content: { 'application/json': { schema: { $ref: '#/components/schemas/Problem' } } }
     })
   })
@@ -121,10 +130,16 @@ describe('an operation names what it takes and what it answers with', () => {
       }
     ])
 
-    expect(document.written.paths?.['/users']?.get).toMatchObject({
+    expect(document.written.paths?.['/users']?.get).toEqual({
       summary: 'every user',
       description: 'in no order',
-      deprecated: true
+      deprecated: true,
+      responses: {
+        '200': {
+          description: 'the 200 response',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } }
+        }
+      }
     })
   })
 
@@ -137,8 +152,13 @@ describe('an operation names what it takes and what it answers with', () => {
       }
     ])
 
-    expect(document.written.paths?.['/ping']?.get?.responses?.['200']).toMatchObject({
-      content: { 'application/json': { schema: { type: 'object' } } }
+    expect(document.written.paths?.['/ping']?.get?.responses?.['200']).toEqual({
+      description: 'the 200 response',
+      content: {
+        'application/json': {
+          schema: { type: 'object', properties: { at: { type: 'string' } }, required: ['at'] }
+        }
+      }
     })
     expect(document.written.components).toBeUndefined()
   })
@@ -167,8 +187,12 @@ describe('what OpenAPI refuses, and what this says instead', () => {
 
     // The tuple widening the 2020-12 target reports, reaching a caller with the operation that
     // produced it in its path.
-    expect(document.departures[0]).toMatchObject({ direction: 'wider' })
-    expect(document.departures[0]?.at[0]).toBe('get /pets')
+    expect(document.departures[0]).toEqual({
+      at: ['get /pets'],
+      direction: 'wider',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('does not say which of them must be present')
+    })
   })
 })
 
@@ -193,7 +217,15 @@ describe('a document states what a service needs and how a client divides', () =
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.get).toMatchObject({ tags: ['pets'] })
+    expect(document.written.paths?.['/pets']?.get).toEqual({
+      tags: ['pets'],
+      responses: {
+        '200': {
+          description: 'the 200 response',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } }
+        }
+      }
+    })
   })
 
   it('names the schemes a requirement resolves against', async () => {
@@ -224,8 +256,25 @@ describe('a document states what a service needs and how a client divides', () =
       { security: [{ bearer: [] }], securitySchemes: { bearer } }
     )
 
-    expect(document.written.paths?.['/login']?.post).toMatchObject({ security: [] })
-    expect(document.written.paths?.['/pets']?.get).not.toHaveProperty('security')
+    expect(document.written.paths?.['/login']?.post).toEqual({
+      security: [],
+      responses: {
+        '200': {
+          description: 'the 200 response',
+          content: { 'application/json': { schema: { type: 'string' } } }
+        }
+      }
+    })
+    // No `security` key, which the comparison states by holding the whole value. The operation takes
+    // what the document requires, so stating anything here would be this operation overriding it.
+    expect(document.written.paths?.['/pets']?.get).toEqual({
+      responses: {
+        '200': {
+          description: 'the 200 response',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } }
+        }
+      }
+    })
   })
 
   it('describes a webhook the same way, under a name instead of a path', async () => {
@@ -241,12 +290,13 @@ describe('a document states what a service needs and how a client divides', () =
 
     // The body is described, so the schema is a component and the webhook refers to it like any
     // other operation. A webhook a caller wrote by hand would hold a schema nothing described.
-    expect(document.written.webhooks?.['petAdopted']).toMatchObject({
+    expect(document.written.webhooks?.['petAdopted']).toEqual({
       post: {
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } }
-        }
+        },
+        responses: { '204': { description: 'taken' } }
       }
     })
     expect(Object.keys(document.written.components?.schemas ?? {})).toEqual(['Pet'])
@@ -264,11 +314,17 @@ describe('a document states what a service needs and how a client divides', () =
       }
     )
 
-    expect(document.written.paths?.['/ready']?.post?.responses?.['204']).toMatchObject({
+    expect(document.written.paths?.['/ready']?.post?.responses?.['204']).toEqual({
       description: 'p'
     })
-    expect(document.written.webhooks?.['/ready']).toMatchObject({
-      post: { responses: { '204': { description: 'w' } } }
+    expect(document.written.webhooks?.['/ready']).toEqual({
+      post: {
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Pet' } } }
+        },
+        responses: { '204': { description: 'w' } }
+      }
     })
   })
 
@@ -310,13 +366,16 @@ describe('a use of a named schema may describe that use', () => {
       { path: '/pets', method: 'get', responses: { '200': { schema: Holder } } }
     ])
 
-    expect(document.written.components?.schemas?.['Holder']).toMatchObject({
+    expect(document.written.components?.schemas?.['Holder']).toEqual({
+      type: 'object',
       properties: {
         plain: { $ref: '#/components/schemas/Name' },
         said: { $ref: '#/components/schemas/Name', description: 'the name this caller sends' }
-      }
+      },
+      required: ['plain', 'said']
     })
-    expect(document.written.components?.schemas?.['Name']).not.toHaveProperty('description')
+    // The component says nothing of its own, which the comparison states by holding the whole value.
+    expect(document.written.components?.schemas?.['Name']).toEqual({ type: 'string', minLength: 2 })
   })
 
   it('moves it under a conjunction for 3.0, which reads no keyword beside a reference', async () => {
@@ -331,15 +390,17 @@ describe('a use of a named schema may describe that use', () => {
       throw new Error(spelled.message)
     }
 
-    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
-    expect(spelled.written.components?.schemas?.['Holder']).toMatchObject({
+    expect((await validator.validate(spelled.written as never)).valid).toBe(true)
+    expect(spelled.written.components?.schemas?.['Holder']).toEqual({
+      type: 'object',
       properties: {
         plain: { $ref: '#/components/schemas/Name' },
         said: {
           allOf: [{ $ref: '#/components/schemas/Name' }],
           description: 'the name this caller sends'
         }
-      }
+      },
+      required: ['plain', 'said']
     })
   })
 
@@ -355,8 +416,12 @@ describe('a use of a named schema may describe that use', () => {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.departures[0]).toMatchObject({ direction: 'neither', cause: 'noShapeForIt' })
-    expect(spelled.departures[0]?.said).toContain('3.0 reads no keyword there')
+    expect(spelled.departures[0]).toEqual({
+      at: ['Holder', 'properties/said'],
+      direction: 'neither',
+      cause: 'noShapeForIt',
+      said: expect.stringContaining('3.0 reads no keyword there')
+    })
   })
 })
 
@@ -459,8 +524,9 @@ describe('a response states what no schema carries', () => {
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.get?.responses?.['200']).toMatchObject({
-      description: 'a pet name'
+    expect(document.written.paths?.['/pets']?.get?.responses?.['200']).toEqual({
+      description: 'a pet name',
+      content: { 'application/json': { schema: { type: 'string' } } }
     })
   })
 
@@ -469,8 +535,9 @@ describe('a response states what no schema carries', () => {
       { path: '/pets', method: 'get', responses: { '404': { schema: z.string() } } }
     ])
 
-    expect(document.written.paths?.['/pets']?.get?.responses?.['404']).toMatchObject({
-      description: 'the 404 response'
+    expect(document.written.paths?.['/pets']?.get?.responses?.['404']).toEqual({
+      description: 'the 404 response',
+      content: { 'application/json': { schema: { type: 'string' } } }
     })
   })
 
@@ -488,8 +555,10 @@ describe('a response states what no schema carries', () => {
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.get?.responses?.['200']).toMatchObject({
-      headers: { 'Cache-Control': { schema: { type: 'string' } } }
+    expect(document.written.paths?.['/pets']?.get?.responses?.['200']).toEqual({
+      description: 'the 200 response',
+      headers: { 'Cache-Control': { schema: { type: 'string' } } },
+      content: { 'application/json': { schema: { type: 'string' } } }
     })
   })
 
@@ -559,7 +628,14 @@ describe('whether a request must carry a body is stated, never defaulted', () =>
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.post?.requestBody).toMatchObject({ required: true })
+    expect(document.written.paths?.['/pets']?.post?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': {
+          schema: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] }
+        }
+      }
+    })
   })
 
   it('says a body may be omitted where the caller says so', async () => {
@@ -573,7 +649,14 @@ describe('whether a request must carry a body is stated, never defaulted', () =>
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.patch?.requestBody).toMatchObject({ required: false })
+    expect(document.written.paths?.['/pets']?.patch?.requestBody).toEqual({
+      required: false,
+      content: {
+        'application/json': {
+          schema: { type: 'object', properties: { note: { type: 'string' } }, required: ['note'] }
+        }
+      }
+    })
   })
 
   it('writes the keyword either way, so no reader supplies the default', async () => {
@@ -589,7 +672,10 @@ describe('whether a request must carry a body is stated, never defaulted', () =>
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.post?.requestBody).toHaveProperty('required')
+    expect(document.written.paths?.['/pets']?.post?.requestBody).toEqual({
+      required: false,
+      content: { 'application/json': { schema: { type: 'string' } } }
+    })
   })
 })
 
@@ -706,7 +792,8 @@ describe('a caller sends part of a request outside the body', () => {
         schema: { $ref: '#/components/schemas/PetId' }
       }
     ])
-    expect(document.written.components?.schemas?.['PetId']).toMatchObject({
+    expect(document.written.components?.schemas?.['PetId']).toEqual({
+      type: 'string',
       description: 'any pet id'
     })
   })
@@ -724,9 +811,9 @@ describe('a caller sends part of a request outside the body', () => {
     ])
 
     const parameters = document.written.paths?.['/pets']?.get?.parameters
-    expect(parameters).toMatchObject([
-      { name: 'a', required: true },
-      { name: 'b', required: false }
+    expect(parameters).toEqual([
+      { name: 'a', in: 'query', required: true, schema: { type: 'string' } },
+      { name: 'b', in: 'query', required: false, schema: { type: 'string' } }
     ])
   })
 
@@ -766,8 +853,10 @@ describe('a caller sends part of a request outside the body', () => {
       }
     ])
 
-    expect(document.written.paths?.['/pets']?.get?.parameters?.[0]).toMatchObject({
+    expect(document.written.paths?.['/pets']?.get?.parameters?.[0]).toEqual({
       name: 'limit',
+      in: 'query',
+      required: false,
       schema: { type: 'number', default: 20 }
     })
   })
@@ -802,7 +891,15 @@ describe('a caller sends part of a request outside the body', () => {
       { path: '/ping', method: 'get', responses: { '200': { schema: z.string() } } }
     ])
 
-    expect(document.written.paths?.['/ping']?.get).not.toHaveProperty('parameters')
+    // No `parameters` key, which the comparison states by holding the whole value.
+    expect(document.written.paths?.['/ping']?.get).toEqual({
+      responses: {
+        '200': {
+          description: 'the 200 response',
+          content: { 'application/json': { schema: { type: 'string' } } }
+        }
+      }
+    })
   })
 
   it('states parameters in 3.0, which reads them the same way', async () => {
@@ -824,9 +921,12 @@ describe('a caller sends part of a request outside the body', () => {
       throw new Error(spelled.message)
     }
 
-    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
+    expect((await validator.validate(spelled.written as never)).valid).toBe(true)
     // The 3.0 dialect reaches the parameter's schema too, so null is a flag rather than a type.
-    expect(spelled.written.paths?.['/pets']?.get?.parameters?.[0]).toMatchObject({
+    expect(spelled.written.paths?.['/pets']?.get?.parameters?.[0]).toEqual({
+      name: 'a',
+      in: 'query',
+      required: true,
       schema: { type: 'string', nullable: true }
     })
   })
@@ -841,8 +941,13 @@ describe('a caller sends part of a request outside the body', () => {
       }
     ])
 
-    expect(document.departures[0]).toMatchObject({ direction: 'wider' })
-    expect(document.departures[0]?.at[0]).toBe('get /pets')
+    // The path names the operation and then the parameter inside it.
+    expect(document.departures[0]).toEqual({
+      at: ['get /pets', 'a'],
+      direction: 'wider',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('does not say which of them must be present')
+    })
   })
 })
 
@@ -927,7 +1032,7 @@ describe('a tagged disjunction states the tag, which only this target has a word
     // that name where no mapping stands, and no component here is called `cat`. The names and the
     // values differ on purpose, because a bare `propertyName` resolves to nothing where a name and a
     // value differ.
-    expect(document.written.components?.schemas?.['Animal']).toMatchObject({
+    expect(document.written.components?.schemas?.['Animal']).toEqual({
       oneOf: [
         { $ref: '#/components/schemas/CatDetails' },
         { $ref: '#/components/schemas/DogDetails' }
@@ -964,9 +1069,20 @@ describe('a tagged disjunction states the tag, which only this target has a word
       throw new Error(spelled.message)
     }
 
-    expect(await validator.validate(spelled.written as never)).toMatchObject({ valid: true })
-    expect(spelled.written.components?.schemas?.['Animal']).toMatchObject({
-      discriminator: { propertyName: 'kind' }
+    expect((await validator.validate(spelled.written as never)).valid).toBe(true)
+    // The same shape 3.1 writes. Both dialects hold the keyword, so the translation touches neither.
+    expect(spelled.written.components?.schemas?.['Animal']).toEqual({
+      oneOf: [
+        { $ref: '#/components/schemas/CatDetails' },
+        { $ref: '#/components/schemas/DogDetails' }
+      ],
+      discriminator: {
+        propertyName: 'kind',
+        mapping: {
+          cat: '#/components/schemas/CatDetails',
+          dog: '#/components/schemas/DogDetails'
+        }
+      }
     })
   })
 
@@ -983,8 +1099,27 @@ describe('a tagged disjunction states the tag, which only this target has a word
       { path: '/pets', method: 'get', responses: { '200': { schema: Inline } } }
     ])
 
-    expect(document.written.components?.schemas?.['Inline']).not.toHaveProperty('discriminator')
-    expect(document.departures[0]).toMatchObject({ direction: 'neither', cause: 'noWordForIt' })
+    // No `discriminator`, which the comparison states by holding the whole value.
+    expect(document.written.components?.schemas?.['Inline']).toEqual({
+      oneOf: [
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['a'] } },
+          required: ['kind']
+        },
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['b'] } },
+          required: ['kind']
+        }
+      ]
+    })
+    expect(document.departures[0]).toEqual({
+      at: ['Inline'],
+      direction: 'neither',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('no keyword for one')
+    })
   })
 
   it('writes no tag for a disjunction that names no property to choose by', async () => {
@@ -993,7 +1128,14 @@ describe('a tagged disjunction states the tag, which only this target has a word
       { path: '/pets', method: 'get', responses: { '200': { schema: Plain } } }
     ])
 
-    expect(document.written.components?.schemas?.['Plain']).not.toHaveProperty('discriminator')
+    // `anyOf` rather than `oneOf`, and no `discriminator`. A plain disjunction states no exclusivity,
+    // and the comparison holds the whole value, so the absent keyword is part of the claim.
+    expect(document.written.components?.schemas?.['Plain']).toEqual({
+      anyOf: [
+        { $ref: '#/components/schemas/CatDetails' },
+        { $ref: '#/components/schemas/DogDetails' }
+      ]
+    })
     expect(document.departures).toEqual([])
   })
 })
@@ -1111,7 +1253,7 @@ describe('3.0 is a different dialect of one target', () => {
   it('has no positional form, and says what that gives up', async () => {
     const { written, departures } = await schemaIn30(z.tuple([z.string(), z.number()]))()
 
-    expect(written).toMatchObject({
+    expect(written).toEqual({
       type: 'array',
       items: { anyOf: [{ type: 'string' }, { type: 'number' }] }
     })
@@ -1123,8 +1265,8 @@ describe('3.0 is a different dialect of one target', () => {
   it('states one example where a term states several', async () => {
     const { written, departures } = await schemaIn30(z.string().meta({ examples: ['a', 'b'] }))()
 
-    expect(written).toMatchObject({ example: 'a' })
-    expect(written).not.toHaveProperty('examples')
+    // One `example` and no `examples`, which the comparison states by holding the whole value.
+    expect(written).toEqual({ type: 'string', example: 'a' })
     expect(departures.map((one) => one.direction)).toContain('neither')
   })
 

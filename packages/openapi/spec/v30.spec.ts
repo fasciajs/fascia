@@ -69,8 +69,11 @@ describe('what 3.0 cannot say, it reports rather than loses', () => {
   it('says a tuple is a list of anything a position admits, and reports it', () => {
     const { there, said } = roundTrip(z.tuple([z.string(), z.number()]))
 
-    expect(there).toMatchObject({ items: { anyOf: [{ type: 'string' }, { type: 'number' }] } })
-    expect(there).not.toHaveProperty('prefixItems')
+    // No `prefixItems`, which the comparison states by holding the whole value.
+    expect(there).toEqual({
+      type: 'array',
+      items: { anyOf: [{ type: 'string' }, { type: 'number' }] }
+    })
     expect(said).toBeGreaterThan(0)
   })
 

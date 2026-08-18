@@ -30,30 +30,91 @@ function read(schema: unknown): Node<BaseRoot> {
  * the half the compile-time assertion cannot give: that one says every constraint arktype states is
  * classified, and this one says every constraint filed as read actually reaches something.
  *
- * The five structural constraints reach a shape rather than an assertion, which is why the
- * expectation is over the whole node rather than over its assertions.
+ * The five structural constraints reach a shape rather than an assertion. Each witness states the
+ * whole node, so a reading that grows a field states the field here or the test says so.
  */
 const aSchemaPerReadConstraint: Record<ReadArkConstraints, [unknown, object]> = {
-  min: [type('number > 1'), { assertions: { minimum: { value: 1, exclusive: true } } }],
-  max: [type('number < 9'), { assertions: { maximum: { value: 9, exclusive: true } } }],
-  minLength: [type('string > 2'), { assertions: { minLength: 3 } }],
-  maxLength: [type('string < 9'), { assertions: { maxLength: 8 } }],
-  exactLength: [type('string == 3'), { assertions: { minLength: 3, maxLength: 3 } }],
+  min: [
+    type('number > 1'),
+    { kind: 'scalar', name: 'number', assertions: { minimum: { value: 1, exclusive: true } } }
+  ],
+  max: [
+    type('number < 9'),
+    { kind: 'scalar', name: 'number', assertions: { maximum: { value: 9, exclusive: true } } }
+  ],
+  minLength: [type('string > 2'), { kind: 'scalar', name: 'string', assertions: { minLength: 3 } }],
+  maxLength: [type('string < 9'), { kind: 'scalar', name: 'string', assertions: { maxLength: 8 } }],
+  exactLength: [
+    type('string == 3'),
+    { kind: 'scalar', name: 'string', assertions: { minLength: 3, maxLength: 3 } }
+  ],
   before: [
     type('Date <= d"2030-01-01"'),
-    { assertions: { maximum: { value: new Date('2030-01-01T00:00:00.000Z'), exclusive: false } } }
+    {
+      kind: 'scalar',
+      name: 'date',
+      assertions: { maximum: { value: new Date('2030-01-01T00:00:00.000Z'), exclusive: false } }
+    }
   ],
   after: [
     type('Date >= d"2020-01-01"'),
-    { assertions: { minimum: { value: new Date('2020-01-01T00:00:00.000Z'), exclusive: false } } }
+    {
+      kind: 'scalar',
+      name: 'date',
+      assertions: { minimum: { value: new Date('2020-01-01T00:00:00.000Z'), exclusive: false } }
+    }
   ],
-  pattern: [type('/^a.c$/'), { assertions: { patterns: ['^a.c$'] } }],
-  divisor: [type('number % 2'), { assertions: { multipleOf: 2 } }],
-  structure: [type({ a: 'string' }), { kind: 'structural', of: 'object' }],
-  required: [type({ a: 'string' }), { kind: 'structural', of: 'object' }],
-  optional: [type({ 'a?': 'string' }), { kind: 'structural', of: 'object' }],
-  index: [type({ '[string]': 'number' }), { kind: 'structural', of: 'dictionary' }],
-  sequence: [type('string[]'), { kind: 'structural', of: 'list' }]
+  pattern: [
+    type('/^a.c$/'),
+    { kind: 'scalar', name: 'string', assertions: { patterns: ['^a.c$'] } }
+  ],
+  divisor: [type('number % 2'), { kind: 'scalar', name: 'number', assertions: { multipleOf: 2 } }],
+  structure: [
+    type({ a: 'string' }),
+    {
+      kind: 'structural',
+      of: 'object',
+      properties: new Map([
+        ['a', { schema: expect.any(Function), required: true, default: undefined }]
+      ]),
+      rest: { allows: 'anything' }
+    }
+  ],
+  required: [
+    type({ a: 'string' }),
+    {
+      kind: 'structural',
+      of: 'object',
+      properties: new Map([
+        ['a', { schema: expect.any(Function), required: true, default: undefined }]
+      ]),
+      rest: { allows: 'anything' }
+    }
+  ],
+  optional: [
+    type({ 'a?': 'string' }),
+    {
+      kind: 'structural',
+      of: 'object',
+      properties: new Map([
+        ['a', { schema: expect.any(Function), required: false, default: undefined }]
+      ]),
+      rest: { allows: 'anything' }
+    }
+  ],
+  index: [
+    type({ '[string]': 'number' }),
+    {
+      kind: 'structural',
+      of: 'dictionary',
+      keys: expect.any(Function),
+      values: expect.any(Function)
+    }
+  ],
+  sequence: [
+    type('string[]'),
+    { kind: 'structural', of: 'list', items: expect.any(Function), assertions: {} }
+  ]
 }
 
 describe('every constraint arktype states is classified', () => {
@@ -81,7 +142,7 @@ describe('a constraint filed as read reaches something', () => {
     it(`reads ${name}`, () => {
       const [schema, expected] = aSchemaPerReadConstraint[name]
 
-      expect(read(schema)).toMatchObject(expected)
+      expect(read(schema)).toEqual(expected)
     })
   }
 
@@ -91,7 +152,11 @@ describe('a constraint filed as read reaches something', () => {
       throw new Error('the schema did not read as an object')
     }
 
-    expect(node.properties.get('a')).toMatchObject({ required: false })
+    expect(node.properties.get('a')).toEqual({
+      schema: expect.any(Function),
+      required: false,
+      default: undefined
+    })
   })
 })
 
@@ -106,14 +171,14 @@ describe('a Date states its bounds where arktype puts them', () => {
   it('carries the shift arktype makes, because arktype holds no exclusive Date bound', () => {
     // `Date > x` is normalised to `Date >= x plus one millisecond`, and `exclusive` is never set.
     // The shifted bound is what the schema accepts, so it is what the reading states.
-    expect(read(type('Date > d"2020-01-01"'))).toMatchObject({
+    expect(read(type('Date > d"2020-01-01"'))).toEqual({
+      kind: 'scalar',
+      name: 'date',
       assertions: { minimum: { value: new Date('2020-01-01T00:00:00.001Z'), exclusive: false } }
     })
   })
 
   it('states nothing for a Date with no bound', () => {
-    // Compared exactly. An empty object matches a populated one under `toMatchObject`, so stating
-    // nothing is the one claim that matcher cannot make.
     expect(read(type('Date'))).toEqual({ kind: 'scalar', name: 'date', assertions: {} })
   })
 })

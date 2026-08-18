@@ -90,8 +90,16 @@ describe('three validators reach one term for one value', () => {
       if (term.kind !== 'typed' || term.name !== 'object') {
         throw new Error('a schema did not describe as an object')
       }
-      expect(term.assertions.properties.get('a')).toMatchObject({ required: true })
-      expect(term.assertions.properties.get('b')).toMatchObject({ required: false })
+      expect(term.assertions.properties.get('a')).toEqual({
+        term: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} },
+        required: true,
+        default: undefined
+      })
+      expect(term.assertions.properties.get('b')).toEqual({
+        term: { kind: 'typed', name: 'number', assertions: {}, admitsNull: false, meta: {} },
+        required: false,
+        default: undefined
+      })
     }
   })
 
@@ -127,7 +135,16 @@ describe('where the three disagree, the term says what each one actually stated'
       ])
     )
 
-    expect(term).toMatchObject({ kind: 'exactlyOne', discriminant: 'kind' })
+    expect(term).toEqual({
+      kind: 'exactlyOne',
+      members: [
+        expect.objectContaining({ kind: 'typed', name: 'object' }),
+        expect.objectContaining({ kind: 'typed', name: 'object' })
+      ],
+      discriminant: 'kind',
+      admitsNull: false,
+      meta: {}
+    })
   })
 
   it('describes an effect codec by its wire form, which zod states rarely and arktype never', () => {

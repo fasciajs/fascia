@@ -132,10 +132,12 @@ describe('a name is described once wherever it is used, not only in a cycle', ()
     expect(body.assertions.properties.get('second')?.term).toEqual(ref)
 
     // Described once, under the name, with the assertions the schema stated.
-    expect(result.definitions.get('Name')).toMatchObject({
+    expect(result.definitions.get('Name')).toEqual({
       kind: 'typed',
       name: 'string',
-      assertions: { minLength: 2 }
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
     })
   })
 })

@@ -167,7 +167,7 @@ describe('a width is chosen from the bounds, which is the motto running forwards
     // for refuses whole numbers the schema takes: `int32` here refused 3000000000, and the property
     // beside this file found it. No ATD width holds every whole number, and `int64` travels as a
     // string, so a document naming one describes a value the schema rejects every instance of.
-    expect(spelled.written).toMatchObject({ type: 'float64' })
+    expect(spelled.written).toEqual({ type: 'float64' })
     expect(said(spelled.departures)).toContain('no ATD width matches')
     expect(said(spelled.departures)).toContain('accepts a fraction')
   })
@@ -175,7 +175,7 @@ describe('a width is chosen from the bounds, which is the motto running forwards
   it('writes the width where the schema asked for exactly one', () => {
     // Unchanged, and this is the case a width is for: the bounds are the width, so naming it gives
     // nothing up in either direction.
-    expect(atdOf(z.int32()).written).toMatchObject({ type: 'int32' })
+    expect(atdOf(z.int32()).written).toEqual({ type: 'int32' })
   })
 })
 
@@ -366,7 +366,7 @@ describe('what a schema says about itself, of which ATD has a word for two', () 
   it('writes a description and a deprecation under metadata, where arri keeps a name', () => {
     expect(
       atdOf(z.string().meta({ description: 'who they are', deprecated: true })).written
-    ).toMatchObject({
+    ).toEqual({
       type: 'string',
       metadata: { description: 'who they are', isDeprecated: true }
     })
@@ -382,7 +382,8 @@ describe('what a schema says about itself, of which ATD has a word for two', () 
       'this states a title,',
       'this states examples'
     ])
-    expect(spelled.written).not.toHaveProperty('title')
+    // Neither word reaches the document, which the comparison states by holding the whole value.
+    expect(spelled.written).toEqual({ type: 'string' })
   })
 
   it('keeps a description beside the name a definition is filed under', () => {
