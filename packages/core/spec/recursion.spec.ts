@@ -219,8 +219,8 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
       throw new Error('the schema is not an object')
     }
 
-    // Compared exactly. `toMatchObject({ meta: {} })` states nothing, because an empty object matches
-    // a populated one, so it held whether the word was dropped or carried.
+    // The reference says nothing, because the word it would say is the word the component already
+    // says. Dropping the dedup makes this fail.
     expect(body.assertions.properties.get('b')?.term).toEqual({
       kind: 'ref',
       name: 'Name',
