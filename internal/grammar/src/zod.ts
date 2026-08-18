@@ -60,6 +60,16 @@ function structure(next: () => number, depth: number): z.ZodType {
     () => z.array(inner()).max(2),
     () => z.object({ a: inner() }),
     () => z.object({ a: inner(), b: inner().optional() }),
+    // A value that stands in where a key is absent, which is a fact about the key. Stated on a
+    // property rather than at a root, because absence is a value the pool holds there: `{ a: 'a' }`
+    // omits `b`, and a document requiring `b` refuses a value zod takes. A root default is discarded
+    // by the term, and the pool holds no absent root to ask about, so one there would measure nothing.
+    //
+    // The inner schema is concrete, because a replacement has to be a value that schema admits and
+    // `inner` draws an arbitrary one. The catchall and the tuple rest below are concrete for the
+    // same reason.
+    () => z.object({ a: inner(), b: z.string().default('a') }),
+    () => z.object({ a: inner(), b: z.number().default(1) }),
     () => z.strictObject({ a: inner() }),
     () => z.object({ a: inner() }).catchall(z.number()),
     () => z.record(z.string(), inner()),
