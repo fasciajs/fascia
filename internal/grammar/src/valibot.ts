@@ -66,6 +66,14 @@ function structure(next: () => number, depth: number): Any {
     () => v.pipe(v.array(inner()), v.maxLength(2)),
     () => v.object({ a: inner() }),
     () => v.object({ a: inner(), b: v.optional(inner()) }),
+    // A value that stands in where a key is absent, which is a fact about the key. Stated on a
+    // property, because absence is a value the pool holds there: `{ a: 'a' }` omits `b`, so a
+    // document requiring `b` refuses a value the validator takes.
+    //
+    // The replacement's schema is concrete, because a replacement has to be a value that schema
+    // admits and `inner` draws an arbitrary one.
+    () => v.object({ a: inner(), b: v.optional(v.string(), 'a') }),
+    () => v.object({ a: inner(), b: v.optional(v.number(), 1) }),
     () => v.strictObject({ a: inner() }),
     () => v.objectWithRest({ a: inner() }, v.number()),
     () => v.tuple([inner()]),
