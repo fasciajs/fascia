@@ -11,9 +11,9 @@ import type { V31 } from './openapi.js'
  * emits a sealed hierarchy, and reads a bare `oneOf` and emits an untagged union.
  *
  * **The mapping is written, never left to the reader.** OpenAPI resolves a value to a component
- * whose name is that value where no mapping stands. A schema called `BusinessBeneficiary` holding
- * `kind: 'business'` resolves to nothing under that rule, so a bare `propertyName` states a
- * hierarchy no reader can walk.
+ * whose name is that value where no mapping stands. A schema called `CatDetails` holding
+ * `kind: 'cat'` resolves to nothing under that rule, so a bare `propertyName` states a hierarchy no
+ * reader can walk.
  *
  * **Written at the root of a component or a position, and nowhere below one.** Below the root the
  * written schema is the 2020-12 target's layout, and finding the place a term landed inside it would

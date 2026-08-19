@@ -222,8 +222,12 @@ describe('what this target gives up, which is every assertion', () => {
 
     expect(spelled.written).toEqual({ S: {} })
     expect(spelled.departures).toHaveLength(1)
-    expect(spelled.departures[0]).toMatchObject({ direction: 'wider', cause: 'noWordForIt' })
-    expect(spelled.departures[0]?.said).toContain('minLength, maxLength, patterns')
+    expect(spelled.departures[0]).toEqual({
+      at: [],
+      direction: 'wider',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('minLength, maxLength, patterns')
+    })
   })
 
   it('reports the values an enum admits, keeping only the member they are carried under', () => {

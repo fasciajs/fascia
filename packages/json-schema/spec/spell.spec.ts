@@ -42,15 +42,23 @@ describe('2020-12 has a keyword for every assertion a term carries', () => {
 
   it('names a whole number as a type, where ATD reads a width off the bounds', () => {
     // One fact, two words. The term says whole numbers in a range and each target picks its own.
-    expect(writtenOf(z.int32())).toMatchObject({ type: 'integer', minimum: -2147483648 })
+    expect(writtenOf(z.int32())).toEqual({
+      type: 'integer',
+      minimum: -2147483648,
+      maximum: 2147483647
+    })
   })
 
   it('writes a count on a list', () => {
-    expect(writtenOf(z.array(z.string()).min(2))).toMatchObject({ type: 'array', minItems: 2 })
+    expect(writtenOf(z.array(z.string()).min(2))).toEqual({
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 2
+    })
   })
 
   it('writes a divisor', () => {
-    expect(writtenOf(z.number().multipleOf(2))).toMatchObject({ multipleOf: 2 })
+    expect(writtenOf(z.number().multipleOf(2))).toEqual({ type: 'number', multipleOf: 2 })
   })
 
   it('conjoins several patterns, because a schema states one per term and every one holds', () => {
@@ -70,11 +78,16 @@ describe('what ATD refuses, 2020-12 states', () => {
   it('writes an intersection', () => {
     expect(
       writtenOf(z.intersection(z.object({ a: z.string() }), z.object({ b: z.string() })))
-    ).toMatchObject({ allOf: [{ type: 'object' }, { type: 'object' }] })
+    ).toEqual({
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] },
+        { type: 'object', properties: { b: { type: 'string' } }, required: ['b'] }
+      ]
+    })
   })
 
   it('writes an enum that admits something other than strings', () => {
-    expect(writtenOf(z.literal(1))).toEqual({ enum: [1] })
+    expect(writtenOf(z.literal(1))).toEqual({ type: 'number', enum: [1] })
   })
 
   it('writes a tuple at its positions, where ATD writes a list of anything', () => {
@@ -94,8 +107,12 @@ describe('what ATD refuses, 2020-12 states', () => {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.departures[0]).toMatchObject({ direction: 'wider' })
-    expect(spelled.departures[0]?.said).toContain('does not say which of them must be present')
+    expect(spelled.departures[0]).toEqual({
+      at: [],
+      direction: 'wider',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('does not say which of them must be present')
+    })
   })
 })
 
@@ -105,11 +122,16 @@ describe('nullability is one fact and each target has its own word', () => {
   })
 
   it('states it beside the values of an enum, because a flag would not widen one', () => {
-    expect(writtenOf(z.enum(['a', 'b']).nullable())).toEqual({ enum: ['a', 'b', null] })
+    // Null reaches the values, which is the claim here. The type beside them carries it as well,
+    // because a type refuses null on its own and would turn away a value the list admits.
+    expect(writtenOf(z.enum(['a', 'b']).nullable())).toEqual({
+      type: ['string', 'null'],
+      enum: ['a', 'b', null]
+    })
   })
 
   it('joins a disjunction to null, having no type of its own to widen', () => {
-    expect(writtenOf(z.union([z.string(), z.number()]).nullable())).toMatchObject({
+    expect(writtenOf(z.union([z.string(), z.number()]).nullable())).toEqual({
       anyOf: [{ anyOf: [{ type: 'string' }, { type: 'number' }] }, { type: 'null' }]
     })
   })
@@ -129,13 +151,31 @@ describe('what this target gives up, which is almost nothing', () => {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.written).toMatchObject({ oneOf: [{ type: 'object' }, { type: 'object' }] })
-    expect(spelled.departures[0]).toMatchObject({ direction: 'neither' })
-    expect(spelled.departures[0]?.said).toContain('the disjunction states it')
+    expect(spelled.written).toEqual({
+      oneOf: [
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['a'] } },
+          required: ['kind']
+        },
+        {
+          type: 'object',
+          properties: { kind: { type: 'string', enum: ['b'] } },
+          required: ['kind']
+        }
+      ]
+    })
+    expect(spelled.departures[0]).toEqual({
+      at: [],
+      direction: 'neither',
+      cause: 'noWordForIt',
+      said: expect.stringContaining('the disjunction states it')
+    })
   })
 
   it('writes a default, which ATD has no keyword for', () => {
-    expect(writtenOf(z.object({ a: z.string().default('x') }))).toMatchObject({
+    expect(writtenOf(z.object({ a: z.string().default('x') }))).toEqual({
+      type: 'object',
       properties: { a: { type: 'string', default: 'x' } }
     })
   })
@@ -160,7 +200,7 @@ describe('a description reaches a document, definitions and all', () => {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.written).toMatchObject({
+    expect(spelled.written).toEqual({
       $ref: '#/$defs/Tree',
       $defs: {
         Tree: {
@@ -168,7 +208,8 @@ describe('a description reaches a document, definitions and all', () => {
           properties: {
             name: { type: 'string' },
             children: { type: 'array', items: { $ref: '#/$defs/Tree' } }
-          }
+          },
+          required: ['name', 'children']
         }
       }
     })
@@ -183,12 +224,12 @@ describe('a description reaches a document, definitions and all', () => {
     }
 
     expect(spelled.written.root).toEqual({ ref: 'Tree' })
-    expect(spelled.written.definitions['Tree']).toMatchObject({
-      metadata: { id: 'Tree' },
+    expect(spelled.written.definitions['Tree']).toEqual({
       properties: {
         name: { type: 'string' },
         children: { elements: { ref: 'Tree' } }
-      }
+      },
+      metadata: { id: 'Tree' }
     })
   })
 })
@@ -240,9 +281,9 @@ describe('what a schema says about itself, which 2020-12 has a word for all of',
   })
 
   it('writes them outside a nullable, which is where they are about the whole value', () => {
-    expect(writtenOf(z.union([z.string(), z.number()]).nullable().describe('D'))).toMatchObject({
-      description: 'D',
-      anyOf: [{ anyOf: [{ type: 'string' }, { type: 'number' }] }, { type: 'null' }]
+    expect(writtenOf(z.union([z.string(), z.number()]).nullable().describe('D'))).toEqual({
+      anyOf: [{ anyOf: [{ type: 'string' }, { type: 'number' }] }, { type: 'null' }],
+      description: 'D'
     })
   })
 })

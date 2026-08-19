@@ -163,7 +163,16 @@ describe('a combination becomes the law it was read under', () => {
       root: { ...three.root, law: 'exactlyOne', discriminant: 'tag' }
     })
 
-    expect(term).toMatchObject({ kind: 'exactlyOne', discriminant: 'tag' })
+    expect(term).toEqual({
+      kind: 'exactlyOne',
+      members: [
+        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} },
+        { kind: 'typed', name: 'number', assertions: {}, admitsNull: false, meta: {} }
+      ],
+      discriminant: 'tag',
+      admitsNull: false,
+      meta: {}
+    })
   })
 
   it('describes all of as every', () => {
@@ -190,8 +199,18 @@ describe('an object states on the edge what the edge was read with', () => {
       throw new Error('the schema did not describe as an object')
     }
 
-    expect(term.assertions.properties.get('a')).toMatchObject({ required: true })
-    expect(term.assertions.properties.get('b')).toMatchObject({ required: false, default: 'x' })
+    const aString = { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} }
+
+    expect(term.assertions.properties.get('a')).toEqual({
+      term: aString,
+      required: true,
+      default: undefined
+    })
+    expect(term.assertions.properties.get('b')).toEqual({
+      term: aString,
+      required: false,
+      default: 'x'
+    })
   })
 
   it('describes a dictionary as an object that names no key', () => {
@@ -200,10 +219,18 @@ describe('an object states on the edge what the edge was read with', () => {
       name: { kind: 'scalar', name: 'string', assertions: {} }
     })
 
-    expect(term).toMatchObject({
+    expect(term).toEqual({
       kind: 'typed',
       name: 'object',
-      assertions: { rest: { allows: 'term' } }
+      assertions: {
+        properties: new Map(),
+        rest: {
+          allows: 'term',
+          term: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} }
+        }
+      },
+      admitsNull: false,
+      meta: {}
     })
   })
 })
@@ -218,7 +245,13 @@ describe('a conversion is described by what a caller sends', () => {
 
     // The value side is a date, which has no JSON form. Describing it would be the invention the
     // codec exists to avoid, and the term never reaches it.
-    expect(term).toMatchObject({ kind: 'typed', name: 'string' })
+    expect(term).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
+    })
   })
 
   it('refuses a conversion that states no input', () => {

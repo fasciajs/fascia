@@ -1,5 +1,5 @@
 import type { Described, DescribedOf, DescribedProperty, DescribedRest } from './described.js'
-import { type Meta, noMeta, outermost } from './meta.js'
+import { beyond, type Meta, noMeta, outermost } from './meta.js'
 import type { Node, ObjectProperty, Rest, Source } from './node.js'
 import { FasciaError, isError } from './result.js'
 
@@ -317,14 +317,22 @@ function sameThing<S>(
     return second
   }
 
-  if (canonical(already) === canonical(second)) {
-    return { kind: 'ref', name, admitsNull: false, meta: noMeta }
+  // Compared without what each says about itself, because a description is not a shape. A caller
+  // naming one schema twice and describing one of the two uses states one shape and two sentences,
+  // and refusing that would leave them no way to describe a use of a shared type at all.
+  if (canonical(bare(already)) === canonical(bare(second))) {
+    return { kind: 'ref', name, admitsNull: false, meta: beyond(second.meta, already.meta) }
   }
 
   return new UndescribableSchema(
     schema,
     `two different schemas are named ${name}. A document states one shape under a name, so the second would be written as the first. Give one of them another name`
   )
+}
+
+/** A term with what it says about itself set aside, so two shapes can be compared as shapes. */
+function bare(term: Described): Described {
+  return { ...term, meta: noMeta }
 }
 
 /** The other side. */

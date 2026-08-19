@@ -16,6 +16,10 @@ import { pick, type Subject } from './draw.js'
  * - A refinement over anything the reading has no case for, such as `Schema.filter` with a bare
  *   predicate. It is dropped and the document is wider, which is a missing reading rather than a
  *   target that has no word, and the report would not say which.
+ * - A value that stands in where a key is absent. `Schema.optionalWith(S, { default })` reads as an
+ *   optional property and the replacement is dropped, so a document from it says what this harness
+ *   asks about already: the key may be absent. Drawing one would add a construct and measure nothing.
+ *   The reading is what to fix, and the other three frontends draw the construct.
  * - `Schema.suspend`, which names a schema and produces a reference. The value pool holds no value
  *   nested more than two deep, so a recursive schema and its first unrolling accept the same values.
  *

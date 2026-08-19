@@ -1,4 +1,5 @@
 import type { Bound, Scalar, StringFormat } from '@fasciajs/core'
+import { isError, UnreadableSchema } from '@fasciajs/core'
 import type * as core from 'zod/v4/core'
 
 /**
@@ -52,22 +53,45 @@ function boundOf<T>(
 }
 
 /**
+ * The flags that change what a pattern matches.
+ *
+ * `i` folds case, `m` moves `^` and `$` to every line, and `s` gives `.` the newline. `g` and `y`
+ * hold a position between calls, which a test of one whole value never reads.
+ */
+const MATCHING_FLAGS = ['i', 'm', 's'] as const
+
+/**
  * The patterns a string states, as sources.
  *
- * zod keeps them in a `Set` of `RegExp`. The source is taken rather than the object, because a
- * document carries a pattern as text and a flag a target cannot spell is a flag it would drop
- * without knowing it had.
+ * zod keeps them in a `Set` of `RegExp`, and a document carries a pattern as text with no flag beside
+ * it. **A pattern carrying a flag that changes matching is refused here, where the flag is still
+ * readable.** The source alone states a narrower pattern than the schema holds: `/^ab$/i` accepts
+ * `AB` and `^ab$` refuses it, so the document turns away a value the service takes. Nothing downstream
+ * could report that, because the flag is gone before a term exists and a target cannot give up what it
+ * never received.
+ *
+ * A caller writes the pattern so it matches without the flag. `/^[aA][bB]$/` states what `/^ab$/i`
+ * states, and states it somewhere every reader looks.
  */
-function patternsOf(bag: Bag): readonly string[] | undefined {
+function patternsOf(bag: Bag): readonly string[] | undefined | UnreadableSchema {
   const patterns = bag['patterns']
   if (!(patterns instanceof Set)) {
     return undefined
   }
 
-  const sources = [...patterns]
-    .filter((one): one is RegExp => one instanceof RegExp)
-    .map((one) => one.source)
+  const expressions = [...patterns].filter((one): one is RegExp => one instanceof RegExp)
 
+  for (const expression of expressions) {
+    const flags = MATCHING_FLAGS.filter((flag) => expression.flags.includes(flag))
+    if (flags.length > 0) {
+      return new UnreadableSchema(
+        expression,
+        `this states the pattern ${expression.source} under the flag ${flags.join(' and ')}, and a document states a pattern with no flag beside it. Write the pattern so it matches without the flag`
+      )
+    }
+  }
+
+  const sources = expressions.map((one) => one.source)
   return sources.length === 0 ? undefined : sources
 }
 
@@ -110,11 +134,14 @@ const WHOLE_NUMBER_FORMATS = new Set(['int', 'safeint', 'int32', 'uint32', 'int6
 /** What a string asserts. `minimum` and `maximum` are lengths here. */
 export function stringAssertions(
   schema: core.$ZodType
-): Extract<Scalar, { name: 'string' }>['assertions'] {
+): Extract<Scalar, { name: 'string' }>['assertions'] | UnreadableSchema {
   const bag: Bag = schema._zod.bag
   const minLength = numberAt(bag, 'minimum')
   const maxLength = numberAt(bag, 'maximum')
   const patterns = patternsOf(bag)
+  if (isError(patterns)) {
+    return patterns
+  }
   const format = formatOf(bag)
 
   return {

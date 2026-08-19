@@ -131,6 +131,7 @@ A test that shows only what the code does is not sufficient.
 Name the rule of the business in the name of the test.
 Assert the result that the business needs. Do not assert a call, a log line, or a private field.
 If you change a rule of the business, at least one test must fail. If none fails, the rule has no test.
+Compare a whole value, not a part. A part accepts a keyword the code never wrote, and an empty part accepts anything.
 
 ### Rule 10: Write a summary after each step
 Write a summary after each step that changes a file, or that changes what you plan to do next.

@@ -86,9 +86,9 @@ describe('a procedure names its two ends rather than holding them', () => {
     })
 
     expect(app.written.procedures['users.create']?.params).toBe('UsersCreateParams')
-    expect(app.written.definitions['UsersCreateParams']).toMatchObject({
-      metadata: { id: 'UsersCreateParams' },
-      properties: { name: { type: 'string' } }
+    expect(app.written.definitions['UsersCreateParams']).toEqual({
+      properties: { name: { type: 'string' } },
+      metadata: { id: 'UsersCreateParams' }
     })
   })
 
@@ -125,7 +125,11 @@ describe('a procedure names its two ends rather than holding them', () => {
       }
     })
 
-    expect(app.written.procedures['getUser']).toMatchObject({
+    expect(app.written.procedures['getUser']).toEqual({
+      transport: 'http',
+      method: 'get',
+      path: '/users/get',
+      response: 'User',
       description: 'one user',
       isDeprecated: true
     })
@@ -150,15 +154,21 @@ describe('one schema at two positions is two definitions where its sides differ'
       }
     })
 
-    expect(app.written.procedures['createUser']).toMatchObject({
+    expect(app.written.procedures['createUser']).toEqual({
+      transport: 'http',
+      method: 'post',
+      path: '/users/create',
       params: 'UserInput',
       response: 'UserOutput'
     })
-    expect(app.written.definitions['UserInput']).toMatchObject({
-      optionalProperties: { role: { type: 'string' } }
+    expect(app.written.definitions['UserInput']).toEqual({
+      properties: { id: { type: 'string' } },
+      optionalProperties: { role: { type: 'string' } },
+      metadata: { id: 'UserInput' }
     })
-    expect(app.written.definitions['UserOutput']).toMatchObject({
-      properties: { role: { type: 'string' } }
+    expect(app.written.definitions['UserOutput']).toEqual({
+      properties: { id: { type: 'string' }, role: { type: 'string' } },
+      metadata: { id: 'UserOutput' }
     })
   })
 
@@ -176,7 +186,10 @@ describe('one schema at two positions is two definitions where its sides differ'
     })
 
     expect(Object.keys(app.written.definitions)).toEqual(['User'])
-    expect(app.written.procedures['createUser']).toMatchObject({
+    expect(app.written.procedures['createUser']).toEqual({
+      transport: 'http',
+      method: 'post',
+      path: '/users/create',
       params: 'User',
       response: 'User'
     })
@@ -285,8 +298,9 @@ describe('a document holds schemas from a library arri never heard of', () => {
 
     expect(fromArk).toEqual(fromZod)
     expect(fromEffect).toEqual(fromZod)
-    expect(fromZod.definitions['UsersCreateParams']).toMatchObject({
-      properties: { name: { type: 'string' } }
+    expect(fromZod.definitions['UsersCreateParams']).toEqual({
+      properties: { name: { type: 'string' } },
+      metadata: { id: 'UsersCreateParams' }
     })
   })
 })

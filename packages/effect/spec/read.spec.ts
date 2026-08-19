@@ -63,7 +63,7 @@ describe('every node effect states reaches a group or says why it does not', () 
 
 describe('a refinement is a node wrapping a node, so an assertion is a walk', () => {
   it('reads one refinement', () => {
-    expect(nodeOf(Schema.String.pipe(Schema.minLength(2)))).toMatchObject({
+    expect(nodeOf(Schema.String.pipe(Schema.minLength(2)))).toEqual({
       kind: 'scalar',
       name: 'string',
       assertions: { minLength: 2 }
@@ -76,19 +76,26 @@ describe('a refinement is a node wrapping a node, so an assertion is a walk', ()
     // Two nodes deep. The outer states maxLength and the inner minLength, and the walk collects
     // both before it reaches the string underneath.
     expect(schema.ast._tag).toBe('Refinement')
-    expect(nodeOf(schema)).toMatchObject({ assertions: { minLength: 2, maxLength: 5 } })
+    expect(nodeOf(schema)).toEqual({
+      kind: 'scalar',
+      name: 'string',
+      assertions: { minLength: 2, maxLength: 5 }
+    })
   })
 
   it('reads a bound stated exclusively, which effect writes under its own keyword', () => {
-    expect(nodeOf(Schema.Number.pipe(Schema.greaterThan(1)))).toMatchObject({
+    expect(nodeOf(Schema.Number.pipe(Schema.greaterThan(1)))).toEqual({
+      kind: 'scalar',
+      name: 'number',
       assertions: { minimum: { value: 1, exclusive: true } }
     })
   })
 
   it('reads an array bound, where the same annotation vocabulary means a count', () => {
-    expect(nodeOf(Schema.Array(Schema.String).pipe(Schema.minItems(2)))).toMatchObject({
+    expect(nodeOf(Schema.Array(Schema.String).pipe(Schema.minItems(2)))).toEqual({
       kind: 'structural',
       of: 'list',
+      items: expect.objectContaining({ _tag: 'StringKeyword' }),
       assertions: { minItems: 2 }
     })
   })
@@ -106,7 +113,12 @@ describe('a transformation is bidirectional, so effect states codecs as a matter
   it('reads one as a wire form and a value', () => {
     // zod produces this rarely and arktype cannot produce it at all. Effect's transformations carry
     // a decode and an encode by construction.
-    expect(nodeOf(Schema.NumberFromString)).toMatchObject({ kind: 'conversion', how: 'codec' })
+    expect(nodeOf(Schema.NumberFromString)).toEqual({
+      kind: 'conversion',
+      how: 'codec',
+      wire: expect.objectContaining({ _tag: 'StringKeyword' }),
+      value: expect.objectContaining({ _tag: 'NumberKeyword' })
+    })
   })
 
   it('states the side that travels as the wire form', () => {
@@ -132,12 +144,18 @@ describe('an optional property states itself twice, and the edge is what is kept
   }
 
   it('reads a required key', () => {
-    expect(propertyAt(Schema.Struct({ a: Schema.String }), 'a')).toMatchObject({ required: true })
+    expect(propertyAt(Schema.Struct({ a: Schema.String }), 'a')).toEqual({
+      schema: expect.objectContaining({ _tag: 'StringKeyword' }),
+      required: true,
+      default: undefined
+    })
   })
 
   it('reads an optional key from the edge', () => {
-    expect(propertyAt(Schema.Struct({ a: Schema.optional(Schema.String) }), 'a')).toMatchObject({
-      required: false
+    expect(propertyAt(Schema.Struct({ a: Schema.optional(Schema.String) }), 'a')).toEqual({
+      schema: expect.objectContaining({ _tag: 'StringKeyword' }),
+      required: false,
+      default: undefined
     })
   })
 
@@ -152,16 +170,23 @@ describe('an optional property states itself twice, and the edge is what is kept
 
 describe('one node covers an object and a record', () => {
   it('reads an index signature as a dictionary', () => {
-    expect(nodeOf(Schema.Record({ key: Schema.String, value: Schema.Number }))).toMatchObject({
+    expect(nodeOf(Schema.Record({ key: Schema.String, value: Schema.Number }))).toEqual({
       kind: 'structural',
-      of: 'dictionary'
+      of: 'dictionary',
+      keys: expect.objectContaining({ _tag: 'StringKeyword' }),
+      values: expect.objectContaining({ _tag: 'NumberKeyword' })
     })
   })
 
   it('reads a tuple as its positions', () => {
-    expect(nodeOf(Schema.Tuple(Schema.String, Schema.Number))).toMatchObject({
+    expect(nodeOf(Schema.Tuple(Schema.String, Schema.Number))).toEqual({
       kind: 'structural',
-      of: 'tuple'
+      of: 'tuple',
+      positions: [
+        expect.objectContaining({ _tag: 'StringKeyword' }),
+        expect.objectContaining({ _tag: 'NumberKeyword' })
+      ],
+      rest: { allows: 'nothing' }
     })
   })
 })

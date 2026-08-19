@@ -52,9 +52,15 @@ const fromArk = (schema: unknown, io: Io) =>
 const fromEffect = (schema: Schema.Schema.AnyNoContext, io: Io) =>
   termOf(description(schema.ast, effectSource, io))
 
-const refusalFromZod = (schema: z.core.$ZodType, io: Io) => description(schema, zodSource, io)
+/** The reason a description failed, or a statement that it did not fail. */
+function refusalOf(describing: ReturnType<typeof description>): string {
+  return isError(describing) ? describing.message : 'the schema was described'
+}
+
+const refusalFromZod = (schema: z.core.$ZodType, io: Io) =>
+  refusalOf(description(schema, zodSource, io))
 const refusalFromArk = (schema: unknown, io: Io) =>
-  description(schema as ArkRoot, arktypeSource, io)
+  refusalOf(description(schema as ArkRoot, arktypeSource, io))
 
 /** Whether an object term states that a key must be present. */
 function requires(term: Described, key: string): boolean {
@@ -70,13 +76,21 @@ function requires(term: Described, key: string): boolean {
 
 describe('a conversion is described by the side that was asked for', () => {
   it('describes what zod checks before a pipe, and what it checks after', () => {
-    expect(fromZod(z.string().pipe(z.string().min(2)), 'input')).toMatchObject({
+    // The claim about the input side is that it asserts nothing. `min(2)` stands after the pipe, so
+    // the side a caller sends holds no bound at all.
+    expect(fromZod(z.string().pipe(z.string().min(2)), 'input')).toEqual({
+      kind: 'typed',
       name: 'string',
-      assertions: {}
+      assertions: {},
+      admitsNull: false,
+      meta: {}
     })
-    expect(fromZod(z.string().pipe(z.string().min(2)), 'output')).toMatchObject({
+    expect(fromZod(z.string().pipe(z.string().min(2)), 'output')).toEqual({
+      kind: 'typed',
       name: 'string',
-      assertions: { minLength: 2 }
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
     })
   })
 
@@ -85,8 +99,20 @@ describe('a conversion is described by the side that was asked for', () => {
     // function there otherwise. So a morph states its far side exactly when a caller stated one.
     const declared = type('string').pipe((value) => value.length, type('number'))
 
-    expect(fromArk(declared, 'input')).toMatchObject({ name: 'string' })
-    expect(fromArk(declared, 'output')).toMatchObject({ name: 'number' })
+    expect(fromArk(declared, 'input')).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
+    })
+    expect(fromArk(declared, 'output')).toEqual({
+      kind: 'typed',
+      name: 'number',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
+    })
   })
 })
 
@@ -103,13 +129,25 @@ describe('a codec travels as its wire form, whichever way it runs', () => {
       encode: (value) => String(value)
     })
 
-    expect(fromZod(codec, 'input')).toMatchObject({ name: 'string' })
-    expect(fromZod(codec, 'output')).toMatchObject({ name: 'string' })
+    const expected = { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} }
+
+    expect(fromZod(codec, 'input')).toEqual(expected)
+    expect(fromZod(codec, 'output')).toEqual(expected)
   })
 
   it('says the encoded side of an effect transformation on both sides', () => {
-    expect(fromEffect(Schema.NumberFromString, 'input')).toMatchObject({ name: 'string' })
-    expect(fromEffect(Schema.NumberFromString, 'output')).toMatchObject({ name: 'string' })
+    // effect states its own sentence about this schema, and the definition the name points at
+    // carries it. Both sides reach that definition, so both state the sentence.
+    const expected = {
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: { description: 'a string to be decoded into a number' }
+    }
+
+    expect(fromEffect(Schema.NumberFromString, 'input')).toEqual(expected)
+    expect(fromEffect(Schema.NumberFromString, 'output')).toEqual(expected)
   })
 })
 
@@ -117,28 +155,42 @@ describe('an end no schema states is a refusal, and which end depends on the sid
   it('refuses the far side of a zod transform, and describes the near one', () => {
     const transformed = z.string().transform((value) => value.length)
 
-    expect(fromZod(transformed, 'input')).toMatchObject({ name: 'string' })
-    expect(refusalFromZod(transformed, 'output')).toMatchObject({
-      message: expect.stringContaining('no schema states what comes out of it')
+    expect(fromZod(transformed, 'input')).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
     })
+    expect(refusalFromZod(transformed, 'output')).toContain('no schema states what comes out of it')
   })
 
   it('refuses the near side of a zod preprocessor, and describes the far one', () => {
     const preprocessed = z.preprocess((value) => String(value), z.string())
 
-    expect(refusalFromZod(preprocessed, 'input')).toMatchObject({
-      message: expect.stringContaining('no schema states what a caller may send')
+    expect(refusalFromZod(preprocessed, 'input')).toContain(
+      'no schema states what a caller may send'
+    )
+    expect(fromZod(preprocessed, 'output')).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
     })
-    expect(fromZod(preprocessed, 'output')).toMatchObject({ name: 'string' })
   })
 
   it('refuses the far side of an arktype morph the caller declared nothing for', () => {
     const bare = type('string').pipe((value) => value.length)
 
-    expect(fromArk(bare, 'input')).toMatchObject({ name: 'string' })
-    expect(refusalFromArk(bare, 'output')).toMatchObject({
-      message: expect.stringContaining('no schema states what comes out of it')
+    expect(fromArk(bare, 'input')).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: false,
+      meta: {}
     })
+    expect(refusalFromArk(bare, 'output')).toContain('no schema states what comes out of it')
   })
 })
 
@@ -240,17 +292,24 @@ describe('a document holds both sides, and a name states one shape', () => {
       'UserInput',
       'UserOutput'
     ])
-    expect(described.definitions.get('EnvelopeInput')).toMatchObject({
+    expect(described.definitions.get('EnvelopeInput')).toEqual({
+      kind: 'typed',
+      name: 'object',
       assertions: {
         properties: new Map([
           [
             'user',
-            expect.objectContaining({
-              term: { kind: 'ref', name: 'UserInput', admitsNull: false, meta: {} }
-            })
+            {
+              term: { kind: 'ref', name: 'UserInput', admitsNull: false, meta: {} },
+              required: true,
+              default: undefined
+            }
           ]
-        ])
-      }
+        ]),
+        rest: { allows: 'anything' }
+      },
+      admitsNull: false,
+      meta: {}
     })
   })
 

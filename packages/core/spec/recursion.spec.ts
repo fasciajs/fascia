@@ -132,10 +132,12 @@ describe('a name is described once wherever it is used, not only in a cycle', ()
     expect(body.assertions.properties.get('second')?.term).toEqual(ref)
 
     // Described once, under the name, with the assertions the schema stated.
-    expect(result.definitions.get('Name')).toMatchObject({
+    expect(result.definitions.get('Name')).toEqual({
       kind: 'typed',
       name: 'string',
-      assertions: { minLength: 2 }
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
     })
   })
 })
@@ -166,6 +168,66 @@ describe('two schemas claiming one name is refused, not silently merged', () => 
     }
 
     expect([...describing.definitions.keys()]).toEqual(['Name'])
+  })
+
+  it('describes a use of a shared name, because a sentence is not a second shape', () => {
+    // The idiom a service reaches for: one shared type, and a description of this use of it. A
+    // factory returns a fresh object each call, so the two claim one name and are not one object.
+    // Compared with what each says about itself set aside, the two are one shape, and the sentence
+    // the second adds stands on the reference.
+    const first = z.string().min(2).meta({ id: 'Name' })
+    const second = z.string().min(2).meta({ id: 'Name', description: 'the name this caller sends' })
+
+    const result = described(description(z.object({ a: first, b: second }), zodSource, 'input'))
+    const body = result.term
+    if (body.kind !== 'typed' || body.name !== 'object') {
+      throw new Error('the schema is not an object')
+    }
+
+    expect(body.assertions.properties.get('a')?.term).toEqual({
+      kind: 'ref',
+      name: 'Name',
+      admitsNull: false,
+      meta: {}
+    })
+    expect(body.assertions.properties.get('b')?.term).toEqual({
+      kind: 'ref',
+      name: 'Name',
+      admitsNull: false,
+      meta: { description: 'the name this caller sends' }
+    })
+
+    // One definition, and it says nothing this caller said about their use of it.
+    expect([...result.definitions.keys()]).toEqual(['Name'])
+    expect(result.definitions.get('Name')?.meta).toEqual({})
+  })
+
+  it('says a word once where the two schemas already agree about it', () => {
+    // Both state the same sentence, so the reference states nothing. A reference and the schema it
+    // names both carrying one sentence say what one says.
+    const said = { id: 'Name', description: 'a name' }
+    const result = described(
+      description(
+        z.object({ a: z.string().meta(said), b: z.string().meta(said) }),
+        zodSource,
+        'input'
+      )
+    )
+
+    const body = result.term
+    if (body.kind !== 'typed' || body.name !== 'object') {
+      throw new Error('the schema is not an object')
+    }
+
+    // The reference says nothing, because the word it would say is the word the component already
+    // says. Dropping the dedup makes this fail.
+    expect(body.assertions.properties.get('b')?.term).toEqual({
+      kind: 'ref',
+      name: 'Name',
+      admitsNull: false,
+      meta: {}
+    })
+    expect(result.definitions.get('Name')?.meta).toEqual({ description: 'a name' })
   })
 
   it('refuses a name claimed while the first is still being described', () => {

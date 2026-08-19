@@ -35,7 +35,36 @@ export function toV30(written: JSONSchema): Spelled<JSONSchema> {
     }
   }
 
-  return { written: out as JSONSchema, departures }
+  return { written: besideReference(out, departures) as JSONSchema, departures }
+}
+
+/**
+ * A reference with something stated beside it, moved where 3.0 reads both.
+ *
+ * **3.0 reads no keyword next to a reference.** A use of a named schema that describes that use
+ * writes the sentence beside the `$ref`, which 2020-12 and 3.1 both read. A 3.0 reader takes the
+ * reference and ignores everything else in the object, so the sentence would reach no document at all.
+ *
+ * The reference goes under a conjunction of one and what was beside it stays outside, which every
+ * reader of 3.0 takes. That is the same move `admittingNull` makes for a flag, for the same reason.
+ */
+function besideReference(
+  written: Record<string, unknown>,
+  departures: Departure[]
+): Record<string, unknown> {
+  const { $ref, ...beside } = written
+  if ($ref === undefined || Object.keys(beside).length === 0) {
+    return written
+  }
+
+  departures.push({
+    at: [],
+    direction: 'neither',
+    cause: 'noShapeForIt',
+    said: `this refers to a schema and states ${Object.keys(beside).join(' and ')} beside the reference, and 3.0 reads no keyword there. The reference is written under a conjunction of one so the rest has somewhere to sit, which every reader of 3.0 takes and the specification does not state`
+  })
+
+  return { allOf: [{ $ref }], ...beside }
 }
 
 /**
@@ -188,10 +217,16 @@ function admittingNull(written: unknown, departures: Departure[]): unknown {
 
   const stated = written as Record<string, unknown>
 
-  // A list of admitted values states what it admits, and a flag beside it states nothing. Null is
-  // added to the list, which is the same trap arri's own converter falls into the other way.
+  // A list of admitted values states what it admits, so null is added to the list. The flag goes on
+  // as well wherever a type stands beside the list, because a type refuses null on its own and the
+  // two would then disagree: the list would admit a value the type turned away. Where no type stands
+  // the flag states nothing and is left off.
   if (Array.isArray(stated['enum'])) {
-    return { ...stated, enum: [...stated['enum'], null] }
+    return {
+      ...stated,
+      ...(stated['type'] !== undefined && { nullable: true }),
+      enum: [...stated['enum'], null]
+    }
   }
 
   // Beside a conjunction the flag is read nowhere either. Pushed onto each member it says the same

@@ -28,7 +28,7 @@ function termOf(schema: v.GenericSchema) {
 
 describe('an assertion is a list of actions rather than a shape of its own', () => {
   it('reads a bounded string off the pipe, where the node still says string', () => {
-    expect(read(v.pipe(v.string(), v.minLength(2), v.maxLength(5), v.regex(/^a/)))).toMatchObject({
+    expect(read(v.pipe(v.string(), v.minLength(2), v.maxLength(5), v.regex(/^a/)))).toEqual({
       kind: 'scalar',
       name: 'string',
       assertions: { minLength: 2, maxLength: 5, patterns: ['^a'] }
@@ -36,7 +36,9 @@ describe('an assertion is a list of actions rather than a shape of its own', () 
   })
 
   it('reads a bound and says whether the bound itself is admitted', () => {
-    expect(read(v.pipe(v.number(), v.gtValue(1), v.maxValue(9), v.integer()))).toMatchObject({
+    expect(read(v.pipe(v.number(), v.gtValue(1), v.maxValue(9), v.integer()))).toEqual({
+      kind: 'scalar',
+      name: 'number',
       assertions: {
         minimum: { value: 1, exclusive: true },
         maximum: { value: 9, exclusive: false },
@@ -46,7 +48,9 @@ describe('an assertion is a list of actions rather than a shape of its own', () 
   })
 
   it('reads a format from the action that states it', () => {
-    expect(read(v.pipe(v.string(), v.isoDateTime()))).toMatchObject({
+    expect(read(v.pipe(v.string(), v.isoDateTime()))).toEqual({
+      kind: 'scalar',
+      name: 'string',
       assertions: { format: 'date-time' }
     })
   })
@@ -63,7 +67,11 @@ describe('a conversion stands in the same list as the assertions', () => {
         v.transform((value) => value.length)
       )
     )
-    expect(node).toMatchObject({ kind: 'conversion', how: 'unstatedOutput' })
+    expect(node).toEqual({
+      kind: 'conversion',
+      how: 'unstatedOutput',
+      sent: expect.objectContaining({ kind: 'schema', type: 'string' })
+    })
 
     expect(
       termOf(
@@ -73,9 +81,12 @@ describe('a conversion stands in the same list as the assertions', () => {
           v.transform((value) => value.length)
         )
       )
-    ).toMatchObject({
+    ).toEqual({
+      kind: 'typed',
       name: 'string',
-      assertions: { minLength: 2 }
+      assertions: { minLength: 2 },
+      admitsNull: false,
+      meta: {}
     })
   })
 })
@@ -85,11 +96,31 @@ describe('a tuple means the opposite of what zod means by the word', () => {
     // Found by the property on its first run. `v.tuple` removes an extra element rather than
     // refusing the value, and `strictTuple` is the one that refuses.
     expect(v.safeParse(v.tuple([v.string()]), ['a', 1]).success).toBe(true)
-    expect(read(v.tuple([v.string()]))).toMatchObject({ rest: { allows: 'anything' } })
+    expect(read(v.tuple([v.string()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [
+        expect.objectContaining({
+          kind: 'schema',
+          type: 'string'
+        })
+      ],
+      rest: { allows: 'anything' }
+    })
   })
 
   it('refuses it where the schema does', () => {
-    expect(read(v.strictTuple([v.string()]))).toMatchObject({ rest: { allows: 'nothing' } })
+    expect(read(v.strictTuple([v.string()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [
+        expect.objectContaining({
+          kind: 'schema',
+          type: 'string'
+        })
+      ],
+      rest: { allows: 'nothing' }
+    })
   })
 })
 
@@ -123,5 +154,23 @@ describe('an unreadable schema says why, rather than reading as something else',
     expect(said(v.set(v.string()))).toContain('An array of unique items is')
     expect(said(v.blob())).toContain('sent as a body')
     expect(said(v.never())).toContain('describes nothing a caller could send')
+  })
+
+  it('turns away a pattern whose flag changes what it matches', () => {
+    // valibot holds the expression itself, like zod does, so the source alone states a narrower
+    // pattern than the schema holds. A document carries no flag beside a pattern, and the flag is
+    // gone before a term exists, so no target could report the loss.
+    const node = read(v.pipe(v.string(), v.regex(/^ab$/i)))
+
+    expect(v.safeParse(v.pipe(v.string(), v.regex(/^ab$/i)), 'AB').success).toBe(true)
+    expect(isError(node) ? node.message : 'read').toContain('under the flag i')
+  })
+
+  it('reads a pattern whose flag matches nothing differently', () => {
+    expect(read(v.pipe(v.string(), v.regex(/^ab$/g)))).toEqual({
+      kind: 'scalar',
+      name: 'string',
+      assertions: { patterns: ['^ab$'] }
+    })
   })
 })

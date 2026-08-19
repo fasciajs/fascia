@@ -15,6 +15,11 @@ import { pick, type Subject } from './draw.js'
  *   accepting an unnamed key. Including it would report a widening that is a missing reading rather
  *   than a target that has no word, and the report would not say which.
  * - A morph, which states what it converts and leaves what comes out to a function.
+ * - A value that stands in where a key is absent. arktype reads one as a morph, and refuses an
+ *   unordered union of two objects whose inputs overlap when either carries one: `{ a: string, b:
+ *   number }` or `{ a: string, b: number = 1 }` is indeterminate to its parser. Every structure here
+ *   can stand in the union case, so the construct cannot be drawn without dropping that case. zod
+ *   and valibot draw it.
  * - An object stated by an index signature alone. arktype's `object` domain admits an array, and a
  *   document's does not, so every such document refuses a value arktype takes. The spec beside this
  *   file states the divergence rather than leaving it to a comment here.

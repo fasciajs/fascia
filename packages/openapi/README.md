@@ -20,6 +20,61 @@ spellOpenApi(operations, zodSource, naming, info)          // 3.1
 spellOpenApi(operations, zodSource, naming, info, '3.0')   // 3.0
 ```
 
+An operation states a body, the responses, and what a caller sends outside the body. The body is
+described as the input side and each response as the output side, so one schema with a default or a
+conversion under it becomes two components.
+
+A parameter is a name, a place and a schema, and no validator holds that shape. So one object is
+stated for each place, and its properties are the parameters there. A key that may be absent is a
+parameter that is not required.
+
+```ts
+{
+  path: '/pets/{petId}',
+  method: 'post',
+  parameters: {
+    path: z.object({ petId: PetId }),
+    query: z.object({ limit: z.number().optional() }),
+    header: z.object({ authorization: z.string() })
+  },
+  body: NewPet,
+  responses: {
+    '200': { schema: Pet, description: 'the pet, as stored' },
+    '204': { description: 'gone' },
+    '404': { schema: ApiError }
+  }
+}
+```
+
+A response states what no schema carries: its description, the headers it sets, the links it offers,
+and the media type it is written in. None of those is a fact about the value, so no validator holds
+one. A response with no `schema` carries no body, which is what a 204 answers with. Where a caller
+describes nothing, the status is written, because OpenAPI requires a description.
+
+A path parameter is required, and it fills a template expression the path holds. This refuses one
+that may be absent, and one the path has no `{name}` for.
+
+A stated body is required. OpenAPI reads an absent `required` as false, so a document that says
+nothing tells a client the body may be omitted. `bodyRequired: false` says the other thing, and the
+keyword is written either way. `bodyMediaType` names the media type, and `mediaType` does the same for
+a response. Both are `application/json` where a caller states none.
+
+A document states what a service needs and how a client divides. `tags` on an operation is what a
+generator makes one file per group from. A security requirement names a scheme, and an empty list on
+one operation says that operation needs nothing where the document needs something. A webhook is an
+operation a service calls rather than answers, so it is a path item under a name instead of a path,
+and it is described the same way. 3.0 has no `webhooks`, so stating one for a 3.0 document is refused
+rather than dropped.
+
+```ts
+spellOpenApi(operations, zodSource, naming, info, '3.1', {
+  tags: [{ name: 'pets' }],
+  security: [{ bearer: [] }],
+  securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+  webhooks: { petAdopted: { method: 'post', body: Pet, responses: { '204': { description: 'taken' } } } }
+})
+```
+
 See the [root README](https://github.com/fasciajs/fascia#readme) for the whole shape, what it
 refuses, and the numbers.
 

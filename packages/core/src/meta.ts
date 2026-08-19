@@ -33,6 +33,44 @@ export function outermost(outer: Meta, inner: Meta): Meta {
 }
 
 /**
+ * What one statement says that another does not already say.
+ *
+ * **A use of a named schema may describe that use, and a document holds the description beside the
+ * reference.** Two schemas sharing a name are one shape, so the second is written as a reference to
+ * the first. Where the second says something further about itself, that goes on the reference. A
+ * caller who describes one use of a shared timestamp says what that one field holds, and not what
+ * every timestamp holds.
+ *
+ * A word the two already share is dropped rather than repeated. A reference and the schema it names
+ * both carrying one sentence say what one says, and a reader that found them disagreeing would have
+ * nothing to choose by.
+ */
+export function beyond(stated: Meta, already: Meta): Meta {
+  return {
+    ...(stated.title !== undefined && stated.title !== already.title && { title: stated.title }),
+    ...(stated.description !== undefined &&
+      stated.description !== already.description && { description: stated.description }),
+    ...(stated.examples !== undefined &&
+      !sameExamples(stated.examples, already.examples) && { examples: stated.examples }),
+    ...(stated.deprecated !== undefined &&
+      stated.deprecated !== already.deprecated && { deprecated: stated.deprecated })
+  }
+}
+
+/**
+ * Whether two lists of examples hold the same values.
+ *
+ * Compared as JSON, which is the form every one of them has: a value reaches `examples` only after
+ * `asExamples` gave it a JSON form. Two lists that agree hold one order, so the text agrees as well.
+ */
+function sameExamples(
+  stated: readonly JsonValue[],
+  already: readonly JsonValue[] | undefined
+): boolean {
+  return already !== undefined && JSON.stringify(stated) === JSON.stringify(already)
+}
+
+/**
  * What a vendor's bag of words says, taking only the four and only where each is well formed.
  *
  * The bag crosses the boundary, so every value in it is unknown until this reads it. A key this does

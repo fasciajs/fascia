@@ -54,10 +54,14 @@ describe('a tool states what it takes and what it answers with', () => {
 
     expect(tool?.name).toBe('create_user')
     expect(tool?.title).toBe('Create a user')
+    const properties = { id: { type: 'string' }, role: { type: 'string', default: 'reader' } }
+    const sent = { type: 'object', properties, required: ['id'] }
+    const received = { type: 'object', properties, required: ['id', 'role'] }
+
     // Inlined rather than referenced. MCP holds a tool at a schema naming `object`, and the SDK
     // refuses a bare reference, so a named schema stands as its own body with the name beside it.
-    expect(tool?.inputSchema).toMatchObject({ type: 'object', required: ['id'] })
-    expect(tool?.outputSchema).toMatchObject({ type: 'object', required: ['id', 'role'] })
+    expect(tool?.inputSchema).toEqual({ ...sent, $defs: { UserInput: sent } })
+    expect(tool?.outputSchema).toEqual({ ...received, $defs: { User: received } })
   })
 
   it('carries the side, so what is sent and what comes back differ', () => {
@@ -107,11 +111,12 @@ describe('a tool states what it takes and what it answers with', () => {
   it('writes an unnamed schema in place', () => {
     const [tool] = toolsOf([{ name: 'ping', arguments: z.object({ at: z.string() }) }]).written
 
-    expect(tool?.inputSchema).toMatchObject({
+    // No `$defs`, which the comparison states by holding the whole value.
+    expect(tool?.inputSchema).toEqual({
       type: 'object',
-      properties: { at: { type: 'string' } }
+      properties: { at: { type: 'string' } },
+      required: ['at']
     })
-    expect(tool?.inputSchema).not.toHaveProperty('$defs')
   })
 })
 

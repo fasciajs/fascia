@@ -22,18 +22,18 @@ function groupOf(schema: unknown): string {
 
 describe('a Type is a node, and its children are nodes', () => {
   it('reads a bare domain', () => {
-    expect(nodeOf(type('string'))).toMatchObject({ kind: 'scalar', name: 'string' })
-    expect(nodeOf(type('number'))).toMatchObject({ kind: 'scalar', name: 'number' })
-    expect(nodeOf(type('bigint'))).toMatchObject({ kind: 'scalar', name: 'bigint' })
+    expect(nodeOf(type('string'))).toEqual({ kind: 'scalar', name: 'string', assertions: {} })
+    expect(nodeOf(type('number'))).toEqual({ kind: 'scalar', name: 'number', assertions: {} })
+    expect(nodeOf(type('bigint'))).toEqual({ kind: 'scalar', name: 'bigint', assertions: {} })
   })
 
   it('reads a constrained domain, with the constraints beside it', () => {
-    expect(nodeOf(type('string > 2'))).toMatchObject({
+    expect(nodeOf(type('string > 2'))).toEqual({
       kind: 'scalar',
       name: 'string',
       assertions: { minLength: 3 }
     })
-    expect(nodeOf(type('1 < number < 9'))).toMatchObject({
+    expect(nodeOf(type('1 < number < 9'))).toEqual({
       kind: 'scalar',
       name: 'number',
       assertions: {
@@ -44,11 +44,15 @@ describe('a Type is a node, and its children are nodes', () => {
   })
 
   it('reads a pattern', () => {
-    expect(nodeOf(type('/^a.c$/'))).toMatchObject({ assertions: { patterns: ['^a.c$'] } })
+    expect(nodeOf(type('/^a.c$/'))).toEqual({
+      kind: 'scalar',
+      name: 'string',
+      assertions: { patterns: ['^a.c$'] }
+    })
   })
 
   it('reads a Date, and turns away a prototype with no wire form', () => {
-    expect(nodeOf(type('Date'))).toMatchObject({ kind: 'scalar', name: 'date' })
+    expect(nodeOf(type('Date'))).toEqual({ kind: 'scalar', name: 'date', assertions: {} })
     expect(groupOf(type('symbol'))).toContain('not a value a document carries')
   })
 })
@@ -58,7 +62,7 @@ describe('arktype writes as a union three things that are not disjunctions', () 
     // arktype writes `boolean` as the two unit types. Reading it as a disjunction of two constants
     // would accept the same values and say so in a way no reader of a document would recognise.
     expect(type('boolean').json).toEqual([{ unit: false }, { unit: true }])
-    expect(nodeOf(type('boolean'))).toMatchObject({ kind: 'scalar', name: 'boolean' })
+    expect(nodeOf(type('boolean'))).toEqual({ kind: 'scalar', name: 'boolean', assertions: {} })
   })
 
   it('turns away never, which arktype writes as a union of no branches', () => {
@@ -67,13 +71,23 @@ describe('arktype writes as a union three things that are not disjunctions', () 
   })
 
   it('reads a real disjunction as one', () => {
-    expect(nodeOf(type('string|number'))).toMatchObject({ kind: 'combination', law: 'any' })
+    expect(nodeOf(type('string|number'))).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.any(Function), expect.any(Function)],
+      discriminant: undefined
+    })
   })
 
   it('reads a nullable as a disjunction holding the null unit', () => {
     // zod states this as a wrapper and arktype as a union. The sum holds both, and nothing
     // canonicalises the two into one shape.
-    expect(nodeOf(type('string|null'))).toMatchObject({ kind: 'combination', law: 'any' })
+    expect(nodeOf(type('string|null'))).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.any(Function), expect.any(Function)],
+      discriminant: undefined
+    })
   })
 })
 
@@ -87,20 +101,26 @@ describe('an object states optionality and a default on its edge', () => {
   }
 
   it('reads a required key', () => {
-    expect(propertyAt(type({ a: 'string' }), 'a')).toMatchObject({ required: true })
+    expect(propertyAt(type({ a: 'string' }), 'a')).toEqual({
+      schema: expect.any(Function),
+      required: true,
+      default: undefined
+    })
   })
 
   it('reads an optional key, which holds no wrapper to unwrap', () => {
     // The whole reason the edge carries this. arktype's value here is `number`, and no arktype
     // schema means "optional number".
-    expect(propertyAt(type({ 'b?': 'number' }), 'b')).toMatchObject({
+    expect(propertyAt(type({ 'b?': 'number' }), 'b')).toEqual({
+      schema: expect.any(Function),
       required: false,
       default: undefined
     })
   })
 
   it('reads a default, which arktype also states on the edge', () => {
-    expect(propertyAt(type({ b: 'number = 3' }), 'b')).toMatchObject({
+    expect(propertyAt(type({ b: 'number = 3' }), 'b')).toEqual({
+      schema: expect.any(Function),
       required: false,
       default: 3
     })
@@ -109,20 +129,35 @@ describe('an object states optionality and a default on its edge', () => {
 
 describe('one structure node covers four shapes', () => {
   it('reads an array, and the bounds it states', () => {
-    expect(nodeOf(type('string[]'))).toMatchObject({ kind: 'structural', of: 'list' })
-    expect(nodeOf(type('string[] > 2'))).toMatchObject({ assertions: { minItems: 3 } })
+    expect(nodeOf(type('string[]'))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.any(Function),
+      assertions: {}
+    })
+    expect(nodeOf(type('string[] > 2'))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.any(Function),
+      assertions: { minItems: 3 }
+    })
   })
 
   it('reads a tuple as its positions', () => {
-    const node = nodeOf(type(['string', 'number']))
-    expect(node).toMatchObject({ kind: 'structural', of: 'tuple' })
-    expect((node as unknown as { positions: unknown[] }).positions).toHaveLength(2)
+    expect(nodeOf(type(['string', 'number']))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(Function), expect.any(Function)],
+      rest: { allows: 'nothing' }
+    })
   })
 
   it('reads an index signature as a dictionary, keeping the key schema', () => {
-    expect(nodeOf(type({ '[string]': 'number' }))).toMatchObject({
+    expect(nodeOf(type({ '[string]': 'number' }))).toEqual({
       kind: 'structural',
-      of: 'dictionary'
+      of: 'dictionary',
+      keys: expect.any(Function),
+      values: expect.any(Function)
     })
   })
 
@@ -140,9 +175,10 @@ describe('one structure node covers four shapes', () => {
 
 describe('a morph states what it is given and not what it produces', () => {
   it('reads a morph as a stated input with an unstated output', () => {
-    expect(nodeOf(type('string').pipe((value: string) => value.length))).toMatchObject({
+    expect(nodeOf(type('string').pipe((value: string) => value.length))).toEqual({
       kind: 'conversion',
-      how: 'unstatedOutput'
+      how: 'unstatedOutput',
+      sent: expect.any(Function)
     })
   })
 })
