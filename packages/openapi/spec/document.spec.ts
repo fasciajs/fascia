@@ -990,6 +990,28 @@ describe('what a request outside the body cannot say', () => {
     expect(isError(spelled) ? spelled.message : 'written').toContain('no {ptId}')
   })
 
+  it('refuses a place whose object admits null, because a request carries no null there', async () => {
+    // A list of parameters is not a value, so there is nowhere for a null to stand. A caller who
+    // means every parameter may be absent says that on the keys instead.
+    const spelled = spellOpenApi(
+      [
+        {
+          path: '/pets',
+          method: 'get',
+          parameters: { query: z.object({ a: z.string() }).nullable() },
+          responses: { '204': { description: 'x' } }
+        }
+      ],
+      zodSource,
+      { sides },
+      info
+    )
+
+    expect(isError(spelled) ? spelled.message : 'written').toContain(
+      'the query parameters admit null'
+    )
+  })
+
   it('refuses a place that states anything but an object', async () => {
     const spelled = spellOpenApi(
       [
