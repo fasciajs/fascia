@@ -5,6 +5,7 @@ import {
   numbers,
   VALUES,
   valibotGrammar,
+  valuesNear,
   zodGrammar
 } from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
@@ -99,7 +100,9 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
       faithfulRounds += 1
     }
 
-    for (const value of VALUES) {
+    // The fixed pool, and the values this term's own bounds suggest. A departure claims a document
+    // takes more than the schema, and the value that shows it is one the bound named.
+    for (const value of [...VALUES, ...valuesNear(described.term, described.definitions)]) {
       const byDocument = validate(value) === true
 
       if (faithful) {

@@ -106,7 +106,7 @@ export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Me
  * The definitions are converted one by one and put under `$defs`, because arri writes a reference as
  * `#/$defs/<name>` and converts one schema at a time.
  */
-function asJsonSchema(written: {
+export function asJsonSchema(written: {
   readonly root: AtdSchema
   readonly definitions: Readonly<Record<string, AtdSchema>>
 }): object {
