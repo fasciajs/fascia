@@ -9,7 +9,8 @@ import { pick, type Subject } from './draw.js'
  *
  * Absent on purpose:
  *
- * - `v.date()` and `v.bigint()`, which JSON has no form for.
+ * - `v.date()` and `v.bigint()`, which JSON has no form for. `v.literal(1n)` is drawn: a bigint
+ *   among the values a term admits is a branch every reader here has, and no run reached one.
  * - A transformation, whose far side no schema states.
  * - `v.record`, which accepts an array: valibot asks whether a value is an object and JavaScript
  *   says an array is one. A document has no word for a domain holding both, so every document from
@@ -43,6 +44,8 @@ function leaf(next: () => number): Any {
     () => v.pipe(v.string(), v.minLength(2)),
     () => v.pipe(v.string(), v.maxLength(3)),
     () => v.pipe(v.string(), v.regex(/^a/)),
+    () => v.pipe(v.string(), v.email()),
+    () => v.pipe(v.string(), v.uuid()),
     () => v.number(),
     () => v.pipe(v.number(), v.minValue(1)),
     () => v.pipe(v.number(), v.ltValue(9)),
@@ -51,6 +54,7 @@ function leaf(next: () => number): Any {
     () => v.boolean(),
     () => v.literal('a'),
     () => v.literal(1),
+    () => v.literal(1n),
     () => v.picklist(['a', 'abc']),
     () => v.unknown(),
     () => v.null()

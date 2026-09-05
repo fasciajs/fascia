@@ -1,4 +1,4 @@
-import type { Described } from '@fasciajs/core'
+import type { Described, StringFormat } from '@fasciajs/core'
 
 /**
  * The values a term's own shape suggests, beside the values it would not.
@@ -23,6 +23,26 @@ export function valuesNear(
   definitions: ReadonlyMap<string, Described>
 ): unknown[] {
   return drawn(term, definitions, 0)
+}
+
+/**
+ * A value each format admits, and one it turns away.
+ *
+ * Written here rather than decided, because deciding a format is a validator's work and writing one
+ * example of each is not. The near miss is what tells a document that states the format from one
+ * that dropped it: both take the first and only one turns away the second.
+ */
+const FORMATTED: Readonly<Record<StringFormat, readonly string[]>> = {
+  email: ['a@b.com', 'a@b@c.com'],
+  uri: ['https://a.example/b', 'not a uri'],
+  uuid: ['123e4567-e89b-12d3-a456-426614174000', '123e4567-e89b-12d3-a456-42661417400'],
+  hostname: ['a.example', 'not a hostname'],
+  ipv4: ['192.0.2.1', '192.0.2.256'],
+  ipv6: ['2001:db8::1', '2001:db8::g'],
+  date: ['2026-09-05', '2026-13-05'],
+  time: ['12:30:00', '25:30:00'],
+  'date-time': ['2026-09-05T12:30:00Z', '2026-09-05T25:30:00Z'],
+  duration: ['P1D', 'P1X']
 }
 
 /** How deep the walk goes. A term holds a cycle as a reference, so the bound is on the walk. */
@@ -83,15 +103,19 @@ function fromTyped(
 ): unknown[] {
   switch (term.name) {
     case 'string': {
-      const { minLength, maxLength } = term.assertions
+      const { minLength, maxLength, format } = term.assertions
       const least = minLength ?? 0
       const most = maxLength ?? least + 1
-      return [
+      const lengths = [
         'a'.repeat(Math.max(0, least - 1)),
         'a'.repeat(least),
         'a'.repeat(most),
         'a'.repeat(most + 1)
       ]
+      // A format is the one assertion no length reaches. Without a value the format admits, a term
+      // that states one refuses the whole pool, and a document that dropped the format agrees by
+      // refusing it too.
+      return format === undefined ? lengths : [...lengths, ...FORMATTED[format]]
     }
     case 'number': {
       const { minimum, maximum, multipleOf } = term.assertions

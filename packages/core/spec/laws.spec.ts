@@ -51,16 +51,8 @@ const RUN = { seed: 1, rounds: 300, depth: 2 }
  */
 const UNCOVERED: ReadonlyMap<string, string> = new Map([
   [
-    'admitted/bigint',
-    'no grammar draws a bigint, which every grammar leaves out on purpose: no document has a form for one'
-  ],
-  [
     'assert/array/unique',
-    'no reading produces one. The DynamoDB target spells a set from it and no frontend reaches the line'
-  ],
-  [
-    'assert/string/format',
-    'no grammar draws a formatted string, and two frontends read one. The agreement runs add ajv-formats to measure what nothing states'
+    'no reading produces one, and that is a decision rather than a gap: a Set is refused, and `zod-types.ts` says why. The DynamoDB target spells a set from it and no frontend reaches the line'
   ]
 ])
 

@@ -5,6 +5,7 @@ import { describe as description, isError } from '@fasciajs/core'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { toV30 } from '@fasciajs/openapi'
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as formats } from 'ajv-formats'
 import { fromV30 } from './reverse.js'
 
 /**
@@ -38,7 +39,10 @@ export interface Run {
 }
 
 export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Measured {
+  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
+  // agreement. Ajv says so out loud: it prints `unknown format "uuid" ignored` and answers true.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
+  formats.default(ajv)
   const next = numbers(run.seed)
   const measured: Measured = {
     narrower: [],

@@ -16,6 +16,7 @@ import { effectSource } from '@fasciajs/effect'
 import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as formats } from 'ajv-formats'
 import { describe, expect, it } from 'vitest'
 import { asJsonSchema } from './lib/measure.js'
 
@@ -40,7 +41,10 @@ interface Surveyed {
 }
 
 function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
+  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
+  // agreement. Ajv says so out loud: it prints `unknown format "uuid" ignored` and answers true.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
+  formats.default(ajv)
   const next = numbers(RUN.seed)
   const quietlyWider: string[] = []
   const quietlyNarrower: string[] = []
