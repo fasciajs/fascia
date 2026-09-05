@@ -375,24 +375,6 @@ function exactlyOne(term: DescribedOf<'exactlyOne'>): Spelling<JSONSchema> {
   return { written: orNull({ oneOf: written }, term.admitsNull), departures }
 }
 
-/**
- * A shorter list than the positions is admitted, because the term does not say which are required.
- *
- * `minItems` would be the exact statement where every position must be present, and a term has no
- * way to say that: a validator may hold a position that admits a missing value, and zod does. A
- * tuple of one `unknown` accepts the empty list, and a document demanding its whole prefix refuses
- * a value the schema takes. That is the direction that breaks a client, so the count is left off and
- * said instead.
- */
-function shorterIsAdmitted(positions: number): Departure {
-  return {
-    at: [],
-    direction: 'wider',
-    cause: 'noWordForIt',
-    said: `this states ${positions} values at positions, and a term does not say which of them must be present, so the document accepts a shorter list. Nothing states how many are required.`
-  }
-}
-
 /** Values at positions, which 2020-12 states exactly and ATD has no form for. */
 function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
   const prefixItems: JSONSchema[] = []
@@ -419,15 +401,33 @@ function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
     departures.push(...under('items', spelled.departures))
 
     return {
-      written: orNull({ type: 'array', prefixItems, items: spelled.written }, term.admitsNull),
-      departures: [...departures, shorterIsAdmitted(term.positions.length)]
+      written: orNull(
+        { type: 'array', prefixItems, ...atLeast(term.minPositions), items: spelled.written },
+        term.admitsNull
+      ),
+      departures
     }
   }
 
   return {
-    written: orNull({ type: 'array', prefixItems, ...items }, term.admitsNull),
-    departures: [...departures, shorterIsAdmitted(term.positions.length)]
+    written: orNull(
+      { type: 'array', prefixItems, ...atLeast(term.minPositions), ...items },
+      term.admitsNull
+    ),
+    departures
   }
+}
+
+/**
+ * How many values a document demands, where the term demands any.
+ *
+ * `prefixItems` states what stands at each position and says nothing about how many are there, so a
+ * document holding one alone accepts the empty list. `minItems` is the other half, and the term
+ * carries it: a validator states an optional position by letting it trail, and a count is what both
+ * of them mean by that.
+ */
+function atLeast(positions: number): { readonly minItems?: number } {
+  return positions === 0 ? {} : { minItems: positions }
 }
 
 /**

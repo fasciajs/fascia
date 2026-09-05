@@ -293,12 +293,21 @@ function propertyOf(schema: ValibotSchema): ObjectProperty<ValibotSchema> {
 }
 
 function tuple(schema: Known, rest: Rest<ValibotSchema>): Node<ValibotSchema> {
+  const positions = asList(schema['items']).map(asSchema)
+
   return {
     kind: 'structural',
     of: 'tuple',
-    positions: asList(schema['items']).map(asSchema),
+    positions,
+    // Lifted onto the edge, the way a key's optionality is, and read by the same test.
+    minPositions: positions.filter((position) => !isOptionalPosition(position)).length,
     rest
   }
+}
+
+/** Whether a position may be absent, which valibot states by wrapping the position. */
+function isOptionalPosition(schema: ValibotSchema): boolean {
+  return isType(schema, ['optional', 'exact_optional', 'undefinedable', 'nullish'])
 }
 
 function members(schema: Known): readonly [ValibotSchema, ValibotSchema, ...ValibotSchema[]] {

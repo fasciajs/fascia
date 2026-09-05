@@ -132,9 +132,17 @@ interface DescribedCases {
   /** All of these at once. */
   readonly every: { readonly members: readonly [Described, Described, ...Described[]] }
 
-  /** Values at positions, which is a different thing from a list of one type. */
+  /**
+   * Values at positions, which is a different thing from a list of one type.
+   *
+   * `minPositions` is how many of them must be present. Without it a term states the positions and
+   * not the length, and a document written from one accepts a shorter value than the schema does.
+   * A count rather than a flag on each position: an optional position is a trailing one in every
+   * validator here, and a flag would admit a required position after an optional one.
+   */
   readonly tuple: {
     readonly positions: readonly Described[]
+    readonly minPositions: number
     readonly rest: DescribedRest
   }
 

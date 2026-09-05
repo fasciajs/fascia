@@ -289,6 +289,7 @@ describe('a tuple says what it admits past its positions', () => {
       kind: 'structural',
       of: 'tuple',
       positions: [expect.any(z.ZodString)],
+      minPositions: 1,
       rest: { allows: 'nothing' }
     })
   })
@@ -298,6 +299,7 @@ describe('a tuple says what it admits past its positions', () => {
       kind: 'structural',
       of: 'tuple',
       positions: [expect.any(z.ZodString)],
+      minPositions: 1,
       rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
     })
   })

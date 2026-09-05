@@ -182,16 +182,27 @@ describe('what OpenAPI refuses, and what this says instead', () => {
 
   it('reports what the schema half gave up, at the position that gave it up', async () => {
     const document = await documentOf([
-      { path: '/pets', method: 'get', responses: { '200': { schema: z.tuple([z.string()]) } } }
+      {
+        path: '/pets',
+        method: 'get',
+        responses: {
+          '200': {
+            schema: z.discriminatedUnion('kind', [
+              z.object({ kind: z.literal('a') }),
+              z.object({ kind: z.literal('b') })
+            ])
+          }
+        }
+      }
     ])
 
-    // The tuple widening the 2020-12 target reports, reaching a caller with the operation that
+    // The discriminant the 2020-12 target reports, reaching a caller with the operation that
     // produced it in its path.
     expect(document.departures[0]).toEqual({
       at: ['get /pets'],
-      direction: 'wider',
+      direction: 'neither',
       cause: 'noWordForIt',
-      said: expect.stringContaining('does not say which of them must be present')
+      said: expect.stringContaining('to tell the members apart')
     })
   })
 })
@@ -936,7 +947,14 @@ describe('a caller sends part of a request outside the body', () => {
       {
         path: '/pets',
         method: 'get',
-        parameters: { query: z.object({ a: z.tuple([z.string()]) }) },
+        parameters: {
+          query: z.object({
+            a: z.discriminatedUnion('kind', [
+              z.object({ kind: z.literal('a') }),
+              z.object({ kind: z.literal('b') })
+            ])
+          })
+        },
         responses: { '200': { schema: z.string() } }
       }
     ])
@@ -944,9 +962,9 @@ describe('a caller sends part of a request outside the body', () => {
     // The path names the operation and then the parameter inside it.
     expect(document.departures[0]).toEqual({
       at: ['get /pets', 'a'],
-      direction: 'wider',
+      direction: 'neither',
       cause: 'noWordForIt',
-      said: expect.stringContaining('does not say which of them must be present')
+      said: expect.stringContaining('to tell the members apart')
     })
   })
 })
@@ -1275,9 +1293,12 @@ describe('3.0 is a different dialect of one target', () => {
   it('has no positional form, and says what that gives up', async () => {
     const { written, departures } = await schemaIn30(z.tuple([z.string(), z.number()]))()
 
+    // `minItems` survives the dialect: how many values must be there is a count, and 3.0 has the
+    // same keyword for one. What it loses is which shape stands at each of them.
     expect(written).toEqual({
       type: 'array',
-      items: { anyOf: [{ type: 'string' }, { type: 'number' }] }
+      items: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+      minItems: 2
     })
     expect(departures.map((one) => one.said)).toContainEqual(
       expect.stringContaining('which shape stands where')

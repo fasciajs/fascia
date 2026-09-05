@@ -105,6 +105,7 @@ describe('a tuple means the opposite of what zod means by the word', () => {
           type: 'string'
         })
       ],
+      minPositions: 1,
       rest: { allows: 'anything' }
     })
   })
@@ -119,6 +120,7 @@ describe('a tuple means the opposite of what zod means by the word', () => {
           type: 'string'
         })
       ],
+      minPositions: 1,
       rest: { allows: 'nothing' }
     })
   })

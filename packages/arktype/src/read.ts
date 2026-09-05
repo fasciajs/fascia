@@ -275,7 +275,11 @@ function structured(
   const sequence = structure.sequence
 
   if (sequence !== undefined) {
-    const positions: readonly BaseRoot[] = sequence.prefix ?? []
+    // arktype states the two apart on the sequence, so nothing has to be lifted: what trails the
+    // prefix may be absent, and how many must be present is the length of the prefix.
+    const required: readonly BaseRoot[] = sequence.prefix ?? []
+    const optional: readonly BaseRoot[] = sequence.optionals ?? []
+    const positions: readonly BaseRoot[] = [...required, ...optional]
     const items = sequence.variadic
 
     if (positions.length > 0) {
@@ -283,6 +287,7 @@ function structured(
         kind: 'structural',
         of: 'tuple',
         positions,
+        minPositions: required.length,
         rest: items === undefined ? { allows: 'nothing' } : { allows: 'schema', schema: items }
       }
     }

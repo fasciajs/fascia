@@ -83,7 +83,7 @@ function decide(term: Described, value: unknown, walk: Walk): Admission {
     case 'exactlyOne':
       return oneOf(term.members, value, walk)
     case 'tuple':
-      return decideTuple(term.positions, term.rest, value, walk)
+      return decideTuple(term.positions, term.minPositions, term.rest, value, walk)
     case 'ref':
       return decideRef(term.name, value, walk)
     case 'untyped':
@@ -253,6 +253,7 @@ function decideSet(term: DescribedOf<'set'>, value: unknown, walk: Walk): Admiss
 
 function decideTuple(
   positions: readonly Described[],
+  minPositions: number,
   rest: DescribedRest,
   value: unknown,
   walk: Walk
@@ -260,8 +261,13 @@ function decideTuple(
   if (!isList(value)) {
     return false
   }
-  // A shorter list is admitted, because a term states the values at the positions and does not say
-  // which of them must be present. The JSON Schema target reports the same silence as a departure.
+  // The term says how many of the positions must be present, so a shorter value is refused rather
+  // than admitted. It stated the positions and not the length until `minPositions`, and a document
+  // written from one accepted the empty list where the schema turned it away.
+  if (value.length < minPositions) {
+    return false
+  }
+
   for (const [index, position] of positions.entries()) {
     if (index >= value.length) {
       break

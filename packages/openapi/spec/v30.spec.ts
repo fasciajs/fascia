@@ -69,10 +69,12 @@ describe('what 3.0 cannot say, it reports rather than loses', () => {
   it('says a tuple is a list of anything a position admits, and reports it', () => {
     const { there, said } = roundTrip(z.tuple([z.string(), z.number()]))
 
-    // No `prefixItems`, which the comparison states by holding the whole value.
+    // No `prefixItems`, which the comparison states by holding the whole value. `minItems` survives:
+    // how many values must be there is a count, and 3.0 has the same keyword for it.
     expect(there).toEqual({
       type: 'array',
-      items: { anyOf: [{ type: 'string' }, { type: 'number' }] }
+      items: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+      minItems: 2
     })
     expect(said).toBeGreaterThan(0)
   })

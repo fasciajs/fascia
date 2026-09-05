@@ -805,7 +805,14 @@ function structural<S>(
       const rest = restOf(node.rest, follow)
       return isError(rest)
         ? rest
-        : { kind: 'tuple', positions, rest, admitsNull: false, meta: noMeta }
+        : {
+            kind: 'tuple',
+            positions,
+            minPositions: node.minPositions,
+            rest,
+            admitsNull: false,
+            meta: noMeta
+          }
     }
 
     // A document names a key with a string. What a key must satisfy beyond being a string is a

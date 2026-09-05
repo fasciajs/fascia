@@ -148,6 +148,7 @@ describe('one structure node covers four shapes', () => {
       kind: 'structural',
       of: 'tuple',
       positions: [expect.any(Function), expect.any(Function)],
+      minPositions: 2,
       rest: { allows: 'nothing' }
     })
   })

@@ -65,15 +65,23 @@ describe('a term admits what the schema it was read from admits', () => {
     )
   })
 
-  it('admits a shorter list, because a term does not say which positions must be present', () => {
-    // The one place a term states less than the schema it was read from. Every target reports the
-    // same silence: the JSON Schema speller writes `prefixItems` and calls the shorter list a
-    // departure. A verdict of false here would name the target for what the reading gave up.
+  it('refuses a list shorter than the positions the tuple demands', () => {
+    // This once admitted the shorter list, and it was right about the term it was asked: a tuple
+    // stated its positions and not its length. `minPositions` is that length, so the term now says
+    // what zod says, and a document written from it demands the same count.
     const term = fromZod(z.tuple([z.string()]))
 
-    expect(admits(term, [])).toBe(true)
-    expect(z.tuple([z.string()]).safeParse([]).success).toBe(false)
+    expect(admits(term, [])).toBe(false)
+    expect(admits(term, ['a'])).toBe(true)
     expect(admits(term, [4])).toBe(false)
+  })
+
+  it('admits a shorter list exactly where the tuple lets a position be absent', () => {
+    const term = fromZod(z.tuple([z.string(), z.number().optional()]))
+
+    expect(admits(term, ['a'])).toBe(true)
+    expect(admits(term, [])).toBe(false)
+    expect(admits(term, ['a', 1])).toBe(true)
   })
 
   it('admits a value nested under a name the schema holds itself by', () => {

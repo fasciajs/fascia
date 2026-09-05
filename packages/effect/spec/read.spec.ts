@@ -203,6 +203,7 @@ describe('one node covers an object and a record', () => {
         expect.objectContaining({ _tag: 'StringKeyword' }),
         expect.objectContaining({ _tag: 'NumberKeyword' })
       ],
+      minPositions: 2,
       rest: { allows: 'nothing' }
     })
   })

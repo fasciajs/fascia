@@ -137,29 +137,37 @@ describe('what ATD refuses, 2020-12 states', () => {
     expect(writtenOf(z.literal(1))).toEqual({ type: 'number', enum: [1] })
   })
 
-  it('writes a tuple at its positions, where ATD writes a list of anything', () => {
-    // No `minItems`. It would be exact where every position must be present, and a term does not
-    // say which are: a validator may hold a position that admits a missing value, and zod does.
-    // A tuple of one `unknown` accepts the empty list, and demanding the prefix refused it.
+  it('writes a tuple at its positions, and demands the ones that must be there', () => {
+    // `prefixItems` says what stands at each position and nothing about how many are there, so a
+    // document holding it alone accepts the empty list. `minItems` is the other half.
     expect(writtenOf(z.tuple([z.string(), z.number()]))).toEqual({
       type: 'array',
       prefixItems: [{ type: 'string' }, { type: 'number' }],
+      minItems: 2,
       items: false
     })
   })
 
-  it('says that a shorter list is admitted, rather than leaving the widening silent', () => {
+  it('demands only the positions that must be there, where one may be absent', () => {
+    // zod states an optional position by wrapping it, and every optional one trails, so the count
+    // is what both zod and a document mean by it.
+    expect(writtenOf(z.tuple([z.string(), z.number().optional()]))).toEqual({
+      type: 'array',
+      prefixItems: [{ type: 'string' }, { type: 'number' }],
+      minItems: 1,
+      items: false
+    })
+  })
+
+  it('gives nothing up writing a tuple, where it used to report a widening', () => {
     const spelled = spellJsonSchema(termOf(z.tuple([z.string()])))
     if (isError(spelled)) {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.departures[0]).toEqual({
-      at: [],
-      direction: 'wider',
-      cause: 'noWordForIt',
-      said: expect.stringContaining('does not say which of them must be present')
-    })
+    // The term carries how many positions must be present, so the document states it and the
+    // widening is gone rather than reported.
+    expect(spelled.departures).toEqual([])
   })
 })
 

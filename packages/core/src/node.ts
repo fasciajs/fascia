@@ -151,6 +151,19 @@ export type Structure<S> =
   | {
       readonly of: 'tuple'
       readonly positions: readonly S[]
+      /**
+       * How many of the positions must be present.
+       *
+       * A count rather than a flag on each position. Every validator here states an optional
+       * position as a trailing one, and a document states the same fact as a count, so a flag per
+       * position would admit a required position after an optional one: a state no validator writes
+       * and no target can spell.
+       *
+       * Stated by the frontend for the same reason a key's optionality is: the validator says it on
+       * the edge of the structure, and a reading that dropped it would leave the term saying a
+       * shorter value is admitted where the schema turns one away.
+       */
+      readonly minPositions: number
       readonly rest: Rest<S>
     }
   | {
