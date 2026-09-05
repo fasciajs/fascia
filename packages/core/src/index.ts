@@ -1,3 +1,5 @@
+export type { Admission } from './admits.js'
+export { admits, UndecidedAdmission } from './admits.js'
 export type {
   Departure,
   DepartureCause,
