@@ -1,12 +1,22 @@
 import type { Grammar } from '@fascia-internal/grammar'
-import { arkGrammar, numbers, VALUES, valuesNear, zodGrammar } from '@fascia-internal/grammar'
+import {
+  arkGrammar,
+  effectGrammar,
+  numbers,
+  VALUES,
+  valuesNear,
+  zodGrammar
+} from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
 import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
+import { effectSource } from '@fasciajs/effect'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { zodSource } from '@fasciajs/zod'
+import { default as Ajv } from 'ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
+import { JSONSchema, Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -26,7 +36,11 @@ import * as z from 'zod'
  * disagree about shape all the time: `enum` against `const`, a type list against `anyOf`. What they
  * may not disagree about is which values pass.
  *
- * A disagreement is attributed by asking arktype itself. Whichever document differs from the
+ * **Each document is read by a reader that knows its own dialect.** effect writes draft-07 and the
+ * other two write 2020-12, and a tuple is spelled differently in the two. Handing a draft-07
+ * document to a 2020-12 reader would measure the dialect rather than the writer.
+ *
+ * A disagreement is attributed by asking the validator itself. Whichever document differs from the
  * validator is the wrong one, and this is not a check that assumes the reference is right.
  *
  * It found one. arktype wrote `minItems` for a tuple and this library wrote none, so a document from
@@ -51,12 +65,18 @@ interface Surveyed {
 function survey<S>(
   source: Source<S>,
   grammar: Grammar<S>,
-  writes: (schema: S) => unknown
+  writes: (schema: S) => unknown,
+  /** The reference's own dialect. What this library writes is 2020-12 whoever it was read from. */
+  dialect: '2020-12' | 'draft-07' = '2020-12'
 ): Surveyed {
   // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
   // agreement.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
+  const reader =
+    dialect === '2020-12'
+      ? ajv
+      : formats.default(new Ajv.default({ strict: false, allErrors: false }))
 
   const next = numbers(RUN.seed)
   const ours: string[] = []
@@ -80,7 +100,7 @@ function survey<S>(
     let asReference: ReturnType<typeof ajv.compile>
     try {
       // A construct the reference declines to write is the reference saying so, not a finding here.
-      asReference = ajv.compile(writes(subject.schema) as object)
+      asReference = reader.compile(writes(subject.schema) as object)
     } catch {
       continue
     }
@@ -137,6 +157,11 @@ function survey<S>(
  * `items`, so its document takes the empty list and a longer one where zod itself refuses both.
  * This library wrote the same document until a run against arktype found it, which is what a second
  * reference is for: two of them disagree about different things.
+ *
+ * effect's is its own shape again. `JSONSchema.make` writes `additionalProperties: false` for a
+ * struct, and effect takes a value carrying a key the struct does not name: it strips the key rather
+ * than refusing the value. So its document turns away what the schema admits, which is the direction
+ * that breaks a client.
  */
 const surveys = [
   [
@@ -151,6 +176,18 @@ const surveys = [
     61,
     survey(zodSource, zodGrammar, (schema: z.core.$ZodType) =>
       z.toJSONSchema(schema, { io: 'input' })
+    )
+  ],
+  [
+    'effect',
+    58,
+    survey(
+      effectSource,
+      effectGrammar,
+      // effect writes from a schema and the grammar hands the AST, which is what a reading is given.
+      // `Schema.make` wraps it back up, and it is the only place here that has to.
+      (ast: Parameters<typeof effectSource.read>[0]) => JSONSchema.make(Schema.make(ast)),
+      'draft-07'
     )
   ]
 ] as const
