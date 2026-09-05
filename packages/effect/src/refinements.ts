@@ -25,6 +25,8 @@ export interface Refined {
   readonly minimum?: Bound<number>
   readonly maximum?: Bound<number>
   readonly multipleOf?: number
+  /** Whole numbers only. effect states it as a type and a term states it as an assertion. */
+  readonly integer?: boolean
   readonly minItems?: number
   readonly maxItems?: number
 }
@@ -103,6 +105,12 @@ function readFragment(fragment: Fragment): Refined {
   const format = fragment['format']
   const named = typeof format === 'string' ? FORMAT_NAMES[format] : undefined
 
+  // `Schema.Int` annotates `{ type: 'integer' }` and states nothing else. A key this package cannot
+  // turn back into something is dropped, and this one it can: a whole number is a number that is
+  // whole, which the term carries as an assertion. Dropped, the document takes 1.5 and effect
+  // does not, and no departure records the widening because the reading is where it happened.
+  const integer = fragment['type'] === 'integer'
+
   return {
     ...(minLength !== undefined && { minLength }),
     ...(maxLength !== undefined && { maxLength }),
@@ -112,7 +120,8 @@ function readFragment(fragment: Fragment): Refined {
     ...(minimum !== undefined && { minimum }),
     ...(maximum !== undefined && { maximum }),
     ...(typeof pattern === 'string' && { patterns: [pattern] }),
-    ...(named !== undefined && { format: named })
+    ...(named !== undefined && { format: named }),
+    ...(integer && { integer: true })
   }
 }
 
@@ -150,7 +159,8 @@ export function numberAssertionsOf(
   return {
     ...(refined.minimum !== undefined && { minimum: refined.minimum }),
     ...(refined.maximum !== undefined && { maximum: refined.maximum }),
-    ...(refined.multipleOf !== undefined && { multipleOf: refined.multipleOf })
+    ...(refined.multipleOf !== undefined && { multipleOf: refined.multipleOf }),
+    ...(refined.integer !== undefined && { integer: refined.integer })
   }
 }
 
