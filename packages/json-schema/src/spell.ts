@@ -59,6 +59,8 @@ function body(term: Described): Spelling<JSONSchema> {
       return exactlyOne(term)
     case 'every':
       return composed(term.members, 'allOf', term.admitsNull)
+    case 'set':
+      return set(term)
     case 'tuple':
       return tuple(term)
     case 'ref':
@@ -161,6 +163,43 @@ function array(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling
       ...(term.assertions.maxItems !== undefined && { maxItems: term.assertions.maxItems })
     },
     departures: under('items', items.departures)
+  }
+}
+
+/**
+ * A set, written as an array whose items do not repeat.
+ *
+ * `uniqueItems` states the half of a set that a document can state. The other half is that a
+ * position is not part of the value, and 2020-12 has no way to say it: a JSON array is ordered, and
+ * two arrays holding the same items in another order are two documents.
+ *
+ * So this accepts exactly the documents the term admits, and a reader hands back a value carrying an
+ * order the term never stated. Nothing about what the document accepts changed, which is what
+ * `neither` says.
+ */
+function set(term: DescribedOf<'set'>): Spelling<JSONSchema> {
+  const items = spellJsonSchema(term.items)
+  if (isError(items)) {
+    return items
+  }
+
+  return {
+    written: {
+      type: typeOf('array', term.admitsNull),
+      items: items.written,
+      uniqueItems: true,
+      ...(term.minItems !== undefined && { minItems: term.minItems }),
+      ...(term.maxItems !== undefined && { maxItems: term.maxItems })
+    },
+    departures: [
+      ...under('items', items.departures),
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states a value with no order, and 2020-12 writes an array, which has one. The document accepts the same values, and a reader gives back an order the schema never stated.'
+      }
+    ]
   }
 }
 

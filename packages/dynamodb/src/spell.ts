@@ -43,6 +43,8 @@ function body(term: Described): Spelling<AttributeShape> {
       return typed(term)
     case 'values':
       return values(term)
+    case 'set':
+      return set(term)
     case 'tuple':
       return tuple(term)
     case 'some':
@@ -109,13 +111,7 @@ function assertedOn(assertions: Readonly<Record<string, unknown>>): Departure[] 
   return stated.length === 0 ? [] : [dropped(stated.join(', '))]
 }
 
-/**
- * A list, or a set where the term said the items do not repeat.
- *
- * `SS` and `NS` are the one place this target says something both of the others refuse: a set is not
- * a value JSON carries, and DynamoDB has three of them. A set is exact where the items are strings
- * or numbers that do not repeat, and DynamoDB holds no set of anything else.
- */
+/** A list, which DynamoDB holds under `L`. What a set is written as is beside this. */
 function list(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling<AttributeShape> {
   const items = spellDynamo(term.assertions.items)
   if (isError(items)) {
@@ -130,29 +126,57 @@ function list(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling<
     })
   ]
 
-  const set = setOf(term.assertions)
-  if (set !== undefined) {
-    return { written: memberShape(set), departures }
-  }
-
   return { written: { L: { items: items.written } }, departures }
 }
 
 /**
- * Which set holds these items, where a set holds them at all.
+ * A set, which is the one thing this target says that both of the others refuse.
  *
- * Asked of the term rather than of a validator, because a set is a fact about the values and every
- * validator states it somewhere else. No reading produces `unique` yet, so this is reached only by a
- * term stated directly, and the spec beside this file states one.
+ * A set is not a value JSON carries and DynamoDB has three of them, so this is the only target here
+ * that writes what the term states rather than the nearest thing with an order. It is exact where
+ * the values are strings or numbers, which is what DynamoDB holds a set of.
+ *
+ * Anywhere else it is `L`, and a list has an order the term did not state. That widens nothing and
+ * changes what a reader gives back, so the departure says `neither` and names the reason.
  */
-function setOf(
-  assertions: Extract<DescribedOf<'typed'>, { name: 'array' }>['assertions']
-): AttributeName | undefined {
-  if (assertions.unique !== true) {
-    return undefined
+function set(term: DescribedOf<'set'>): Spelling<AttributeShape> {
+  const items = spellDynamo(term.items)
+  if (isError(items)) {
+    return items
   }
 
-  const items = assertions.items
+  const departures = [
+    ...under('items', items.departures),
+    ...assertedOn({ minItems: term.minItems, maxItems: term.maxItems })
+  ]
+
+  const held = setMemberOf(term.items)
+  if (held !== undefined) {
+    return { written: memberShape(held), departures }
+  }
+
+  return {
+    written: { L: { items: items.written } },
+    departures: [
+      ...departures,
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noShapeForIt',
+        said: 'DynamoDB holds a set of strings, of numbers and of binary, and this holds neither. It is written as a list, which has an order the schema never stated.'
+      }
+    ]
+  }
+}
+
+/**
+ * Which set holds these values, where DynamoDB holds them at all.
+ *
+ * A set holds one type and nothing else, so a member that admits null or that is not a plain string
+ * or number has no set. There is no widening here to choose from: `SS` holds strings, and a set of
+ * anything else is a list.
+ */
+function setMemberOf(items: Described): AttributeName | undefined {
   if (items.kind !== 'typed' || items.admitsNull) {
     return undefined
   }

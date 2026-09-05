@@ -61,7 +61,7 @@ describe('an unreadable type says why, rather than reading as something else', (
   it('turns away a value JSON does not carry', () => {
     expect(groupOf(z.symbol())).toContain('not a value JSON carries')
     expect(groupOf(z.map(z.string(), z.string()))).toContain('A record of the same shape is')
-    expect(groupOf(z.set(z.string()))).toContain('An array of unique items is')
+    expect(groupOf(z.set(z.string()))).toContain('states a conversion rather than one value')
   })
 
   it('turns away a schema that admits no value', () => {

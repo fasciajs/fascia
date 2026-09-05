@@ -67,13 +67,6 @@ interface AssertionsByTypeName {
     readonly items: Described
     readonly minItems?: number
     readonly maxItems?: number
-    /**
-     * The items do not repeat.
-     *
-     * A fact about the values rather than a way of writing them, so it belongs here even though the
-     * two JSON targets have no keyword for it. DynamoDB does: a set is one of its ten types.
-     */
-    readonly unique?: boolean
   }
 }
 
@@ -97,6 +90,26 @@ interface DescribedCases {
       readonly assertions: AssertionsByTypeName[Name]
     }
   }[DescribedTypeName]
+
+  /**
+   * Values where a position is not part of the value, and no value is held twice.
+   *
+   * **The one case here that states a quotient rather than a predicate.** A list of items that do
+   * not repeat is still a list: it has a first item, and two lists holding the same items in another
+   * order are two values. A set is what is left when the position is forgotten, and forgetting it is
+   * not something a predicate on a list can say.
+   *
+   * A case rather than a flag beside `array`, for the reason every case here is a case: a target has
+   * to answer, and a flag lets a target write a list and say nothing. DynamoDB holds three sets and
+   * writes this exactly. Every JSON target writes an array of items that do not repeat, which
+   * accepts the same documents and gives back a value with an order the term never stated, and each
+   * says so.
+   */
+  readonly set: {
+    readonly items: Described
+    readonly minItems?: number
+    readonly maxItems?: number
+  }
 
   /** A fixed set of admitted values. The type of each value travels with the value. */
   readonly values: { readonly admitted: readonly [AdmittedValue, ...AdmittedValue[]] }

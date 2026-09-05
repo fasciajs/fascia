@@ -82,7 +82,7 @@ export const UnreadableValibotTypes = {
   symbol: 'a symbol is not a value JSON carries',
   function: 'a function is not a value JSON carries',
   map: 'a map is not a value JSON carries. A record of the same shape is',
-  set: 'a set is not a value JSON carries. An array of unique items is',
+  set: 'a parse of a list gives back a Set, so this states a conversion rather than one value. The term has a set, and nothing here states one without the conversion',
   blob: 'a blob is sent as a body rather than as a value in one',
   file: 'a file is sent as a body rather than as a value in one',
   promise: 'a promise is not a value at all until it settles',

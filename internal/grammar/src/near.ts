@@ -79,6 +79,12 @@ function drawn(
       }
       return found
     }
+    case 'set': {
+      const one = first(term.items, definitions, depth)
+      // A value held twice, which is the half of a set a document can turn away.
+      found.push([], [one], [one, one])
+      return found
+    }
     case 'tuple': {
       const filled = term.positions.map((position) => first(position, definitions, depth))
       found.push(filled, filled.slice(0, -1), [...filled, 'one position more'], [])

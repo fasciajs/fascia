@@ -129,6 +129,19 @@ describe('a term that states what this does not decide reports no verdict', () =
   })
 })
 
+describe('a set admits a value with no order and no repeat', () => {
+  it('refuses a value held twice, and takes the same values in another order', () => {
+    // The half of a set a value can be asked about. That a position is not part of the value is a
+    // fact about the value's identity, and no single value shows it.
+    const term = standing({ kind: 'set', items: aString, admitsNull: false, meta: {} }, [])
+
+    expect(admits(term, ['a', 'b'])).toBe(true)
+    expect(admits(term, ['b', 'a'])).toBe(true)
+    expect(admits(term, ['a', 'a'])).toBe(false)
+    expect(admits(term, ['a', 1])).toBe(false)
+  })
+})
+
 describe('a combination admits what its law says', () => {
   it('refuses a value two members of an exclusive combination take', () => {
     const term = standing(

@@ -51,8 +51,8 @@ const RUN = { seed: 1, rounds: 300, depth: 2 }
  */
 const UNCOVERED: ReadonlyMap<string, string> = new Map([
   [
-    'assert/array/unique',
-    'no reading produces one, and that is a decision rather than a gap: a Set is refused, and `zod-types.ts` says why. The DynamoDB target spells a set from it and no frontend reaches the line'
+    'set',
+    'no reading produces one. Every validator here states a set as a value that is not a list, and reading one is a conversion rather than a description: `zod-types.ts` says so where zod refuses it. The DynamoDB target writes one exactly, and the spec beside that target states the term directly'
   ]
 ])
 
@@ -66,7 +66,6 @@ const STATED: readonly string[] = [
   'admitted/string',
   'assert/array/maxItems',
   'assert/array/minItems',
-  'assert/array/unique',
   'assert/number/integer',
   'assert/number/maximum',
   'assert/number/minimum',
@@ -82,6 +81,7 @@ const STATED: readonly string[] = [
   'property/optional',
   'ref',
   'rest/anything',
+  'set',
   'rest/nothing',
   'rest/term',
   'some',
@@ -211,6 +211,10 @@ function state(
       }
       return
     }
+    case 'set':
+      into.add('set')
+      state(term.items, definitions, into, depth + 1)
+      return
     case 'values':
       into.add('values')
       for (const one of term.admitted) {

@@ -1,5 +1,5 @@
 import type { Description } from './describe.js'
-import type { Described, DescribedRest } from './described.js'
+import type { Described, DescribedOf, DescribedRest } from './described.js'
 import type { AdmittedValue } from './node.js'
 import { FasciaError, isError } from './result.js'
 
@@ -72,6 +72,8 @@ function decide(term: Described, value: unknown, walk: Walk): Admission {
   switch (term.kind) {
     case 'typed':
       return decideTyped(term, value, walk)
+    case 'set':
+      return decideSet(term, value, walk)
     case 'values':
       return term.admitted.some((one) => isAdmitted(one, value))
     case 'some':
@@ -205,9 +207,6 @@ function decideTyped(
       if (assertions.maxItems !== undefined && value.length > assertions.maxItems) {
         return false
       }
-      if (assertions.unique === true && !distinct(value)) {
-        return false
-      }
       for (const [index, item] of value.entries()) {
         const answer = decide(assertions.items, item, into(walk, String(index)))
         if (answer !== true) {
@@ -220,6 +219,36 @@ function decideTyped(
       term satisfies never
       throw new Error('a typed term carries a name this function has no answer for')
   }
+}
+
+/**
+ * A set, asked of the value a document carries.
+ *
+ * A set arrives as a list, because no wire form here has another shape for one. What the term states
+ * about the value is that no item is held twice; that a position is not part of the value is not
+ * something a value can be asked. So the answer is the same one a list of items that do not repeat
+ * would give, and the difference between the two lives in what a parse gives back.
+ */
+function decideSet(term: DescribedOf<'set'>, value: unknown, walk: Walk): Admission {
+  if (!isList(value)) {
+    return false
+  }
+  if (term.minItems !== undefined && value.length < term.minItems) {
+    return false
+  }
+  if (term.maxItems !== undefined && value.length > term.maxItems) {
+    return false
+  }
+  if (!distinct(value)) {
+    return false
+  }
+  for (const [index, item] of value.entries()) {
+    const answer = decide(term.items, item, into(walk, String(index)))
+    if (answer !== true) {
+      return answer
+    }
+  }
+  return true
 }
 
 function decideTuple(

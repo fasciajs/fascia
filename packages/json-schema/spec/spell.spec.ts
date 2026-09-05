@@ -22,6 +22,53 @@ function writtenOf(schema: z.core.$ZodType): unknown {
   return spelled.written
 }
 
+/** A set, stated as a term: no reading produces one, and every target has to answer about one. */
+const aSetOf = (items: Described): Described => ({
+  kind: 'set',
+  items,
+  admitsNull: false,
+  meta: {}
+})
+
+const aString: Described = {
+  kind: 'typed',
+  name: 'string',
+  assertions: {},
+  admitsNull: false,
+  meta: {}
+}
+
+describe('a value with no order is written as the nearest thing that has one', () => {
+  it('writes the half a document can state, and says the half it cannot', () => {
+    const spelled = spellJsonSchema(aSetOf(aString))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    // `uniqueItems` is the half 2020-12 states. An array has an order and a set does not, and no
+    // keyword removes one, so the document accepts the same values and gives back one more fact.
+    expect(spelled.written).toEqual({ type: 'array', items: { type: 'string' }, uniqueItems: true })
+    expect(spelled.departures).toEqual([
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states a value with no order, and 2020-12 writes an array, which has one. The document accepts the same values, and a reader gives back an order the schema never stated.'
+      }
+    ])
+  })
+
+  it('gives up both halves in ATD, and each in its own direction', () => {
+    const spelled = spellAtd(aSetOf(aString))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.written).toEqual({ elements: { type: 'string' } })
+    expect(spelled.departures.map((one) => one.direction)).toEqual(['wider', 'neither'])
+  })
+})
+
 describe('2020-12 has a keyword for every assertion a term carries', () => {
   it('writes every string assertion, where ATD writes none of them', () => {
     expect(writtenOf(z.string().min(2).max(5).regex(/^a/))).toEqual({

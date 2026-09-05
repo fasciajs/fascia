@@ -459,6 +459,8 @@ function mapRefs(term: Described, rename: (name: string) => string): Described {
     case 'exactlyOne':
     case 'every':
       return { ...term, members: memberRefs(term.members, rename) }
+    case 'set':
+      return { ...term, items: mapRefs(term.items, rename) }
     case 'tuple':
       return {
         ...term,
@@ -769,9 +771,22 @@ function structural<S>(
             assertions: {
               items,
               ...(node.assertions.minItems !== undefined && { minItems: node.assertions.minItems }),
-              ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems }),
-              ...(node.assertions.unique !== undefined && { unique: node.assertions.unique })
+              ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems })
             },
+            admitsNull: false,
+            meta: noMeta
+          }
+    }
+
+    case 'set': {
+      const items = follow(node.items)
+      return isError(items)
+        ? items
+        : {
+            kind: 'set',
+            items,
+            ...(node.assertions.minItems !== undefined && { minItems: node.assertions.minItems }),
+            ...(node.assertions.maxItems !== undefined && { maxItems: node.assertions.maxItems }),
             admitsNull: false,
             meta: noMeta
           }

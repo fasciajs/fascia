@@ -160,7 +160,24 @@ export type Structure<S> =
       readonly assertions: {
         readonly minItems?: number
         readonly maxItems?: number
-        readonly unique?: boolean
+      }
+    }
+  /**
+   * Values where a position is not part of the value, and no value is held twice.
+   *
+   * A case rather than a flag on a list, because a set is a different value and not a list that
+   * satisfies a predicate. A list carries a position and a set does not, so no target can answer
+   * about one by answering about the other, and a case is what makes each target say which.
+   *
+   * The two facts arrive together. A flag saying only that a position is not part of the value would
+   * state a multiset, which no target here can write and which no validator states.
+   */
+  | {
+      readonly of: 'set'
+      readonly items: S
+      readonly assertions: {
+        readonly minItems?: number
+        readonly maxItems?: number
       }
     }
   | {
