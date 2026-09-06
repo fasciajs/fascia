@@ -4,6 +4,7 @@ import type {
   Described,
   DescribedOf,
   DescribedRest,
+  Meta,
   Spelled,
   Spelling
 } from '@fasciajs/core'
@@ -32,9 +33,42 @@ export function spellDynamo(term: Described): Spelling<AttributeShape> {
   // A term admitting null admits one more member. Nullability reaches a fourth target and is spelled
   // a fourth way: a flag beside a type, a member of a type list, a joined branch, and here a member
   // of the coproduct itself.
-  return term.admitsNull
-    ? { written: { ...spelled.written, NULL: {} }, departures: spelled.departures }
-    : spelled
+  const written = term.admitsNull ? { ...spelled.written, NULL: {} } : spelled.written
+
+  return {
+    written,
+    departures: [...spelled.departures, ...annotated(term.meta)]
+  }
+}
+
+/**
+ * What a caller said about the schema, which reaches no attribute.
+ *
+ * An AttributeValue names a type and carries a value, and it holds no room for a word about either.
+ * 2020-12 writes all four of these and ATD writes two, so this is the one target that loses every
+ * one of them.
+ *
+ * Reported rather than dropped in silence, and in neither direction. What a caller wrote about a
+ * schema changes nothing about the values a table takes, so nobody's row is turned away by the loss.
+ * It was silent until a run asked what each target does with a title: this wrote `{ S: {} }` and
+ * reported nothing, and no check here could have seen it, because every one of them measures which
+ * values a description admits.
+ */
+function annotated(meta: Meta): readonly Departure[] {
+  const stated = (['title', 'description', 'examples', 'deprecated'] as const).filter(
+    (name) => meta[name] !== undefined
+  )
+
+  return stated.length === 0
+    ? []
+    : [
+        {
+          at: [],
+          direction: 'neither',
+          cause: 'noWordForIt',
+          said: `this states ${stated.join(', ')}, and an AttributeValue names a type and carries a value and holds no word about either. What a table takes is unchanged`
+        }
+      ]
 }
 
 function body(term: Described): Spelling<AttributeShape> {

@@ -148,6 +148,30 @@ describe('a term reaches the member that carries it', () => {
   })
 })
 
+describe('what a caller said about a schema reaches no attribute, and is reported', () => {
+  it('names every annotation it loses, in neither direction', () => {
+    const spelled = shapeOf(
+      z.string().meta({ title: 'A', description: 'B', examples: ['c'], deprecated: true })
+    )
+
+    // 2020-12 writes all four and ATD writes two. This target has room for none, and the loss turns
+    // nobody's row away, so it is reported in neither direction rather than left silent.
+    expect(spelled.written).toEqual({ S: {} })
+    expect(spelled.departures).toEqual([
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states title, description, examples, deprecated, and an AttributeValue names a type and carries a value and holds no word about either. What a table takes is unchanged'
+      }
+    ])
+  })
+
+  it('says nothing where a caller said nothing', () => {
+    expect(shapeOf(z.string()).departures).toEqual([])
+  })
+})
+
 describe('what this target says that both of the others refuse', () => {
   it('carries a bigint under N, which is a string of up to thirty-eight digits', () => {
     // JSON has no form for one, so ATD and 2020-12 both refuse the term outright. DynamoDB writes
