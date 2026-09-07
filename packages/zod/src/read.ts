@@ -56,14 +56,9 @@ function metaOf(schema: core.$ZodType): Meta {
 /**
  * How many positions of a tuple zod demands, which it answers two ways.
  *
- * **A tuple with nothing past its positions is held to a length, and one with a rest is held per
- * position.** `z.tuple([z.unknown()])` refuses the empty list and `z.tuple([z.unknown()], z.number())`
- * takes it, so the same position is required in one and absent in the other. The length zod checks
- * comes from `optin`, and the per-position check comes from whether the position takes `undefined`.
- *
- * Read the way zod reads it, because the count reaches a document as `minItems` and a count too
- * large turns away a value the schema takes. A count too small only widens, which is the direction
- * a caller recovers from, so where the two readings disagree this takes the smaller.
+ * A closed tuple is held to a length read off `optin`; one with a rest is held per position, which
+ * asks whether the position takes `undefined`. So `z.tuple([z.unknown()])` refuses the empty list
+ * and `z.tuple([z.unknown()], z.number())` takes it.
  */
 function demanded(positions: readonly core.$ZodType[], closed: boolean): number {
   let least = 0
@@ -78,7 +73,7 @@ function demanded(positions: readonly core.$ZodType[], closed: boolean): number 
   return least
 }
 
-/** Whether a value at this position may be missing, which is what zod asks past a tuple's rest. */
+/** What zod asks of a position past a tuple's rest. */
 function mayBeAbsent(schema: core.$ZodType): boolean {
   if (schema._zod.optin === 'optional') {
     return true

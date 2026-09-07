@@ -66,12 +66,7 @@ describe('a caller names a schema without touching it', () => {
 })
 
 describe('a caller refuses a loss rather than reading about one', () => {
-  /**
-   * The same term, written by the target that gives things up.
-   *
-   * 2020-12 has a keyword for every assertion a term states and reports no widening at all, so what
-   * a caller refuses is only worth asking of a target that widens. ATD has no keyword for a count.
-   */
+  /** 2020-12 reports no widening at all, so what a caller refuses needs a target that widens. */
   function spelledAsAtd(schema: z.core.$ZodType) {
     const described = describeAll([{ schema, io: 'input' }], zodSource, { sides })
     if (isError(described)) {
@@ -103,8 +98,7 @@ describe('a caller refuses a loss rather than reading about one', () => {
   })
 
   it('refuses one that widened, and says what it gave up', () => {
-    // ATD has no keyword for a count, so a document written from a bounded list accepts a list the
-    // schema turns away. A caller publishing a contract may not want that.
+    // ATD has no keyword for a count, so the document accepts a list the schema turns away.
     const held = refusing(spelledAsAtd(z.array(z.string()).min(1)), ['wider'])
 
     expect(isError(held) ? held.message : 'written').toContain('no keyword for a count')

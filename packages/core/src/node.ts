@@ -154,14 +154,8 @@ export type Structure<S> =
       /**
        * How many of the positions must be present.
        *
-       * A count rather than a flag on each position. Every validator here states an optional
-       * position as a trailing one, and a document states the same fact as a count, so a flag per
-       * position would admit a required position after an optional one: a state no validator writes
-       * and no target can spell.
-       *
        * Stated by the frontend for the same reason a key's optionality is: the validator says it on
-       * the edge of the structure, and a reading that dropped it would leave the term saying a
-       * shorter value is admitted where the schema turns one away.
+       * the edge of the structure.
        */
       readonly minPositions: number
       readonly rest: Rest<S>
@@ -178,12 +172,8 @@ export type Structure<S> =
   /**
    * Values where a position is not part of the value, and no value is held twice.
    *
-   * A case rather than a flag on a list, because a set is a different value and not a list that
-   * satisfies a predicate. A list carries a position and a set does not, so no target can answer
-   * about one by answering about the other, and a case is what makes each target say which.
-   *
-   * The two facts arrive together. A flag saying only that a position is not part of the value would
-   * state a multiset, which no target here can write and which no validator states.
+   * Both facts together, because a flag for the first alone would state a multiset that no target
+   * here can write.
    */
   | {
       readonly of: 'set'

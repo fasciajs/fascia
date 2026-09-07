@@ -169,13 +169,8 @@ function array(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling
 /**
  * A set, written as an array whose items do not repeat.
  *
- * `uniqueItems` states the half of a set that a document can state. The other half is that a
- * position is not part of the value, and 2020-12 has no way to say it: a JSON array is ordered, and
- * two arrays holding the same items in another order are two documents.
- *
- * So this accepts exactly the documents the term admits, and a reader hands back a value carrying an
- * order the term never stated. Nothing about what the document accepts changed, which is what
- * `neither` says.
+ * `uniqueItems` is the half a document can state. A JSON array is ordered and no keyword removes an
+ * order, so a reader gives back one the term never stated and acceptance is unchanged.
  */
 function set(term: DescribedOf<'set'>): Spelling<JSONSchema> {
   const items = spellJsonSchema(term.items)
@@ -418,14 +413,7 @@ function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
   }
 }
 
-/**
- * How many values a document demands, where the term demands any.
- *
- * `prefixItems` states what stands at each position and says nothing about how many are there, so a
- * document holding one alone accepts the empty list. `minItems` is the other half, and the term
- * carries it: a validator states an optional position by letting it trail, and a count is what both
- * of them mean by that.
- */
+/** `prefixItems` says what stands where and nothing about how many, so `minItems` is the other half. */
 function atLeast(positions: number): { readonly minItems?: number } {
   return positions === 0 ? {} : { minItems: positions }
 }

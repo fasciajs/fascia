@@ -105,10 +105,8 @@ function readFragment(fragment: Fragment): Refined {
   const format = fragment['format']
   const named = typeof format === 'string' ? FORMAT_NAMES[format] : undefined
 
-  // `Schema.Int` annotates `{ type: 'integer' }` and states nothing else. A key this package cannot
-  // turn back into something is dropped, and this one it can: a whole number is a number that is
-  // whole, which the term carries as an assertion. Dropped, the document takes 1.5 and effect
-  // does not, and no departure records the widening because the reading is where it happened.
+  // `Schema.Int` annotates `{ type: 'integer' }` and states nothing else. Dropped, the document
+  // takes 1.5 where effect does not, and no departure records it: the loss is in the reading.
   const integer = fragment['type'] === 'integer'
 
   return {

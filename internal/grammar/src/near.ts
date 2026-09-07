@@ -1,22 +1,10 @@
 import type { Described, StringFormat } from '@fasciajs/core'
 
 /**
- * The values a term's own shape suggests, beside the values it would not.
+ * The values a term's own shape suggests, beside the fixed pool `VALUES` holds.
  *
- * `VALUES` is fixed, and the reason is written where it is defined: the values that tell two
- * readings apart are the ones a schema's own shape would not suggest. That argument holds for what
- * it was written for, and it leaves a question nothing asks. A departure claims a document accepts
- * more than the schema. Finding the value that shows it needs the bound the schema stated, and a
- * fixed pool does not know the bound.
- *
- * So this is a second source rather than a replacement. Over a run of both, the values drawn here
- * found more disagreements than the fixed pool did, and every one was already named by a departure.
- *
- * **Each case gives a value on each side of what it states.** A string of one below the minimum
- * length and one at it, a number at a bound and half a unit either side of it, a list one shorter
- * than the minimum and one longer than the maximum, an object with a required key removed and one
- * with a key nobody named. What is here is what a bound admits and what it turns away, so a document
- * that states the bound loosely is asked the one value that shows it.
+ * A departure claims a document accepts more than the schema, and finding the value that shows it
+ * needs the bound the schema stated. A value on each side of every bound is what is drawn here.
  */
 export function valuesNear(
   term: Described,
@@ -25,13 +13,7 @@ export function valuesNear(
   return drawn(term, definitions, 0)
 }
 
-/**
- * A value each format admits, and one it turns away.
- *
- * Written here rather than decided, because deciding a format is a validator's work and writing one
- * example of each is not. The near miss is what tells a document that states the format from one
- * that dropped it: both take the first and only one turns away the second.
- */
+/** One value each format admits and one it turns away, which tells a stated format from a dropped one. */
 const FORMATTED: Readonly<Record<StringFormat, readonly string[]>> = {
   email: ['a@b.com', 'a@b@c.com'],
   uri: ['https://a.example/b', 'not a uri'],
@@ -45,7 +27,7 @@ const FORMATTED: Readonly<Record<StringFormat, readonly string[]>> = {
   duration: ['P1D', 'P1X']
 }
 
-/** How deep the walk goes. A term holds a cycle as a reference, so the bound is on the walk. */
+/** A term holds a cycle as a reference, so the bound is on the walk. */
 const DEEPEST = 3
 
 function drawn(
@@ -57,7 +39,6 @@ function drawn(
     return []
   }
 
-  // Null is asked of every term, because whether a term admits it is a fact every case carries.
   const found: unknown[] = [null]
 
   switch (term.kind) {
@@ -67,7 +48,6 @@ function drawn(
       for (const one of term.admitted) {
         found.push(one.of === 'null' ? null : one.value)
       }
-      // A value no member admits, which is what says the document holds the set rather than the type.
       found.push('a value the term does not admit', -98765.5)
       return found
     }
@@ -81,7 +61,6 @@ function drawn(
     }
     case 'set': {
       const one = first(term.items, definitions, depth)
-      // A value held twice, which is the half of a set a document can turn away.
       found.push([], [one], [one, one])
       return found
     }
@@ -118,9 +97,7 @@ function fromTyped(
         'a'.repeat(most),
         'a'.repeat(most + 1)
       ]
-      // A format is the one assertion no length reaches. Without a value the format admits, a term
-      // that states one refuses the whole pool, and a document that dropped the format agrees by
-      // refusing it too.
+      // No length reaches a format, and both sides refuse the whole pool without a value it admits.
       return format === undefined ? lengths : [...lengths, ...FORMATTED[format]]
     }
     case 'number': {
@@ -179,7 +156,7 @@ function fromTyped(
   }
 }
 
-/** One value to fill a place with. A place has to hold something for the shape to be asked about. */
+/** One value to fill a place with. */
 function first(
   term: Described,
   definitions: ReadonlyMap<string, Described>,

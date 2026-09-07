@@ -20,46 +20,25 @@ import { default as formats } from 'ajv-formats'
 import { describe, expect, it } from 'vitest'
 
 /**
- * **What a departure claims, asked of the document rather than of the prose.**
+ * What a departure claims, asked of the document rather than of the prose.
  *
- * A spelling returns what it wrote and what it gave up, and until this nothing read the second. A
- * list of losses nobody checks is a list that can be wrong in two ways, and only one of them is
- * visible: a loss named where nothing was lost is noise a reader learns to skip, and a loss that
- * happened and was never named is a client turned away by a document nobody was warned about.
- *
- * Two laws, and the second is the one with teeth.
- *
- * **(E) A spelling that gave up nothing accepts exactly what the term accepts.** Both directions,
- * which no other check here asserts: the standing agreement runs assert one direction and print the
- * other, because a widening is a decision. Where the spelling reports no departure there is no
- * decision to protect, so the two must agree exactly or the report is wrong.
- *
- * **(A) A widening the departures do not name is a widening nobody can act on.** `refusing` lets a
- * caller stop a build on a `wider` departure, and a caller who does that is asking never to publish
- * a document that takes what their schema turns away. That promise is worth what this law says it
- * is worth. It found the reading of `Schema.Int` dropping `{ type: 'integer' }`, where the document
- * took `1.5`, effect refused it, and the departures said nothing.
- *
- * The reference is the validator, not the term. A departure states what the document does against
- * the schema, and a target never sees the schema, so the claim can only be checked from here.
+ * (E) a spelling that gave up nothing accepts exactly what the term accepts, both directions.
+ * (A) a departure names every value the document and the schema disagree about. The reference is the
+ * validator, because a departure states what the document does against the schema and a target
+ * never sees one.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
 
 interface Surveyed {
-  /** (E). A value a faithful spelling and the term disagree about. */
   readonly inexact: readonly string[]
-  /** (A). A value the document takes, the schema refuses, and no departure names. */
   readonly quietlyWider: readonly string[]
-  /** (A). A value the schema takes, the document refuses, and no departure names. */
   readonly quietlyNarrower: readonly string[]
   readonly faithfulRounds: number
   readonly verdicts: number
 }
 
 function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
-  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
-  // agreement.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
 
@@ -78,8 +57,7 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
       continue
     }
 
-    // The whole description, definitions and all. A document holding a reference to nothing
-    // compiles as nothing, and every document beneath one would be skipped.
+    // The whole description, or a document holding a reference to nothing compiles as nothing.
     const spelled = spellJsonSchemaAll(described)
     if (isError(spelled)) {
       continue
@@ -100,8 +78,6 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
       faithfulRounds += 1
     }
 
-    // The fixed pool, and the values this term's own bounds suggest. A departure claims a document
-    // takes more than the schema, and the value that shows it is one the bound named.
     for (const value of [...VALUES, ...valuesNear(described.term, described.definitions)]) {
       const byDocument = validate(value) === true
 
@@ -117,7 +93,6 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
         }
       }
 
-      // A validator that throws states no verdict, so there is nothing to check a claim against.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -149,7 +124,6 @@ describe('(E) a spelling that gave up nothing accepts exactly what the term acce
     it(`writes ${what} exactly, wherever it reports no departure`, () => {
       expect(surveyed.inexact).toEqual([])
 
-      // A run of nothing but lossy subjects would report the law held over no subject at all.
       expect(surveyed.faithfulRounds).toBeGreaterThan(RUN.rounds / 2)
       expect(surveyed.verdicts).toBeGreaterThan(RUN.rounds)
     })

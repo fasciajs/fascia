@@ -16,39 +16,17 @@ import { zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 
 /**
- * **The laws of the read layer and the describe layer, stated once and driven over drawn schemas.**
+ * What a reading and a term owe, over drawn schemas.
  *
- * Every other generative check here compares a validator against a document, and one number carries
- * two questions: whether the frontend read the schema, and whether the target wrote the term. This
- * file asks only about the half before a target: what a reading owes, and what a term owes the
- * schema it was read from.
- *
- * Three laws, and each is a statement a reader can check rather than a number to watch.
- *
- * **(T) A reading answers, or it names its failure.** `read` returns `Node | UnreadableSchema`, so a
- * throw from a frontend is a failure the signature does not declare. A validator may throw and that
- * is the validator's business; a reading of one may not.
- *
- * **(N) A term is never narrower than the schema it was read from.** A term wider than the schema is
- * a loss this library reports and a caller can live with. A term narrower than the schema turns a
- * working value away, and no departure records it, because a reading that dropped an assertion
- * cannot know it dropped one. This is the law the whole library rests on.
- *
- * **(C) The run states every case of the term.** A law proved over drawn schemas is proved over what
- * the schemas state and over nothing else. A case no grammar draws is a case where (T) and (N) hold
- * vacuously, and a count of findings cannot tell that apart from a case that holds. So what the run
- * never states is written down here with the reason, and a new one fails.
+ * (T) a reading answers or names its failure, because `read` returns `Node | UnreadableSchema`.
+ * (N) a term is never narrower than the schema, which no departure records.
+ * (C) the run states every case, or the first two hold vacuously and a count of findings cannot
+ * tell that apart from a case that holds.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
 
-/**
- * What the run never states, and why.
- *
- * A name leaves this map when a grammar draws the case. A name arrives in it when a case stops being
- * drawn, and that is the failure: the two laws above went quiet about the case and said nothing
- * about it while reporting no findings.
- */
+/** What the run never states, and why. A name arriving here is a case the laws went quiet about. */
 const UNCOVERED: ReadonlyMap<string, string> = new Map([
   [
     'set',
@@ -56,7 +34,7 @@ const UNCOVERED: ReadonlyMap<string, string> = new Map([
   ]
 ])
 
-/** Every case and every assertion a term can state. A name here that no run reaches is a finding. */
+/** Every case and assertion a term can state. */
 const STATED: readonly string[] = [
   'admitsNull',
   'admitted/boolean',
@@ -98,15 +76,10 @@ const STATED: readonly string[] = [
   'values'
 ]
 
-/** What one run of one grammar found. */
 interface Surveyed {
-  /** (T). A frontend that threw where the signature says it returns. */
   readonly threw: readonly string[]
-  /** (N). A value the schema takes and the term turns away. */
   readonly narrower: readonly string[]
-  /** (C). What the drawn schemas stated. */
   readonly stated: ReadonlySet<string>
-  /** A verdict neither law can use, counted so a quiet run is visible. */
   readonly undecided: number
   readonly refused: number
   readonly verdicts: number
@@ -141,8 +114,7 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
     state(describing.term, describing.definitions, stated, 0)
 
     for (const value of VALUES) {
-      // A validator that throws states no verdict. That is the validator's business and not a
-      // reading's, so it is skipped rather than counted against (T).
+      // A validator that throws is the validator's business, not a reading's.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -165,14 +137,13 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
   return { threw, narrower, stated, undecided, refused, verdicts }
 }
 
-/** What a term states, as the names the coverage law is written in. */
+/** What a term states, in the names the coverage law is written in. */
 function state(
   term: Described,
   definitions: ReadonlyMap<string, Described>,
   into: Set<string>,
   depth: number
 ): void {
-  // A cycle is written as a reference, so a bound stops the walk rather than the value.
   if (depth > 8) {
     return
   }
@@ -183,8 +154,7 @@ function state(
   switch (term.kind) {
     case 'typed': {
       into.add(`typed/${term.name}`)
-      // The children of a structure sit in the same bag as its assertions, and the walk names them
-      // where it descends: an object by its properties and its rest, a list by its items.
+      // A structure's children sit in the same bag, and the walk names them where it descends.
       const structural = new Set(['properties', 'rest', 'items'])
       for (const key of Object.keys(term.assertions)) {
         if (!structural.has(key)) {
@@ -265,7 +235,6 @@ function state(
   }
 }
 
-/** A term named by its case, which is what a finding needs to be found again. */
 function shape(term: Described): string {
   return term.kind === 'typed' ? `${term.kind}/${term.name}` : term.kind
 }
@@ -290,7 +259,6 @@ describe('(N) a term is never narrower than the schema it was read from', () => 
     it(`takes every value ${what} takes, over ${RUN.rounds} schemas from seed ${RUN.seed}`, () => {
       expect(surveyed.narrower).toEqual([])
 
-      // A run of nothing but skips reports the law held. The count is what says it was asked.
       expect(surveyed.verdicts).toBeGreaterThan(RUN.rounds)
     })
   }
@@ -309,8 +277,7 @@ describe('(C) the run states every case of the term', () => {
   })
 
   it('names every case the term can carry, so a case added to the term is a failure here', () => {
-    // The walk writes a name for every case it descends through. A case added to `Described` and not
-    // to `STATED` would be stated by the run and never asked about.
+    // A case added to `Described` and not to `STATED` would be stated and never asked about.
     const stated = new Set<string>()
     for (const [, surveyed] of surveys) {
       for (const name of surveyed.stated) {

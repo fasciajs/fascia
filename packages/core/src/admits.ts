@@ -6,18 +6,8 @@ import { FasciaError, isError } from './result.js'
 /**
  * Whether a term admits a value, asked of the term rather than of a validator.
  *
- * **Why this exists.** Every check in this repository that asks whether a document is *true* asks a
- * validator and a reader of the document, and one number carries two questions: the frontend may
- * have misread the schema, and the target may have miswritten the term. A finding names neither.
- * This is the term's own answer, so the two questions separate: a validator against this measures
- * the frontend, and this against a document measures the target.
- *
- * The second measurement is the only verdict available to a target nothing reads back.
- *
- * **This is not a validator.** It decides what the term states, and it says so where the term states
- * something it does not decide. A `format` is the one such thing: deciding an email means writing
- * the validator this library refuses to be. A default of `true` there would report a target as
- * narrow for enforcing what the term asked for.
+ * A validator against this measures the frontend, and this against a document measures the target.
+ * It is not a validator: a `format` gets no verdict, because deciding one means writing one.
  */
 
 /** Whether a term admits a value, or the reason there is no answer. */
@@ -30,14 +20,7 @@ export class UndecidedAdmission extends FasciaError<{ at: readonly string[] }> {
   }
 }
 
-/**
- * Where the walk is, and which names it reached with no value consumed.
- *
- * `seen` is emptied on the way into a child value and carried across a combination and a reference,
- * which is the whole of the cycle rule: a schema that holds itself under a key is a description of a
- * nested value and terminates on one, and a union that names itself with nothing between describes
- * no value at all.
- */
+/** `seen` empties on the way into a child value, so only a cycle consuming none is refused. */
 interface Walk {
   readonly definitions: ReadonlyMap<string, Described>
   readonly at: readonly string[]
@@ -63,8 +46,6 @@ export function admits(description: Description, value: unknown): Admission {
 }
 
 function decide(term: Described, value: unknown, walk: Walk): Admission {
-  // Every case carries this, so it is asked once here rather than in each case that could carry a
-  // null. A case may admit null on its own account, so a false answer here decides nothing.
   if (value === null && term.admitsNull) {
     return true
   }
@@ -105,7 +86,7 @@ function decideTyped(
         return false
       }
       const assertions = term.assertions
-      // Code points rather than code units, which is what every reader of a document counts.
+      // Code points, which is what a reader of a document counts.
       const length = [...value].length
       if (assertions.minLength !== undefined && length < assertions.minLength) {
         return false
@@ -127,7 +108,7 @@ function decideTyped(
           return false
         }
       }
-      // Last, so a value the term already refuses is refused rather than left undecided.
+      // Last, so a value the term already refuses is refused rather than undecided.
       if (assertions.format !== undefined) {
         return new UndecidedAdmission(
           walk.at,
@@ -158,8 +139,7 @@ function decideTyped(
       ) {
         return false
       }
-      // The division, which is how every reader of a document states the same question. A binary
-      // float divides exactly where the reader says it does, so the two agree or both are wrong.
+      // The division, which is how a reader of a document states it.
       if (assertions.multipleOf !== undefined && !Number.isInteger(value / assertions.multipleOf)) {
         return false
       }
@@ -221,14 +201,7 @@ function decideTyped(
   }
 }
 
-/**
- * A set, asked of the value a document carries.
- *
- * A set arrives as a list, because no wire form here has another shape for one. What the term states
- * about the value is that no item is held twice; that a position is not part of the value is not
- * something a value can be asked. So the answer is the same one a list of items that do not repeat
- * would give, and the difference between the two lives in what a parse gives back.
- */
+/** A set arrives as a list. That a position is not part of the value is not a value's to answer. */
 function decideSet(term: DescribedOf<'set'>, value: unknown, walk: Walk): Admission {
   if (!isList(value)) {
     return false
@@ -261,9 +234,6 @@ function decideTuple(
   if (!isList(value)) {
     return false
   }
-  // The term says how many of the positions must be present, so a shorter value is refused rather
-  // than admitted. It stated the positions and not the length until `minPositions`, and a document
-  // written from one accepted the empty list where the schema turned it away.
   if (value.length < minPositions) {
     return false
   }
@@ -319,12 +289,7 @@ function decideRef(name: string, value: unknown, walk: Walk): Admission {
   })
 }
 
-/**
- * Any of these.
- *
- * A member with no verdict is reported only where no member admits the value. A member that admits
- * it answers the question whatever the undecided one would have said.
- */
+/** A member that admits the value answers the question, whatever an undecided one would say. */
 function anyOf(members: readonly Described[], value: unknown, walk: Walk): Admission {
   const answers = members.map((member, index) => decide(member, value, beside(walk, String(index))))
   if (answers.includes(true)) {
@@ -378,12 +343,7 @@ function distinct(items: readonly unknown[]): boolean {
   return items.every((item, index) => items.findIndex((other) => same(item, other)) === index)
 }
 
-/**
- * Whether two values are the same value.
- *
- * Structural, because `unique` is a statement about the values and two objects written the same way
- * are one value to whoever reads the document. Key order is not part of the value.
- */
+/** Structural, and key order is not part of the value. */
 function same(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) {
     return true
@@ -401,12 +361,12 @@ function same(left: unknown, right: unknown): boolean {
   return false
 }
 
-/** A value with keys, and not a list. Unknown data, parsed here and read as a record after. */
+/** Unknown data, parsed here so nothing downstream reads an `any`. */
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** A list. Unknown data, parsed here so nothing downstream reads an `any`. */
+/** Unknown data, parsed here so nothing downstream reads an `any`. */
 function isList(value: unknown): value is readonly unknown[] {
   return Array.isArray(value)
 }

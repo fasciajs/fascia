@@ -23,15 +23,10 @@ import { describe, expect, it } from 'vitest'
 import { fromV30 } from './lib/reverse.js'
 
 /**
- * **A departure names every value the document and the schema disagree about.**
+ * A departure names every value the document and the schema disagree about.
  *
- * Two spellings compose here, and both give things up: 2020-12 is written first and 3.0 is written
- * from it. So the list a caller reads is the two lists together, and a loss either one made without
- * saying so is a client turned away by a document nobody was warned about. `refusing` lets a caller
- * stop a build on a `wider` departure, and this is what says that promise is kept across both.
- *
- * The reference is the validator, and the document is the 2020-12 recovered from 3.0, because Ajv
- * has no word for `nullable`. The spec beside this one holds that recovery to what 2020-12 wrote.
+ * Two spellings compose here, so the list a caller reads is both. The document is the 2020-12
+ * recovered from 3.0, because Ajv has no word for `nullable`.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -43,8 +38,7 @@ interface Surveyed {
 }
 
 function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
-  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
-  // agreement.
+  // Or a `format` keyword is ignored and a measurement of nothing looks like agreement.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
   const next = numbers(RUN.seed)
@@ -74,13 +68,11 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
     }
 
     const written = JSON.stringify(v30.written)
-    // Both spellings, because a caller reads one list and the pipeline is what gave things up.
     const departures = [...spelled.departures, ...v30.departures]
     const saysWider = departures.some((one) => one.direction === 'wider')
     const saysNarrower = departures.some((one) => one.direction === 'narrower')
 
     for (const value of [...VALUES, ...valuesNear(described.term, described.definitions)]) {
-      // A validator that throws states no verdict, so there is nothing to check a claim against.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -125,7 +117,6 @@ describe('a departure names every value the document and the schema disagree abo
     it(`names every widening over ${RUN.rounds} schemas from ${what}`, () => {
       expect(surveyed.quietlyWider).toEqual([])
 
-      // A target that gave up nothing would report the law held over no disagreement at all.
       expect(surveyed.named).toBeGreaterThan(0)
     })
 

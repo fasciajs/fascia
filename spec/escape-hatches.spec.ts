@@ -2,29 +2,13 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * **The escape hatches, counted over the whole tree rather than over a list.**
+ * Every cast, permissive type, suppression and non-null assertion under `packages` and `internal`.
  *
- * A cast, a non-null assertion and a suppression each tell the compiler to stop asking. One at the
- * boundary is sanctioned and the reason is written beside it; the type checker cannot tell that one
- * from a cast that hides a defect, and neither can a review that reads the files it thought to open.
- *
- * **A guard that names what it guards is silent about the rest.** So this walks the tree and holds
- * every file it finds, rather than holding a list somebody maintains. A package added tomorrow is
- * guarded on the day it is added, and the second block below is what says so: a directory under
- * `packages/` or `internal/` that this walk never reached is a failure here, not a gap nobody sees.
- *
- * The counts are held per file and fail on a rise. They are not a budget to spend. A number that
- * falls is a hatch closed, and lowering the number written here is how the fall is kept.
+ * The walk finds the files rather than naming them, so a package added tomorrow is held on the day
+ * it is added. The counts fail on a rise; a fall is written down here.
  */
 
-/**
- * A path under the repository, written with `/` on every platform.
- *
- * `node:path` joins with the separator the host uses, and the counts below are keyed by the path, so
- * a census taken on Windows matched none of them and reported every file as a hatch closed. Node
- * reads a path spelled this way on Windows too, and a key that reads the same everywhere is what a
- * recorded number needs.
- */
+/** A key rather than a handle: `node:path` joins with the host separator and Windows read none. */
 function at(...parts: readonly string[]): string {
   return parts.join('/')
 }
@@ -32,14 +16,7 @@ function at(...parts: readonly string[]): string {
 /** Where the source lives. A spec is not held: a cast in a test states what the test is about. */
 const ROOTS = ['packages', 'internal'] as const
 
-/**
- * What each file may still hold, and nothing more. A rise fails; a fall is written down here.
- *
- * Every one of these sits in a frontend, a target, or a grammar. `packages/core/src` holds none, and
- * that is the shape the rule asks for: a cast belongs where a third-party type is read, and the
- * waist reads nobody's types. The reason for each one is not held here. The count is what a guard
- * can check; whether the reason beside a cast is a good one is a reader's question.
- */
+/** Every one sits in a frontend, a target or a grammar. `packages/core/src` holds none. */
 const SANCTIONED: ReadonlyMap<string, number> = new Map([
   ['internal/grammar/src/arktype.ts', 2],
   ['internal/grammar/src/valibot.ts', 5],
@@ -60,13 +37,7 @@ interface Hatch {
   readonly said: string
 }
 
-/**
- * The text with every comment and every literal removed.
- *
- * A cast is a token and prose is not. `read as a kind` in a sentence and `'a' as const` in a string
- * are both text that names nothing, and counting them would make the census a measure of how much
- * this codebase explains itself.
- */
+/** Comments and literals removed, because a cast is a token and `read as a kind` is prose. */
 function code(text: string): string {
   let out = ''
   let index = 0
@@ -103,12 +74,12 @@ function code(text: string): string {
 function hatchesIn(at: string, text: string): readonly Hatch[] {
   const found: Hatch[] = []
 
-  // Read before the comments go, because a suppression is a comment.
+  // Before the comments go, because a suppression is one.
   for (const suppression of text.match(/@ts-(expect-error|ignore|nocheck)/g) ?? []) {
     found.push({ at, said: `a suppression: ${suppression}` })
   }
 
-  // An import and a re-export both spell a rename with `as`, and a rename is not a cast.
+  // An import and a re-export spell a rename with `as`, and a rename is not a cast.
   const written = code(text).replace(/\b(?:import|export)\b[\s\S]*?\bfrom\s*(?=\s|$)/g, ' ')
 
   for (const cast of written.match(/\bas\s+(?!const\b)[A-Za-z_$][\w$]*/g) ?? []) {
@@ -206,9 +177,7 @@ describe('the escape hatches are held to what was sanctioned', () => {
 
 describe('the guard reaches the whole tree', () => {
   it('finds the source of every package, so a package laid out differently is not passed over', () => {
-    // The walk asks the filesystem rather than a list, and the one thing it assumes is where the
-    // source sits. A package that keeps its source elsewhere would be held to nothing, and the
-    // guard would report a clean tree it never read.
+    // The walk assumes where the source sits, and a package keeping it elsewhere would be unheld.
     const named = ROOTS.flatMap((root) =>
       readdirSync(root, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())

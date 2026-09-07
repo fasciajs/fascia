@@ -308,11 +308,7 @@ function tuple(schema: Known, rest: Rest<ValibotSchema>): Node<ValibotSchema> {
 /**
  * How many positions of a tuple valibot demands.
  *
- * valibot holds a tuple per position rather than to a length, so a position that takes an absent
- * value is one the tuple does not demand: `v.tuple([v.unknown()])` takes the empty list.
- *
- * The count reaches a document as `minItems`, and one too large turns away a value the schema takes.
- * One too small only widens, which is the direction a caller recovers from.
+ * Held per position rather than to a length, so `v.tuple([v.unknown()])` takes the empty list.
  */
 function demanded(positions: readonly ValibotSchema[]): number {
   let least = 0

@@ -21,15 +21,10 @@ import { describe, expect, it } from 'vitest'
 import { asJsonSchema } from './lib/measure.js'
 
 /**
- * **A departure names every value the document and the schema disagree about.**
+ * A departure names every value the document and the schema disagree about.
  *
- * ATD gives up more than any target here, and the run beside this one prints how often. A count that
- * moves is a thing to look at; a loss that reached no list at all is a client turned away by a
- * document nobody was warned about. `refusing` lets a caller stop a build on a `wider` departure,
- * and this is what says that promise is kept.
- *
- * The reference is the validator, because a departure states what the document does against the
- * schema, and a target never sees the schema.
+ * ATD gives up more than any target here. `refusing` lets a caller stop a build on a `wider`
+ * departure, and this is what says that promise is kept.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -41,8 +36,7 @@ interface Surveyed {
 }
 
 function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
-  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
-  // agreement. Ajv says so out loud: it prints `unknown format "uuid" ignored` and answers true.
+  // Or Ajv prints `unknown format "uuid" ignored` and answers true.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
   const next = numbers(RUN.seed)
@@ -75,7 +69,6 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
     const saysNarrower = spelled.departures.some((one) => one.direction === 'narrower')
 
     for (const value of [...VALUES, ...valuesNear(described.term, described.definitions)]) {
-      // A validator that throws states no verdict, so there is nothing to check a claim against.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -120,7 +113,6 @@ describe('a departure names every value the document and the schema disagree abo
     it(`names every widening over ${RUN.rounds} schemas from ${what}`, () => {
       expect(surveyed.quietlyWider).toEqual([])
 
-      // A target that gave up nothing would report the law held over no disagreement at all.
       expect(surveyed.named).toBeGreaterThan(0)
     })
 

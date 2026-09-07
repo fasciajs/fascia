@@ -94,16 +94,8 @@ interface DescribedCases {
   /**
    * Values where a position is not part of the value, and no value is held twice.
    *
-   * **The one case here that states a quotient rather than a predicate.** A list of items that do
-   * not repeat is still a list: it has a first item, and two lists holding the same items in another
-   * order are two values. A set is what is left when the position is forgotten, and forgetting it is
-   * not something a predicate on a list can say.
-   *
-   * A case rather than a flag beside `array`, for the reason every case here is a case: a target has
-   * to answer, and a flag lets a target write a list and say nothing. DynamoDB holds three sets and
-   * writes this exactly. Every JSON target writes an array of items that do not repeat, which
-   * accepts the same documents and gives back a value with an order the term never stated, and each
-   * says so.
+   * A case rather than a flag on a list, because a list of items that do not repeat still carries an
+   * order. A case is also what makes every target answer.
    */
   readonly set: {
     readonly items: Described
@@ -135,10 +127,8 @@ interface DescribedCases {
   /**
    * Values at positions, which is a different thing from a list of one type.
    *
-   * `minPositions` is how many of them must be present. Without it a term states the positions and
-   * not the length, and a document written from one accepts a shorter value than the schema does.
-   * A count rather than a flag on each position: an optional position is a trailing one in every
-   * validator here, and a flag would admit a required position after an optional one.
+   * `minPositions` is how many must be present. A count rather than a flag per position, because a
+   * flag would admit a required position after an optional one and no validator writes that.
    */
   readonly tuple: {
     readonly positions: readonly Described[]

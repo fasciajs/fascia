@@ -20,31 +20,17 @@ import { zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 
 /**
- * **The first verdict this target has ever been given.**
+ * A value the schema takes marshals to an attribute this description admits.
  *
- * Every other target here is measured against a reader: a document is handed to Ajv or to arri and
- * asked about a value. Nothing reads this format, and the README says so: a green check said the
- * shape was well formed and never that it was true.
- *
- * The AWS SDK is the reader. `convertToAttr` is what turns a value into the attribute a table
- * holds, so the claim this target makes can be stated in one sentence and checked:
- *
- *     a value the schema takes marshals to an attribute this document admits.
- *
- * One-directional, as every check of this shape here is. A value the schema turns away says nothing:
- * the document may admit its attribute and that is a widening, which this target does on purpose
- * wherever DynamoDB has no word for an assertion. The direction asserted is the one that breaks a
- * client, where a row a caller may legitimately write is one the description refuses.
- *
- * The marshaller is the boundary. What it returns is parsed here into a member and what the member
- * carries, and nothing downstream reads the SDK's own types.
+ * One-directional: a value the schema turns away says nothing, because this target widens on purpose
+ * wherever DynamoDB has no word for an assertion.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
 
 const NAMES: readonly AttributeName[] = ['S', 'N', 'B', 'SS', 'NS', 'BS', 'M', 'L', 'BOOL', 'NULL']
 
-/** One attribute, parsed at the boundary: a value is exactly one member. */
+/** A value is exactly one member. */
 function memberOf(attribute: unknown): { name: AttributeName; carries: unknown } | undefined {
   if (typeof attribute !== 'object' || attribute === null) {
     return undefined
@@ -147,7 +133,6 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
       continue
     }
 
-    // A term this target cannot write soundly is a refusal it states, and not a finding.
     const spelled = spellDynamo(described.term)
     if (isError(spelled)) {
       continue
@@ -155,7 +140,6 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
     written += 1
 
     for (const value of [...VALUES, ...valuesNear(described.term, described.definitions)]) {
-      // A validator that throws states no verdict, so there is no row to marshal.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -166,8 +150,7 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
         continue
       }
 
-      // The marshaller refuses a value a table cannot hold, which is DynamoDB's answer rather
-      // than this target's.
+      // A value a table cannot hold is DynamoDB's answer rather than this target's.
       let attribute: unknown
       try {
         attribute = convertToAttr(value)
@@ -199,8 +182,6 @@ describe('a value the schema takes marshals to an attribute this description adm
     it(`holds over ${RUN.rounds} schemas from ${what} at seed ${RUN.seed}`, () => {
       expect(surveyed.refused).toEqual([])
 
-      // A run that wrote nothing, or that marshalled nothing, would report the law held over no row
-      // at all. This target refuses a term it cannot write, so both counts are worth stating.
       expect(surveyed.written).toBeGreaterThan(RUN.rounds / 2)
       expect(surveyed.asked).toBeGreaterThan(RUN.rounds)
     })

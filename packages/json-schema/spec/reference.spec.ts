@@ -21,36 +21,12 @@ import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
 /**
- * **The same schema, written by somebody else.**
+ * The same schema, written by somebody else.
  *
- * Every other check here asks a validator whether a value is admitted, and a validator answers about
- * values. This asks a second implementation what the document should *be*: arktype writes 2020-12
- * from its own schemas through `toJsonSchema`, which is the pair of steps this library performs with
- * a frontend and a target, done by the library that owns the schema.
- *
- * So the reference is stronger than a validator in the way that matters. Ajv can only find a
- * disagreement a value in the pool reaches. A second writer disagrees about a keyword whether or not
- * any value shows it, and the value that separates the two documents names the keyword.
- *
- * **The two documents are compared by what they accept, not by their shape.** Two correct writers
- * disagree about shape all the time: `enum` against `const`, a type list against `anyOf`. What they
- * may not disagree about is which values pass.
- *
- * **Each document is read by a reader that knows its own dialect.** effect writes draft-07 and the
- * other two write 2020-12, and a tuple is spelled differently in the two. Handing a draft-07
- * document to a 2020-12 reader would measure the dialect rather than the writer.
- *
- * A disagreement is attributed by asking the validator itself. Whichever document differs from the
- * validator is the wrong one, and this is not a check that assumes the reference is right.
- *
- * It found one. arktype wrote `minItems` for a tuple and this library wrote none, so a document from
- * here accepted the empty list against a tuple of one position, 58 times over 300 schemas. 2020-12
- * had the keyword and the term had thrown away how many positions must be present.
- *
- * The same run against zod's writer finds the divergence the other way, which is why the second
- * assertion is a count rather than an emptiness: `z.toJSONSchema` writes `prefixItems` for a tuple
- * with neither `minItems` nor `items`, so its document takes the empty list and a longer one, and
- * zod itself refuses both.
+ * arktype, zod and effect each write JSON Schema from their own schemas, which is the pair of steps
+ * this library performs with a frontend and a target. Compared by what the two documents accept,
+ * because two correct writers disagree about shape. Whichever document differs from the validator is
+ * the wrong one, so a finding against the reference is reported as the reference's.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -66,11 +42,9 @@ function survey<S>(
   source: Source<S>,
   grammar: Grammar<S>,
   writes: (schema: S) => unknown,
-  /** The reference's own dialect. What this library writes is 2020-12 whoever it was read from. */
+  /** effect writes draft-07 and the other two write 2020-12. */
   dialect: '2020-12' | 'draft-07' = '2020-12'
 ): Surveyed {
-  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
-  // agreement.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
   const reader =
@@ -99,7 +73,6 @@ function survey<S>(
     let asWritten: ReturnType<typeof ajv.compile>
     let asReference: ReturnType<typeof ajv.compile>
     try {
-      // A construct the reference declines to write is the reference saying so, not a finding here.
       asReference = reader.compile(writes(subject.schema) as object)
     } catch {
       continue
@@ -121,8 +94,6 @@ function survey<S>(
         continue
       }
 
-      // The validator settles which of the two documents is wrong. One that throws states no
-      // verdict, and a disagreement nobody can attribute is not a finding either way.
       let bySchema: boolean
       try {
         bySchema = subject.accepts(value)
@@ -149,19 +120,9 @@ function survey<S>(
 /**
  * Each reference, and how often its own document differs from its own verdict at this seed.
  *
- * A closure per case, because the schema type differs and one list cannot hold both. The number is
- * not a budget and not a failure of this library: it moves when the reference changes, and noticing
- * that is the one thing a run against a reference has to do.
- *
- * zod's is 61. `z.toJSONSchema` writes `prefixItems` for a tuple with neither `minItems` nor
- * `items`, so its document takes the empty list and a longer one where zod itself refuses both.
- * This library wrote the same document until a run against arktype found it, which is what a second
- * reference is for: two of them disagree about different things.
- *
- * effect's is its own shape again. `JSONSchema.make` writes `additionalProperties: false` for a
- * struct, and effect takes a value carrying a key the struct does not name: it strips the key rather
- * than refusing the value. So its document turns away what the schema admits, which is the direction
- * that breaks a client.
+ * zod's 61 are one tuple written with neither `minItems` nor `items`. effect's 58 are one struct
+ * written `additionalProperties: false`, which effect itself strips rather than refuses. The number
+ * moves when the reference changes, which is what a run against one has to notice.
  */
 const surveys = [
   [
@@ -184,8 +145,7 @@ const surveys = [
     survey(
       effectSource,
       effectGrammar,
-      // effect writes from a schema and the grammar hands the AST, which is what a reading is given.
-      // `Schema.make` wraps it back up, and it is the only place here that has to.
+      // The grammar hands the AST, and effect writes from a schema.
       (ast: Parameters<typeof effectSource.read>[0]) => JSONSchema.make(Schema.make(ast)),
       'draft-07'
     )
@@ -197,7 +157,6 @@ describe('a document written here accepts what the validator own document accept
     it(`agrees with ${what} over ${RUN.rounds} schemas from seed ${RUN.seed} at depth ${RUN.depth}`, () => {
       expect(surveyed.ours).toEqual([])
 
-      // A run that compiled nothing would report perfect agreement over no document at all.
       expect(surveyed.compared).toBeGreaterThan(RUN.rounds / 2)
       expect(surveyed.agreed).toBeGreaterThan(RUN.rounds)
     })

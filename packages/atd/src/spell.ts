@@ -264,14 +264,7 @@ function array(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling
   return { written: nullable({ elements: items.written }, term.admitsNull), departures }
 }
 
-/**
- * A set, written as the elements form.
- *
- * ATD has one form for several values of one type and it is a list. So both halves of a set are
- * given up here, and they are given up in two directions. That no value is held twice is a
- * restriction the document drops, so the document accepts lists the schema refuses. That a position
- * is not part of the value is not a restriction at all, so nothing about acceptance changed.
- */
+/** A set, written as a list. Both halves are given up, and in two directions. */
 function set(term: DescribedOf<'set'>): Spelling<AtdSchema> {
   const items = spellAtd(term.items)
   if (isError(items)) {

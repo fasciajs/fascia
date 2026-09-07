@@ -44,15 +44,8 @@ export function spellDynamo(term: Described): Spelling<AttributeShape> {
 /**
  * What a caller said about the schema, which reaches no attribute.
  *
- * An AttributeValue names a type and carries a value, and it holds no room for a word about either.
- * 2020-12 writes all four of these and ATD writes two, so this is the one target that loses every
- * one of them.
- *
- * Reported rather than dropped in silence, and in neither direction. What a caller wrote about a
- * schema changes nothing about the values a table takes, so nobody's row is turned away by the loss.
- * It was silent until a run asked what each target does with a title: this wrote `{ S: {} }` and
- * reported nothing, and no check here could have seen it, because every one of them measures which
- * values a description admits.
+ * In neither direction: what a caller wrote turns no row away. Reported all the same, because no
+ * other check here can see it. Every one of them measures which values a description admits.
  */
 function annotated(meta: Meta): readonly Departure[] {
   const stated = (['title', 'description', 'examples', 'deprecated'] as const).filter(
@@ -166,12 +159,8 @@ function list(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling<
 /**
  * A set, which is the one thing this target says that both of the others refuse.
  *
- * A set is not a value JSON carries and DynamoDB has three of them, so this is the only target here
- * that writes what the term states rather than the nearest thing with an order. It is exact where
- * the values are strings or numbers, which is what DynamoDB holds a set of.
- *
- * Anywhere else it is `L`, and a list has an order the term did not state. That widens nothing and
- * changes what a reader gives back, so the departure says `neither` and names the reason.
+ * Exact where the values are strings or numbers. Anywhere else it is `L`, which adds an order the
+ * term did not state: that widens nothing and changes what a reader gives back.
  */
 function set(term: DescribedOf<'set'>): Spelling<AttributeShape> {
   const items = spellDynamo(term.items)
@@ -203,13 +192,7 @@ function set(term: DescribedOf<'set'>): Spelling<AttributeShape> {
   }
 }
 
-/**
- * Which set holds these values, where DynamoDB holds them at all.
- *
- * A set holds one type and nothing else, so a member that admits null or that is not a plain string
- * or number has no set. There is no widening here to choose from: `SS` holds strings, and a set of
- * anything else is a list.
- */
+/** A set holds one type, so a member admitting null or anything else has none. */
 function setMemberOf(items: Described): AttributeName | undefined {
   if (items.kind !== 'typed' || items.admitsNull) {
     return undefined
@@ -336,9 +319,6 @@ function memberOf(value: AdmittedValue): AttributeName {
  * at which position, so a list of the wrong things in the wrong order is admitted.
  */
 function tuple(term: DescribedOf<'tuple'>): Spelling<AttributeShape> {
-  // Every shape the list can hold, which is what stands at a position and what stands past the last
-  // of them. The rest was left out, and a tuple stating one described a list of its positions alone:
-  // `[string, ...number]` said `S` and refused a row holding a number, which the schema admits.
   const held: Described[] = [...term.positions]
   if (term.rest.allows === 'term') {
     held.push(term.rest.term)
@@ -346,8 +326,6 @@ function tuple(term: DescribedOf<'tuple'>): Spelling<AttributeShape> {
 
   const [first, ...others] = held
 
-  // A list whose items are anything is stated by a tuple that admits anything past its positions,
-  // and by a tuple of no positions at all: what a list holds is not asked of one that holds nothing.
   const positions =
     first === undefined || term.rest.allows === 'anything'
       ? faithful(anyAttribute)
@@ -415,17 +393,10 @@ function anyOf(members: readonly [Described, ...Described[]]): Spelling<Attribut
 }
 
 /**
- * The members either of two shapes admits, joined so that a row of either is admitted.
+ * The members either of two shapes admits, joined so a row of either is admitted.
  *
- * A spread is what this was, and a spread is not a join: two members landing on `M` kept the second
- * and dropped the first, so a description of a disjunction refused a row that one of its own members
- * admits. That is the direction that breaks a client, and the departure beside it called the loss a
- * widening while the code narrowed.
- *
- * Joining widens instead, which is what the departure says. A name required in both stays required
- * and every other name may be absent, so the joined shape admits a row taking part of one member and
- * part of another. DynamoDB has no form for a disjunction, and a shape that admits too much is the
- * recoverable half of that.
+ * A spread was not a join: two members landing on `M` kept the second and refused a row matching the
+ * first. Joining widens instead, which is the direction the departure beside it claims.
  */
 function widest(left: AttributeShape, right: AttributeShape): AttributeShape {
   const both = { ...left, ...right }

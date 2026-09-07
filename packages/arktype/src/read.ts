@@ -275,8 +275,7 @@ function structured(
   const sequence = structure.sequence
 
   if (sequence !== undefined) {
-    // arktype states the two apart on the sequence, so nothing has to be lifted: what trails the
-    // prefix may be absent, and how many must be present is the length of the prefix.
+    // arktype keeps the two apart on the sequence, so nothing has to be lifted.
     const required: readonly BaseRoot[] = sequence.prefix ?? []
     const optional: readonly BaseRoot[] = sequence.optionals ?? []
     const positions: readonly BaseRoot[] = [...required, ...optional]

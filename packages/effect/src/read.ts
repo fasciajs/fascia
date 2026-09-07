@@ -316,7 +316,7 @@ function withoutUndefined(ast: SchemaAST.AST): SchemaAST.AST {
 function tupleType(ast: SchemaAST.TupleType, refined: Refined): Node<SchemaAST.AST> {
   const positions = ast.elements.map((element) => element.type)
   const [rest] = ast.rest
-  // effect states it on the element, which is the edge, so nothing has to be lifted.
+  // effect states it on the element, so nothing has to be lifted.
   const minPositions = ast.elements.filter((element) => !element.isOptional).length
 
   if (positions.length > 0) {
