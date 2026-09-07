@@ -4,6 +4,67 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.4.0
+
+### Added
+
+**Every target now has a reader, and the term can answer for itself.**
+
+`admits(description, value)` in `@fasciajs/core` says whether a term takes a value, or reports that
+it does not decide. A `format` is the one thing it will not decide, because deciding an email means
+writing the validator this library refuses to be. Until now nothing could ask a term anything: every
+check asked a validator and a document, and one number carried two questions.
+
+`@fasciajs/dynamodb` is measured against the AWS SDK marshaller. `convertToAttr` turns a value into
+the attribute a table holds, so the claim this target makes is one sentence: a value the schema takes
+marshals to an attribute this description admits. That was untested and the README said so.
+
+The 2020-12 target is also measured against arktype, zod and effect writing 2020-12 from their own
+schemas. That asks what a document should be rather than whether a value passes, and it found the
+tuple defect below. This library differs from none of the three.
+
+### Changed
+
+**A set is a case of the term.** It was a list carrying `unique`, which is a predicate: no item is
+held twice. A set is a quotient, because a position is not part of the value, and `@fasciajs/dynamodb`
+performed that quotient while the term stated only the predicate. `unique` is gone from a list and
+`set` is a case beside `array`, so a multiset cannot be written and every target says what it does
+with one: DynamoDB writes `SS` or `NS` exactly, 2020-12 writes `uniqueItems` and reports the order it
+adds, ATD gives up both halves in two directions.
+
+**A tuple states how many positions must be present.** `minPositions` is on the node and on the term,
+and every frontend states it the way each already lifts a key's optionality onto the edge. A count
+rather than a flag on each position, because every validator here makes an optional position a
+trailing one.
+
+A frontend that reads a validator's own set refuses it for a new reason. A parse of a list gives back
+a Set, so a schema states a conversion rather than one value, and the term now has a set that nothing
+here produces.
+
+### Fixed
+
+**2020-12 wrote a tuple without `minItems`, so a document took the empty list against a tuple of one
+position.** `prefixItems` states what stands at each position and nothing about how many are there.
+The term threw the count away before the target saw it, and the departure that reported the loss
+named the target rather than the reading. The target now reports no widening at all, for any
+frontend.
+
+**`@fasciajs/effect` dropped the whole-number assertion.** `Schema.Int` annotates `{ type: 'integer' }`
+and states nothing else, and the reader dropped a key it could not turn back into something. It could
+turn that one back. A document took `1.5` where effect refused it, and no departure recorded the
+widening, because the loss happened in the reading.
+
+**`@fasciajs/dynamodb` described a disjunction as its last member alone.** Two members landing on `M`
+were merged with a spread, so a description of a discriminated union refused a row matching its first
+option. The members are joined now, and the departure beside it said `wider` while the code narrowed.
+
+**`@fasciajs/dynamodb` ignored what stands past a tuple's positions**, so `[string, ...number]` said
+`S` and turned away a row holding a number.
+
+**`@fasciajs/dynamodb` lost what a caller said about a schema without reporting it.** A title, a
+description, examples and a deprecation reached no attribute and no departure. The loss is in neither
+direction and it is named now.
+
 ## 0.3.0
 
 ### Added
