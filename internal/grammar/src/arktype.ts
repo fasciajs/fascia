@@ -1,5 +1,5 @@
 import type { BaseRoot } from '@ark/schema'
-import { type } from 'arktype'
+import { scope, type } from 'arktype'
 import { pick, type Subject } from './draw.js'
 
 /**
@@ -23,11 +23,22 @@ import { pick, type Subject } from './draw.js'
  * - An object stated by an index signature alone. arktype's `object` domain admits an array, and a
  *   document's does not, so every such document refuses a value arktype takes. The spec beside this
  *   file states the divergence rather than leaving it to a comment here.
- * - A scope, which names a schema and is what a recursive type needs. The value pool holds no value
- *   nested more than two deep, so a recursive schema and its first unrolling accept the same values.
  */
+/**
+ * A schema that holds itself, which arktype names with a scope.
+ *
+ * Drawn whole rather than through `schemaOf`, and never as a member of something else. arktype names
+ * the alias rather than the schema and carries the scope in a type parameter, so a scoped type and a
+ * `type.raw` one meet in no type this file can write. They meet at the cast below, which takes any
+ * shape arktype gives it. Re-parsing to reconcile them inlines the alias and leaves a cycle nothing
+ * names, which is what `type.raw` does to this.
+ */
+const HELD = scope({ Held: { name: 'string', children: 'Held[]' } }).export().Held
+
 export function arkGrammar(next: () => number, depth: number): Subject<BaseRoot> {
-  const schema = schemaOf(next, depth)
+  // One round in ten, because it is one schema rather than a family and the rest of the grammar
+  // draws thousands.
+  const schema = next() < 0.1 ? HELD : schemaOf(next, depth)
 
   return {
     // One cast, here, because arktype publishes `Type` and keeps its node types private. A `Type`
