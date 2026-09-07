@@ -1,5 +1,4 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -17,6 +16,18 @@ import { describe, expect, it } from 'vitest'
  * The counts are held per file and fail on a rise. They are not a budget to spend. A number that
  * falls is a hatch closed, and lowering the number written here is how the fall is kept.
  */
+
+/**
+ * A path under the repository, written with `/` on every platform.
+ *
+ * `node:path` joins with the separator the host uses, and the counts below are keyed by the path, so
+ * a census taken on Windows matched none of them and reported every file as a hatch closed. Node
+ * reads a path spelled this way on Windows too, and a key that reads the same everywhere is what a
+ * recorded number needs.
+ */
+function at(...parts: readonly string[]): string {
+  return parts.join('/')
+}
 
 /** Where the source lives. A spec is not held: a cast in a test states what the test is about. */
 const ROOTS = ['packages', 'internal'] as const
@@ -113,10 +124,10 @@ function hatchesIn(at: string, text: string): readonly Hatch[] {
   return found
 }
 
-function filesUnder(at: string): readonly string[] {
+function filesUnder(under: string): readonly string[] {
   const found: string[] = []
-  for (const entry of readdirSync(at, { withFileTypes: true })) {
-    const path = join(at, entry.name)
+  for (const entry of readdirSync(under, { withFileTypes: true })) {
+    const path = at(under, entry.name)
     if (entry.isDirectory()) {
       found.push(...filesUnder(path))
     } else if (entry.name.endsWith('.ts')) {
@@ -134,10 +145,10 @@ function sourceDirectories(): readonly { readonly of: string; readonly src: stri
       if (!entry.isDirectory()) {
         continue
       }
-      const src = join(root, entry.name, 'src')
+      const src = at(root, entry.name, 'src')
       try {
         if (statSync(src).isDirectory()) {
-          found.push({ of: join(root, entry.name), src })
+          found.push({ of: at(root, entry.name), src })
         }
       } catch {
         // A package with no `src` ships nothing this guard is about.
@@ -201,7 +212,7 @@ describe('the guard reaches the whole tree', () => {
     const named = ROOTS.flatMap((root) =>
       readdirSync(root, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
-        .map((entry) => join(root, entry.name))
+        .map((entry) => at(root, entry.name))
     )
 
     expect(named.filter((of) => !directories.some((one) => one.of === of))).toEqual([])
