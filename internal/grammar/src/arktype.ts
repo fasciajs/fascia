@@ -1,5 +1,5 @@
 import type { BaseRoot } from '@ark/schema'
-import { type } from 'arktype'
+import { scope, type } from 'arktype'
 import { pick, type Subject } from './draw.js'
 
 /**
@@ -23,8 +23,6 @@ import { pick, type Subject } from './draw.js'
  * - An object stated by an index signature alone. arktype's `object` domain admits an array, and a
  *   document's does not, so every such document refuses a value arktype takes. The spec beside this
  *   file states the divergence rather than leaving it to a comment here.
- * - A scope, which names a schema and is what a recursive type needs. The value pool holds no value
- *   nested more than two deep, so a recursive schema and its first unrolling accept the same values.
  */
 export function arkGrammar(next: () => number, depth: number): Subject<BaseRoot> {
   const schema = schemaOf(next, depth)
@@ -83,8 +81,14 @@ function structure(next: () => number, depth: number): ArkType {
     () => type.raw({ a: inner() }),
     () => type.raw({ a: inner(), 'b?': inner() }),
     () => type.raw([inner()]),
-    () => type.raw([inner(), inner()])
+    () => type.raw([inner(), inner()]),
+    () => recursive()
   ])()
+}
+
+/** A schema that holds itself, which arktype names with a scope. */
+function recursive(): ArkType {
+  return type.raw(scope({ Held: { name: 'string', children: 'Held[]' } }).export().Held)
 }
 
 function combination(next: () => number, depth: number): ArkType {

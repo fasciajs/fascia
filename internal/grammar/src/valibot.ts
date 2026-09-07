@@ -16,8 +16,8 @@ import { pick, type Subject } from './draw.js'
  *   says an array is one. A document has no word for a domain holding both, so every document from
  *   one refuses a value valibot takes. arktype's index signature does the same, and the spec beside
  *   the JSON Schema property states that one.
- * - `v.lazy`, which needs a name and produces a reference. The value pool holds no value nested more
- *   than two deep, so a recursive schema and its first unrolling accept the same values in it.
+ * - `v.lazy`, which holds a schema that holds itself. valibot names nothing, and a name comes from
+ *   the caller rather than from the schema, which the grammar has no way to state.
  */
 export function valibotGrammar(next: () => number, depth: number): Subject<VSchema> {
   const schema = schemaOf(next, depth)

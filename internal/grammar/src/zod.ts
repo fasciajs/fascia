@@ -17,8 +17,6 @@ import { pick, type Subject } from './draw.js'
  * - `.catch()` and `z.coerce.*`, which accept more than any document states. The parser was widened
  *   deliberately and a document narrower than one is the decision rather than a finding, so
  *   including them without reading the report would count a decision as a defect.
- * - `z.lazy()`, which needs a name and produces a reference. The value pool holds no value nested
- *   more than two deep, so a recursive schema and its first unrolling accept the same values in it.
  */
 export function zodGrammar(next: () => number, depth: number): Subject<z.core.$ZodType> {
   const schema = schemaOf(next, depth)
@@ -81,8 +79,22 @@ function structure(next: () => number, depth: number): z.ZodType {
     () => z.record(z.string(), inner()),
     () => z.tuple([inner()]),
     () => z.tuple([inner(), inner()]),
-    () => z.tuple([inner()], z.number())
+    () => z.tuple([inner()], z.number()),
+    () => recursive()
   ])()
+}
+
+/**
+ * A schema that holds itself, which is what a reference is for.
+ *
+ * zod names nothing on its own, so a caller states one. `valuesNear` draws a value that nests
+ * through the reference, which is what tells this apart from its first unrolling.
+ */
+function recursive(): z.ZodType {
+  const held: z.ZodType = z
+    .lazy(() => z.object({ name: z.string(), children: z.array(held) }))
+    .meta({ id: 'Held' })
+  return held
 }
 
 function combination(next: () => number, depth: number): z.ZodType {

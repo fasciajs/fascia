@@ -20,8 +20,6 @@ import { pick, type Subject } from './draw.js'
  *   optional property and the replacement is dropped, so a document from it says what this harness
  *   asks about already: the key may be absent. Drawing one would add a construct and measure nothing.
  *   The reading is what to fix, and the other three frontends draw the construct.
- * - `Schema.suspend`, which names a schema and produces a reference. The value pool holds no value
- *   nested more than two deep, so a recursive schema and its first unrolling accept the same values.
  *
  * `Schema.Int` is present and it is why the check carries definitions: effect names it, so it
  * reaches a document as a reference. Every document holding one compiled as nothing until the check
@@ -88,8 +86,24 @@ function structure(next: () => number, depth: number): EffectSchema {
     () => Schema.Record({ key: Schema.String, value: inner() }),
     () => Schema.Tuple(inner()),
     () => Schema.Tuple(inner(), inner()),
-    () => Schema.Tuple([inner()], Schema.Number)
+    () => Schema.Tuple([inner()], Schema.Number),
+    () => recursive()
   ])()
+}
+
+/** A schema that holds itself, which effect names with an identifier and reaches through `suspend`. */
+interface Held {
+  readonly name: string
+  readonly children: readonly Held[]
+}
+
+const HeldSchema: Schema.Schema<Held> = Schema.Struct({
+  name: Schema.String,
+  children: Schema.Array(Schema.suspend((): Schema.Schema<Held> => HeldSchema))
+}).annotations({ identifier: 'Held' })
+
+function recursive(): EffectSchema {
+  return HeldSchema
 }
 
 function combination(next: () => number, depth: number): EffectSchema {
