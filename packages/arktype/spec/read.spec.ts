@@ -153,6 +153,17 @@ describe('one structure node covers four shapes', () => {
     })
   })
 
+  it('reads a bounded array whose element states nothing', () => {
+    // arktype records a constraint and `unknown` is none, so this carries a proto and a length and
+    // no structure node. It was refused as a shape this package reads nothing from.
+    expect(nodeOf(type('unknown[]').atLeastLength(1))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 1 }
+    })
+  })
+
   it('reads an index signature as a dictionary, keeping the key schema', () => {
     expect(nodeOf(type({ '[string]': 'number' }))).toEqual({
       kind: 'structural',

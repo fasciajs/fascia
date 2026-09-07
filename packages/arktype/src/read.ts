@@ -1,4 +1,5 @@
 import type { BaseRoot, nodeOfKind, RootKind } from '@ark/schema'
+import { intrinsic } from '@ark/schema'
 import type {
   AdmittedValue,
   Bound,
@@ -259,6 +260,24 @@ function intersection(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
 
   if (basis?.hasKind('proto') && basis.builtinName === 'Date') {
     return { kind: 'scalar', name: 'date', assertions: dateAssertions(schema) }
+  }
+
+  // An array whose element states nothing carries no structure node, because arktype records a
+  // constraint and `unknown` is none. So `unknown[] >= 1` states a proto and a length and nothing
+  // else, and it is a list of anything with that length.
+  if (basis?.hasKind('proto') && basis.builtinName === 'Array') {
+    const minItems = schema.inner.minLength?.rule
+    const maxItems = schema.inner.maxLength?.rule ?? schema.inner.exactLength?.rule
+
+    return {
+      kind: 'structural',
+      of: 'list',
+      items: intrinsic.unknown,
+      assertions: {
+        ...(minItems !== undefined && { minItems }),
+        ...(maxItems !== undefined && { maxItems })
+      }
+    }
   }
 
   return new UnreadableSchema(
