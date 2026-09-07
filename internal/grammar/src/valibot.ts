@@ -16,8 +16,6 @@ import { pick, type Subject } from './draw.js'
  *   says an array is one. A document has no word for a domain holding both, so every document from
  *   one refuses a value valibot takes. arktype's index signature does the same, and the spec beside
  *   the JSON Schema property states that one.
- * - `v.lazy`, which holds a schema that holds itself. valibot names nothing, and a name comes from
- *   the caller rather than from the schema, which the grammar has no way to state.
  */
 export function valibotGrammar(next: () => number, depth: number): Subject<VSchema> {
   const schema = schemaOf(next, depth)
@@ -82,8 +80,25 @@ function structure(next: () => number, depth: number): Any {
     () => v.objectWithRest({ a: inner() }, v.number()),
     () => v.tuple([inner()]),
     () => v.tuple([inner(), inner()]),
-    () => v.tupleWithRest([inner()], v.number())
+    () => v.tupleWithRest([inner()], v.number()),
+    () => recursive()
   ])() as Any
+}
+
+/**
+ * A schema that holds itself, named by a `metadata` action.
+ *
+ * valibot states nothing about a schema on its own, and `nameOf` reads an `id` from the metadata a
+ * caller piped on. The name stands on the lazy rather than under it, so the walk meets a named
+ * schema where the schema refers to itself: met at a bare `v.lazy`, it would find no name there and
+ * report a cycle nothing names.
+ */
+function recursive(): Any {
+  const held: Any = v.pipe(
+    v.lazy(() => v.object({ name: v.string(), children: v.array(held) })),
+    v.metadata({ id: 'Held' })
+  )
+  return held
 }
 
 function combination(next: () => number, depth: number): Any {
