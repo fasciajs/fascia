@@ -10,7 +10,10 @@ import { pick, type Subject } from './draw.js'
  * Absent on purpose:
  *
  * - `z.date()` and `z.bigint()`, which this library refuses to describe: JSON has no form for
- *   either, so there is no document to compare a parse against.
+ *   either, so there is no document to compare a parse against. `z.literal(1n)` is drawn, and the
+ *   two are different questions: every reader here has a branch for a bigint among the values a
+ *   term admits, and until it was drawn no run reached one. What a target does with it is the
+ *   answer being measured.
  * - `.catch()` and `z.coerce.*`, which accept more than any document states. The parser was widened
  *   deliberately and a document narrower than one is the decision rather than a finding, so
  *   including them without reading the report would count a decision as a defect.
@@ -37,6 +40,8 @@ function leaf(next: () => number): z.ZodType {
     () => z.string().min(2),
     () => z.string().max(3),
     () => z.string().regex(/^a/),
+    () => z.email(),
+    () => z.uuid(),
     () => z.number(),
     () => z.number().min(1),
     () => z.number().lt(9),
@@ -45,6 +50,7 @@ function leaf(next: () => number): z.ZodType {
     () => z.boolean(),
     () => z.literal('a'),
     () => z.literal(1),
+    () => z.literal(1n),
     () => z.enum(['a', 'abc']),
     () => z.unknown(),
     () => z.null()

@@ -26,6 +26,7 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/spec/**/*.ts",
+    "spec/**/*.ts",
     "internal/*/src/**/*.ts",
     "*.mts"
   ]

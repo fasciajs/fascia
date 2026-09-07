@@ -53,6 +53,40 @@ function metaOf(schema: core.$ZodType): Meta {
   return metaFrom(globalRegistry.get(schema))
 }
 
+/**
+ * How many positions of a tuple zod demands, which it answers two ways.
+ *
+ * A closed tuple is held to a length read off `optin`; one with a rest is held per position, which
+ * asks whether the position takes `undefined`. So `z.tuple([z.unknown()])` refuses the empty list
+ * and `z.tuple([z.unknown()], z.number())` takes it.
+ */
+function demanded(positions: readonly core.$ZodType[], closed: boolean): number {
+  let least = 0
+
+  for (const [index, position] of positions.entries()) {
+    const absent = closed ? position._zod.optin === 'optional' : mayBeAbsent(position)
+    if (!absent) {
+      least = index + 1
+    }
+  }
+
+  return least
+}
+
+/** What zod asks of a position past a tuple's rest. */
+function mayBeAbsent(schema: core.$ZodType): boolean {
+  if (schema._zod.optin === 'optional') {
+    return true
+  }
+
+  const name: string = schema._zod.def.type
+  if (name === 'undefined' || name === 'void' || name === 'any' || name === 'unknown') {
+    return true
+  }
+
+  return isZodType(schema, ['union']) && schema._zod.def.options.some(mayBeAbsent)
+}
+
 function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   // Zod's own type for this field is wider than the set of classes zod exports: it carries `int`,
   // which no exported class is keyed by. So the field is read as zod declares it and matched against
@@ -150,10 +184,13 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
   }
   if (isZodType(schema, ['tuple'])) {
     const rest = schema._zod.def.rest
+    const positions = schema._zod.def.items
     return {
       kind: 'structural',
       of: 'tuple',
-      positions: schema._zod.def.items,
+      positions,
+      // Lifted onto the edge, the way a key's optionality is.
+      minPositions: demanded(positions, rest === null || rest === undefined),
       // A tuple with no rest refuses anything past its positions, which `restOf` cannot say: it
       // reads an absent catchall as an object ignoring an unnamed key, and a tuple has no such
       // reading. Told apart here, because the two structures mean opposite things by the absence.

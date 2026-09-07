@@ -91,6 +91,23 @@ describe('a refinement is a node wrapping a node, so an assertion is a walk', ()
     })
   })
 
+  it('reads a whole number, which effect states as a type and a term states as an assertion', () => {
+    // Dropped, the document takes 1.5 and effect does not, and no departure records the widening.
+    expect(nodeOf(Schema.Int)).toEqual({
+      kind: 'scalar',
+      name: 'number',
+      assertions: { integer: true }
+    })
+  })
+
+  it('keeps a bound stated beside a whole number, where effect writes two annotations', () => {
+    expect(nodeOf(Schema.NonNegativeInt)).toEqual({
+      kind: 'scalar',
+      name: 'number',
+      assertions: { integer: true, minimum: { value: 0, exclusive: false } }
+    })
+  })
+
   it('reads an array bound, where the same annotation vocabulary means a count', () => {
     expect(nodeOf(Schema.Array(Schema.String).pipe(Schema.minItems(2)))).toEqual({
       kind: 'structural',
@@ -186,6 +203,7 @@ describe('one node covers an object and a record', () => {
         expect.objectContaining({ _tag: 'StringKeyword' }),
         expect.objectContaining({ _tag: 'NumberKeyword' })
       ],
+      minPositions: 2,
       rest: { allows: 'nothing' }
     })
   })

@@ -97,6 +97,8 @@ function body(term: Described): Spelling<AtdSchema> {
     case 'ref':
       // ATD resolves this against an app definition's `definitions`, keyed by the same name.
       return faithful(nullable({ ref: term.name }, term.admitsNull))
+    case 'set':
+      return set(term)
     case 'some':
       return new UnsayableTerm(
         [],
@@ -255,6 +257,40 @@ function array(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling
         'wider',
         'noWordForIt',
         'this states how many items are admitted, and ATD has no keyword for a count. The document accepts lists the schema refuses.'
+      )
+    )
+  }
+
+  return { written: nullable({ elements: items.written }, term.admitsNull), departures }
+}
+
+/** A set, written as a list. Both halves are given up, and in two directions. */
+function set(term: DescribedOf<'set'>): Spelling<AtdSchema> {
+  const items = spellAtd(term.items)
+  if (isError(items)) {
+    return items
+  }
+
+  const departures = [
+    ...under('elements', items.departures),
+    gaveUp(
+      'wider',
+      'noWordForIt',
+      'this states that no value is held twice, and ATD has no keyword for it. The document accepts a list holding one twice.'
+    ),
+    gaveUp(
+      'neither',
+      'noShapeForIt',
+      'this states a value with no order, and ATD writes a list, which has one. The document accepts the same values, and a reader gives back an order the schema never stated.'
+    )
+  ]
+
+  if (term.minItems !== undefined || term.maxItems !== undefined) {
+    departures.push(
+      gaveUp(
+        'wider',
+        'noWordForIt',
+        'this states how many values are admitted, and ATD has no keyword for a count. The document accepts sets the schema refuses.'
       )
     )
   }

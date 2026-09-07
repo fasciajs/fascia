@@ -22,6 +22,53 @@ function writtenOf(schema: z.core.$ZodType): unknown {
   return spelled.written
 }
 
+/** A set, stated as a term: no reading produces one, and every target has to answer about one. */
+const aSetOf = (items: Described): Described => ({
+  kind: 'set',
+  items,
+  admitsNull: false,
+  meta: {}
+})
+
+const aString: Described = {
+  kind: 'typed',
+  name: 'string',
+  assertions: {},
+  admitsNull: false,
+  meta: {}
+}
+
+describe('a value with no order is written as the nearest thing that has one', () => {
+  it('writes the half a document can state, and says the half it cannot', () => {
+    const spelled = spellJsonSchema(aSetOf(aString))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    // `uniqueItems` is the half 2020-12 states. An array has an order and a set does not, and no
+    // keyword removes one, so the document accepts the same values and gives back one more fact.
+    expect(spelled.written).toEqual({ type: 'array', items: { type: 'string' }, uniqueItems: true })
+    expect(spelled.departures).toEqual([
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states a value with no order, and 2020-12 writes an array, which has one. The document accepts the same values, and a reader gives back an order the schema never stated.'
+      }
+    ])
+  })
+
+  it('gives up both halves in ATD, and each in its own direction', () => {
+    const spelled = spellAtd(aSetOf(aString))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.written).toEqual({ elements: { type: 'string' } })
+    expect(spelled.departures.map((one) => one.direction)).toEqual(['wider', 'neither'])
+  })
+})
+
 describe('2020-12 has a keyword for every assertion a term carries', () => {
   it('writes every string assertion, where ATD writes none of them', () => {
     expect(writtenOf(z.string().min(2).max(5).regex(/^a/))).toEqual({
@@ -90,29 +137,37 @@ describe('what ATD refuses, 2020-12 states', () => {
     expect(writtenOf(z.literal(1))).toEqual({ type: 'number', enum: [1] })
   })
 
-  it('writes a tuple at its positions, where ATD writes a list of anything', () => {
-    // No `minItems`. It would be exact where every position must be present, and a term does not
-    // say which are: a validator may hold a position that admits a missing value, and zod does.
-    // A tuple of one `unknown` accepts the empty list, and demanding the prefix refused it.
+  it('writes a tuple at its positions, and demands the ones that must be there', () => {
+    // `prefixItems` says what stands at each position and nothing about how many are there, so a
+    // document holding it alone accepts the empty list. `minItems` is the other half.
     expect(writtenOf(z.tuple([z.string(), z.number()]))).toEqual({
       type: 'array',
       prefixItems: [{ type: 'string' }, { type: 'number' }],
+      minItems: 2,
       items: false
     })
   })
 
-  it('says that a shorter list is admitted, rather than leaving the widening silent', () => {
+  it('demands only the positions that must be there, where one may be absent', () => {
+    // zod states an optional position by wrapping it, and every optional one trails, so the count
+    // is what both zod and a document mean by it.
+    expect(writtenOf(z.tuple([z.string(), z.number().optional()]))).toEqual({
+      type: 'array',
+      prefixItems: [{ type: 'string' }, { type: 'number' }],
+      minItems: 1,
+      items: false
+    })
+  })
+
+  it('gives nothing up writing a tuple, where it used to report a widening', () => {
     const spelled = spellJsonSchema(termOf(z.tuple([z.string()])))
     if (isError(spelled)) {
       throw new Error(spelled.message)
     }
 
-    expect(spelled.departures[0]).toEqual({
-      at: [],
-      direction: 'wider',
-      cause: 'noWordForIt',
-      said: expect.stringContaining('does not say which of them must be present')
-    })
+    // The term carries how many positions must be present, so the document states it and the
+    // widening is gone rather than reported.
+    expect(spelled.departures).toEqual([])
   })
 })
 

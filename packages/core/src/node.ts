@@ -151,6 +151,13 @@ export type Structure<S> =
   | {
       readonly of: 'tuple'
       readonly positions: readonly S[]
+      /**
+       * How many of the positions must be present.
+       *
+       * Stated by the frontend for the same reason a key's optionality is: the validator says it on
+       * the edge of the structure.
+       */
+      readonly minPositions: number
       readonly rest: Rest<S>
     }
   | {
@@ -160,7 +167,20 @@ export type Structure<S> =
       readonly assertions: {
         readonly minItems?: number
         readonly maxItems?: number
-        readonly unique?: boolean
+      }
+    }
+  /**
+   * Values where a position is not part of the value, and no value is held twice.
+   *
+   * Both facts together, because a flag for the first alone would state a multiset that no target
+   * here can write.
+   */
+  | {
+      readonly of: 'set'
+      readonly items: S
+      readonly assertions: {
+        readonly minItems?: number
+        readonly maxItems?: number
       }
     }
   | {

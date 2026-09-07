@@ -67,13 +67,6 @@ interface AssertionsByTypeName {
     readonly items: Described
     readonly minItems?: number
     readonly maxItems?: number
-    /**
-     * The items do not repeat.
-     *
-     * A fact about the values rather than a way of writing them, so it belongs here even though the
-     * two JSON targets have no keyword for it. DynamoDB does: a set is one of its ten types.
-     */
-    readonly unique?: boolean
   }
 }
 
@@ -98,6 +91,18 @@ interface DescribedCases {
     }
   }[DescribedTypeName]
 
+  /**
+   * Values where a position is not part of the value, and no value is held twice.
+   *
+   * A case rather than a flag on a list, because a list of items that do not repeat still carries an
+   * order. A case is also what makes every target answer.
+   */
+  readonly set: {
+    readonly items: Described
+    readonly minItems?: number
+    readonly maxItems?: number
+  }
+
   /** A fixed set of admitted values. The type of each value travels with the value. */
   readonly values: { readonly admitted: readonly [AdmittedValue, ...AdmittedValue[]] }
 
@@ -119,9 +124,15 @@ interface DescribedCases {
   /** All of these at once. */
   readonly every: { readonly members: readonly [Described, Described, ...Described[]] }
 
-  /** Values at positions, which is a different thing from a list of one type. */
+  /**
+   * Values at positions, which is a different thing from a list of one type.
+   *
+   * `minPositions` is how many must be present. A count rather than a flag per position, because a
+   * flag would admit a required position after an optional one and no validator writes that.
+   */
   readonly tuple: {
     readonly positions: readonly Described[]
+    readonly minPositions: number
     readonly rest: DescribedRest
   }
 

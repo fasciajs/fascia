@@ -61,7 +61,7 @@ describe('an unreadable type says why, rather than reading as something else', (
   it('turns away a value JSON does not carry', () => {
     expect(groupOf(z.symbol())).toContain('not a value JSON carries')
     expect(groupOf(z.map(z.string(), z.string()))).toContain('A record of the same shape is')
-    expect(groupOf(z.set(z.string()))).toContain('An array of unique items is')
+    expect(groupOf(z.set(z.string()))).toContain('states a conversion rather than one value')
   })
 
   it('turns away a schema that admits no value', () => {
@@ -289,7 +289,34 @@ describe('a tuple says what it admits past its positions', () => {
       kind: 'structural',
       of: 'tuple',
       positions: [expect.any(z.ZodString)],
+      minPositions: 1,
       rest: { allows: 'nothing' }
+    })
+  })
+
+  it('demands a position where zod holds the tuple to a length', () => {
+    // `z.tuple([z.unknown()])` refuses the empty list. zod checks a closed tuple against a length,
+    // and the length counts every position a caller did not mark optional.
+    expect(nodeOf(z.tuple([z.unknown()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodUnknown)],
+      minPositions: 1,
+      rest: { allows: 'nothing' }
+    })
+  })
+
+  it('demands nothing where a rest makes zod hold the tuple per position', () => {
+    // The same position, and the opposite answer: `z.tuple([z.unknown()], z.number())` takes the
+    // empty list, because past a rest zod asks each position about `undefined` rather than counting.
+    // A count too large would write `minItems` a document turns a working value away by.
+    expect(z.tuple([z.unknown()], z.number()).safeParse([]).success).toBe(true)
+    expect(nodeOf(z.tuple([z.unknown()], z.number()))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodUnknown)],
+      minPositions: 0,
+      rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
     })
   })
 
@@ -298,6 +325,7 @@ describe('a tuple says what it admits past its positions', () => {
       kind: 'structural',
       of: 'tuple',
       positions: [expect.any(z.ZodString)],
+      minPositions: 1,
       rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
     })
   })

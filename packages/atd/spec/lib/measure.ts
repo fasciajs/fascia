@@ -6,6 +6,7 @@ import { spellAtdAll } from '@fasciajs/atd'
 import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as formats } from 'ajv-formats'
 
 /**
  * How often an ATD document refuses a value its schema takes.
@@ -42,7 +43,10 @@ export interface Run {
 }
 
 export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Measured {
+  // Formats are added, or a `format` keyword is ignored and a measurement of nothing looks like
+  // agreement. Ajv says so out loud: it prints `unknown format "uuid" ignored` and answers true.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
+  formats.default(ajv)
   const next = numbers(run.seed)
   const measured: Measured = {
     narrower: [],
@@ -106,7 +110,7 @@ export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Me
  * The definitions are converted one by one and put under `$defs`, because arri writes a reference as
  * `#/$defs/<name>` and converts one schema at a time.
  */
-function asJsonSchema(written: {
+export function asJsonSchema(written: {
   readonly root: AtdSchema
   readonly definitions: Readonly<Record<string, AtdSchema>>
 }): object {

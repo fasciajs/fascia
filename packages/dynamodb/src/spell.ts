@@ -4,11 +4,12 @@ import type {
   Described,
   DescribedOf,
   DescribedRest,
+  Meta,
   Spelled,
   Spelling
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
-import type { AttributeName, AttributeShape, MapEntry, RestShape } from './attribute.js'
+import type { AttributeName, AttributeShape, MapEntry, MapShape, RestShape } from './attribute.js'
 import { anyAttribute } from './attribute.js'
 
 /**
@@ -32,9 +33,35 @@ export function spellDynamo(term: Described): Spelling<AttributeShape> {
   // A term admitting null admits one more member. Nullability reaches a fourth target and is spelled
   // a fourth way: a flag beside a type, a member of a type list, a joined branch, and here a member
   // of the coproduct itself.
-  return term.admitsNull
-    ? { written: { ...spelled.written, NULL: {} }, departures: spelled.departures }
-    : spelled
+  const written = term.admitsNull ? { ...spelled.written, NULL: {} } : spelled.written
+
+  return {
+    written,
+    departures: [...spelled.departures, ...annotated(term.meta)]
+  }
+}
+
+/**
+ * What a caller said about the schema, which reaches no attribute.
+ *
+ * In neither direction: what a caller wrote turns no row away. Reported all the same, because no
+ * other check here can see it. Every one of them measures which values a description admits.
+ */
+function annotated(meta: Meta): readonly Departure[] {
+  const stated = (['title', 'description', 'examples', 'deprecated'] as const).filter(
+    (name) => meta[name] !== undefined
+  )
+
+  return stated.length === 0
+    ? []
+    : [
+        {
+          at: [],
+          direction: 'neither',
+          cause: 'noWordForIt',
+          said: `this states ${stated.join(', ')}, and an AttributeValue names a type and carries a value and holds no word about either. What a table takes is unchanged`
+        }
+      ]
 }
 
 function body(term: Described): Spelling<AttributeShape> {
@@ -43,6 +70,8 @@ function body(term: Described): Spelling<AttributeShape> {
       return typed(term)
     case 'values':
       return values(term)
+    case 'set':
+      return set(term)
     case 'tuple':
       return tuple(term)
     case 'some':
@@ -109,13 +138,7 @@ function assertedOn(assertions: Readonly<Record<string, unknown>>): Departure[] 
   return stated.length === 0 ? [] : [dropped(stated.join(', '))]
 }
 
-/**
- * A list, or a set where the term said the items do not repeat.
- *
- * `SS` and `NS` are the one place this target says something both of the others refuse: a set is not
- * a value JSON carries, and DynamoDB has three of them. A set is exact where the items are strings
- * or numbers that do not repeat, and DynamoDB holds no set of anything else.
- */
+/** A list, which DynamoDB holds under `L`. What a set is written as is beside this. */
 function list(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling<AttributeShape> {
   const items = spellDynamo(term.assertions.items)
   if (isError(items)) {
@@ -130,29 +153,47 @@ function list(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling<
     })
   ]
 
-  const set = setOf(term.assertions)
-  if (set !== undefined) {
-    return { written: memberShape(set), departures }
-  }
-
   return { written: { L: { items: items.written } }, departures }
 }
 
 /**
- * Which set holds these items, where a set holds them at all.
+ * A set, which is the one thing this target says that both of the others refuse.
  *
- * Asked of the term rather than of a validator, because a set is a fact about the values and every
- * validator states it somewhere else. No reading produces `unique` yet, so this is reached only by a
- * term stated directly, and the spec beside this file states one.
+ * Exact where the values are strings or numbers. Anywhere else it is `L`, which adds an order the
+ * term did not state: that widens nothing and changes what a reader gives back.
  */
-function setOf(
-  assertions: Extract<DescribedOf<'typed'>, { name: 'array' }>['assertions']
-): AttributeName | undefined {
-  if (assertions.unique !== true) {
-    return undefined
+function set(term: DescribedOf<'set'>): Spelling<AttributeShape> {
+  const items = spellDynamo(term.items)
+  if (isError(items)) {
+    return items
   }
 
-  const items = assertions.items
+  const departures = [
+    ...under('items', items.departures),
+    ...assertedOn({ minItems: term.minItems, maxItems: term.maxItems })
+  ]
+
+  const held = setMemberOf(term.items)
+  if (held !== undefined) {
+    return { written: memberShape(held), departures }
+  }
+
+  return {
+    written: { L: { items: items.written } },
+    departures: [
+      ...departures,
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noShapeForIt',
+        said: 'DynamoDB holds a set of strings, of numbers and of binary, and this holds neither. It is written as a list, which has an order the schema never stated.'
+      }
+    ]
+  }
+}
+
+/** A set holds one type, so a member admitting null or anything else has none. */
+function setMemberOf(items: Described): AttributeName | undefined {
   if (items.kind !== 'typed' || items.admitsNull) {
     return undefined
   }
@@ -278,11 +319,17 @@ function memberOf(value: AdmittedValue): AttributeName {
  * at which position, so a list of the wrong things in the wrong order is admitted.
  */
 function tuple(term: DescribedOf<'tuple'>): Spelling<AttributeShape> {
-  const [first, ...rest] = term.positions
+  const held: Described[] = [...term.positions]
+  if (term.rest.allows === 'term') {
+    held.push(term.rest.term)
+  }
 
-  // A tuple of no positions admits the empty list, and what a list holds is not asked of one that
-  // holds nothing.
-  const positions = first === undefined ? faithful(anyAttribute) : anyOf([first, ...rest])
+  const [first, ...others] = held
+
+  const positions =
+    first === undefined || term.rest.allows === 'anything'
+      ? faithful(anyAttribute)
+      : anyOf([first, ...others])
   if (isError(positions)) {
     return positions
   }
@@ -325,7 +372,7 @@ function anyOf(members: readonly [Described, ...Described[]]): Spelling<Attribut
       seen.add(name)
     }
 
-    written = written === undefined ? spelled.written : { ...written, ...spelled.written }
+    written = written === undefined ? spelled.written : widest(written, spelled.written)
     departures.push(...under(String(index), spelled.departures))
   }
 
@@ -338,11 +385,72 @@ function anyOf(members: readonly [Described, ...Described[]]): Spelling<Attribut
       at: [],
       direction: 'wider',
       cause: 'noShapeForIt',
-      said: 'two of these are carried under one member, and a value states its member and nothing else. The document admits either where the schema admitted one of them'
+      said: 'two of these are carried under one member, and a value states its member and nothing else. What each of them holds is joined, so the document admits either, and a row taking part of one and part of another where the schema admits neither'
     })
   }
 
   return { written, departures }
+}
+
+/**
+ * The members either of two shapes admits, joined so a row of either is admitted.
+ *
+ * A spread was not a join: two members landing on `M` kept the second and refused a row matching the
+ * first. Joining widens instead, which is the direction the departure beside it claims.
+ */
+function widest(left: AttributeShape, right: AttributeShape): AttributeShape {
+  const both = { ...left, ...right }
+  const asMap =
+    left.M !== undefined && right.M !== undefined ? widestMap(left.M, right.M) : undefined
+  const asList =
+    left.L !== undefined && right.L !== undefined
+      ? { items: widest(left.L.items, right.L.items) }
+      : undefined
+
+  return {
+    ...both,
+    ...(asMap !== undefined && { M: asMap }),
+    ...(asList !== undefined && { L: asList })
+  }
+}
+
+function widestMap(left: MapShape, right: MapShape): MapShape {
+  const attributes = new Map<string, MapEntry>()
+
+  for (const [name, entry] of left.attributes) {
+    const other = right.attributes.get(name)
+    attributes.set(
+      name,
+      other === undefined
+        ? // A name only one member states is a name the other admits without it.
+          { shape: entry.shape, required: false }
+        : {
+            shape: widest(entry.shape, other.shape),
+            required: entry.required && other.required
+          }
+    )
+  }
+
+  for (const [name, entry] of right.attributes) {
+    if (!attributes.has(name)) {
+      attributes.set(name, { shape: entry.shape, required: false })
+    }
+  }
+
+  return { attributes, rest: widestRest(left.rest, right.rest) }
+}
+
+function widestRest(left: RestShape, right: RestShape): RestShape {
+  if (left.allows === 'anything' || right.allows === 'anything') {
+    return { allows: 'anything' }
+  }
+  if (left.allows === 'nothing') {
+    return right
+  }
+  if (right.allows === 'nothing') {
+    return left
+  }
+  return { allows: 'shape', shape: widest(left.shape, right.shape) }
 }
 
 /**

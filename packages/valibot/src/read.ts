@@ -293,12 +293,48 @@ function propertyOf(schema: ValibotSchema): ObjectProperty<ValibotSchema> {
 }
 
 function tuple(schema: Known, rest: Rest<ValibotSchema>): Node<ValibotSchema> {
+  const positions = asList(schema['items']).map(asSchema)
+
   return {
     kind: 'structural',
     of: 'tuple',
-    positions: asList(schema['items']).map(asSchema),
+    positions,
+    // Lifted onto the edge, the way a key's optionality is.
+    minPositions: demanded(positions),
     rest
   }
+}
+
+/**
+ * How many positions of a tuple valibot demands.
+ *
+ * Held per position rather than to a length, so `v.tuple([v.unknown()])` takes the empty list.
+ */
+function demanded(positions: readonly ValibotSchema[]): number {
+  let least = 0
+
+  for (const [index, position] of positions.entries()) {
+    if (!mayBeAbsent(position)) {
+      least = index + 1
+    }
+  }
+
+  return least
+}
+
+/** Whether a value at this position may be missing. */
+function mayBeAbsent(schema: ValibotSchema): boolean {
+  if (isType(schema, ['optional', 'exact_optional', 'undefinedable', 'nullish'])) {
+    return true
+  }
+  if (isType(schema, ['any', 'unknown', 'undefined', 'void'])) {
+    return true
+  }
+
+  return (
+    isType(schema, ['union', 'variant']) &&
+    asList(schema['options']).map(asSchema).some(mayBeAbsent)
+  )
 }
 
 function members(schema: Known): readonly [ValibotSchema, ValibotSchema, ...ValibotSchema[]] {

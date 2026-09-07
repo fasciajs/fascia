@@ -56,6 +56,8 @@ function leaf(next: () => number): ArkType {
     () => type.raw('string >= 2'),
     () => type.raw('string <= 3'),
     () => type.raw('/^a/'),
+    () => type.raw('string.email'),
+    () => type.raw('string.uuid'),
     () => type.raw('number'),
     () => type.raw('number >= 1'),
     () => type.raw('number < 9'),

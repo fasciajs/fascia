@@ -4,6 +4,74 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.4.0
+
+### Added
+
+**A term can answer for itself.** `admits(description, value)` in `@fasciajs/core` says whether a term
+takes a value, or reports that it does not decide. A `format` is the one thing it will not decide,
+because deciding an email means writing the validator this library refuses to be.
+
+Until now nothing could ask a term anything. Every check asked a validator and a document, and one
+number carried two questions: whether the frontend read the schema, and whether the target wrote the
+term. A finding named neither.
+
+`@fasciajs/json-schema` is measured against arktype, zod and effect writing 2020-12 from their own
+schemas, which is the pair of steps this library performs with a frontend and a target. That asks
+what a document should be rather than whether a value passes, and it found the tuple defect below.
+This library differs from none of the three.
+
+### Changed
+
+**A set is a case of the term.** It was a list carrying `unique`, which is a predicate: no item is
+held twice. A set is a quotient, because a position is not part of the value. `unique` is gone from a
+list and `set` is a case beside `array` in `Node` and in `Described`, so a multiset cannot be written
+and every target says what it does with one. 2020-12 writes `uniqueItems` and reports the order it
+adds; ATD gives up both halves, in two directions.
+
+**A tuple states how many positions must be present.** `minPositions` is on the node and on the term,
+and every frontend states it the way each already lifts a key's optionality onto the edge. A count
+rather than a flag on each position, because every validator here makes an optional position a
+trailing one, and a flag would admit a required position after an optional one.
+
+Both are a change to a published type. A caller who writes a frontend or a target of their own
+answers for the new case and states the new count. A caller who describes a schema and writes a
+document reads no difference, except that the documents are more exact.
+
+A frontend refuses a validator's own set for a new reason. A parse of a list gives back a Set, so a
+schema states a conversion rather than one value, and the term has a set that no reading produces.
+
+### Fixed
+
+**2020-12 wrote a tuple without `minItems`, so a document took the empty list against a tuple of one
+position.** `prefixItems` states what stands at each position and nothing about how many are there.
+The term threw the count away before the target saw it, and the departure reporting the loss named
+the target rather than the reading. The target now reports no widening at all, for any frontend.
+
+**`@fasciajs/effect` dropped the whole-number assertion.** `Schema.Int` annotates
+`{ type: 'integer' }` and states nothing else, and the reader dropped a key it could not turn back
+into something. It could turn that one back. A document took `1.5` where effect refused it, and no
+departure recorded the widening, because the loss happened in the reading.
+
+**`@fasciajs/zod` and `@fasciajs/valibot` demanded a tuple position their validator does not.** zod
+checks a closed tuple against a length and one with a rest per position, so `z.tuple([z.unknown()])`
+refuses the empty list and `z.tuple([z.unknown()], z.number())` takes it. valibot holds a tuple per
+position throughout. Both readings are the validator's own now, and where two disagree the smaller
+count is taken.
+
+### Not published
+
+`@fasciajs/dynamodb` is in the repository and reaches no registry. It is the same package it was, and
+it is measured now: the AWS SDK marshaller reads what it writes, so the claim it makes is checkable.
+A value the schema takes marshals to an attribute the description admits.
+
+That check found three defects, all of them in this package alone. A disjunction was described as its
+last member and refused a row matching its first. A tuple ignored what stands past its positions. A
+title, a description, examples and a deprecation reached no attribute and no departure.
+
+It writes a set exactly, under `SS` or `NS`, which is the one thing it says that every other target
+here refuses. It is still not ready.
+
 ## 0.3.0
 
 ### Added

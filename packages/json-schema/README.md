@@ -9,8 +9,9 @@ anything: four validators and five targets, and neither side knows the other exi
 npm install @fasciajs/json-schema
 ```
 
-2020-12 has a keyword for almost every assertion a term carries. What it gives up is reported rather
-than dropped: a tuple states values at positions and a term does not say which must be present.
+2020-12 has a keyword for every assertion a term carries, and it reports no widening at all. What it
+gives up it reports rather than drops: a discriminant tells the members of a disjunction apart, and
+`oneOf` states what the document accepts without one.
 
 ```ts
 import { spellJsonSchema } from '@fasciajs/json-schema'

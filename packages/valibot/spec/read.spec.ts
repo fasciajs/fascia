@@ -92,6 +92,20 @@ describe('a conversion stands in the same list as the assertions', () => {
 })
 
 describe('a tuple means the opposite of what zod means by the word', () => {
+  it('demands no position that takes an absent value', () => {
+    // valibot holds a tuple per position rather than to a length, so `v.tuple([v.unknown()])` takes
+    // the empty list. A count of one would write `minItems` a document turns that value away by.
+    expect(v.safeParse(v.tuple([v.unknown()]), []).success).toBe(true)
+    expect(read(v.tuple([v.unknown()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.anything()],
+      minPositions: 0,
+      // valibot lets anything stand past the positions, which the block below is about.
+      rest: { allows: 'anything' }
+    })
+  })
+
   it('accepts what stands past the positions, because valibot drops it', () => {
     // Found by the property on its first run. `v.tuple` removes an extra element rather than
     // refusing the value, and `strictTuple` is the one that refuses.
@@ -105,6 +119,7 @@ describe('a tuple means the opposite of what zod means by the word', () => {
           type: 'string'
         })
       ],
+      minPositions: 1,
       rest: { allows: 'anything' }
     })
   })
@@ -119,6 +134,7 @@ describe('a tuple means the opposite of what zod means by the word', () => {
           type: 'string'
         })
       ],
+      minPositions: 1,
       rest: { allows: 'nothing' }
     })
   })
@@ -151,7 +167,7 @@ describe('an unreadable schema says why, rather than reading as something else',
       return isError(node) ? node.message : 'read'
     }
 
-    expect(said(v.set(v.string()))).toContain('An array of unique items is')
+    expect(said(v.set(v.string()))).toContain('states a conversion rather than one value')
     expect(said(v.blob())).toContain('sent as a body')
     expect(said(v.never())).toContain('describes nothing a caller could send')
   })

@@ -59,6 +59,8 @@ function body(term: Described): Spelling<JSONSchema> {
       return exactlyOne(term)
     case 'every':
       return composed(term.members, 'allOf', term.admitsNull)
+    case 'set':
+      return set(term)
     case 'tuple':
       return tuple(term)
     case 'ref':
@@ -161,6 +163,38 @@ function array(term: Extract<DescribedOf<'typed'>, { name: 'array' }>): Spelling
       ...(term.assertions.maxItems !== undefined && { maxItems: term.assertions.maxItems })
     },
     departures: under('items', items.departures)
+  }
+}
+
+/**
+ * A set, written as an array whose items do not repeat.
+ *
+ * `uniqueItems` is the half a document can state. A JSON array is ordered and no keyword removes an
+ * order, so a reader gives back one the term never stated and acceptance is unchanged.
+ */
+function set(term: DescribedOf<'set'>): Spelling<JSONSchema> {
+  const items = spellJsonSchema(term.items)
+  if (isError(items)) {
+    return items
+  }
+
+  return {
+    written: {
+      type: typeOf('array', term.admitsNull),
+      items: items.written,
+      uniqueItems: true,
+      ...(term.minItems !== undefined && { minItems: term.minItems }),
+      ...(term.maxItems !== undefined && { maxItems: term.maxItems })
+    },
+    departures: [
+      ...under('items', items.departures),
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states a value with no order, and 2020-12 writes an array, which has one. The document accepts the same values, and a reader gives back an order the schema never stated.'
+      }
+    ]
   }
 }
 
@@ -336,24 +370,6 @@ function exactlyOne(term: DescribedOf<'exactlyOne'>): Spelling<JSONSchema> {
   return { written: orNull({ oneOf: written }, term.admitsNull), departures }
 }
 
-/**
- * A shorter list than the positions is admitted, because the term does not say which are required.
- *
- * `minItems` would be the exact statement where every position must be present, and a term has no
- * way to say that: a validator may hold a position that admits a missing value, and zod does. A
- * tuple of one `unknown` accepts the empty list, and a document demanding its whole prefix refuses
- * a value the schema takes. That is the direction that breaks a client, so the count is left off and
- * said instead.
- */
-function shorterIsAdmitted(positions: number): Departure {
-  return {
-    at: [],
-    direction: 'wider',
-    cause: 'noWordForIt',
-    said: `this states ${positions} values at positions, and a term does not say which of them must be present, so the document accepts a shorter list. Nothing states how many are required.`
-  }
-}
-
 /** Values at positions, which 2020-12 states exactly and ATD has no form for. */
 function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
   const prefixItems: JSONSchema[] = []
@@ -380,15 +396,26 @@ function tuple(term: DescribedOf<'tuple'>): Spelling<JSONSchema> {
     departures.push(...under('items', spelled.departures))
 
     return {
-      written: orNull({ type: 'array', prefixItems, items: spelled.written }, term.admitsNull),
-      departures: [...departures, shorterIsAdmitted(term.positions.length)]
+      written: orNull(
+        { type: 'array', prefixItems, ...atLeast(term.minPositions), items: spelled.written },
+        term.admitsNull
+      ),
+      departures
     }
   }
 
   return {
-    written: orNull({ type: 'array', prefixItems, ...items }, term.admitsNull),
-    departures: [...departures, shorterIsAdmitted(term.positions.length)]
+    written: orNull(
+      { type: 'array', prefixItems, ...atLeast(term.minPositions), ...items },
+      term.admitsNull
+    ),
+    departures
   }
+}
+
+/** `prefixItems` says what stands where and nothing about how many, so `minItems` is the other half. */
+function atLeast(positions: number): { readonly minItems?: number } {
+  return positions === 0 ? {} : { minItems: positions }
 }
 
 /**

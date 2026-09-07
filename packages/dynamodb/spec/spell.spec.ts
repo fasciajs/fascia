@@ -148,6 +148,30 @@ describe('a term reaches the member that carries it', () => {
   })
 })
 
+describe('what a caller said about a schema reaches no attribute, and is reported', () => {
+  it('names every annotation it loses, in neither direction', () => {
+    const spelled = shapeOf(
+      z.string().meta({ title: 'A', description: 'B', examples: ['c'], deprecated: true })
+    )
+
+    // 2020-12 writes all four and ATD writes two. This target has room for none, and the loss turns
+    // nobody's row away, so it is reported in neither direction rather than left silent.
+    expect(spelled.written).toEqual({ S: {} })
+    expect(spelled.departures).toEqual([
+      {
+        at: [],
+        direction: 'neither',
+        cause: 'noWordForIt',
+        said: 'this states title, description, examples, deprecated, and an AttributeValue names a type and carries a value and holds no word about either. What a table takes is unchanged'
+      }
+    ])
+  })
+
+  it('says nothing where a caller said nothing', () => {
+    expect(shapeOf(z.string()).departures).toEqual([])
+  })
+})
+
 describe('what this target says that both of the others refuse', () => {
   it('carries a bigint under N, which is a string of up to thirty-eight digits', () => {
     // JSON has no form for one, so ATD and 2020-12 both refuse the term outright. DynamoDB writes
@@ -156,18 +180,14 @@ describe('what this target says that both of the others refuse', () => {
   })
 
   it('carries a set of strings under SS', () => {
-    // Stated as a term, because no reading produces `unique` yet: zod refuses `z.set` outright and
-    // neither of the others states uniqueness in a way any reader takes. The term carries the fact
-    // and this is the first target with a word for it.
+    // Stated as a term, because no reading produces a set: every validator here holds one as a value
+    // that is not a list, and reading that is a conversion rather than a description. The term
+    // carries the fact and this is the only target with a word for it.
     const set: Described = {
-      kind: 'typed',
-      name: 'array',
+      kind: 'set',
       admitsNull: false,
       meta: noMeta,
-      assertions: {
-        items: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: noMeta },
-        unique: true
-      }
+      items: { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: noMeta }
     }
 
     const spelled = spellDynamo(set)
@@ -176,14 +196,10 @@ describe('what this target says that both of the others refuse', () => {
 
   it('carries a set of numbers under NS', () => {
     const set: Described = {
-      kind: 'typed',
-      name: 'array',
+      kind: 'set',
       admitsNull: false,
       meta: noMeta,
-      assertions: {
-        items: { kind: 'typed', name: 'number', assertions: {}, admitsNull: false, meta: noMeta },
-        unique: true
-      }
+      items: { kind: 'typed', name: 'number', assertions: {}, admitsNull: false, meta: noMeta }
     }
 
     const spelled = spellDynamo(set)
@@ -192,14 +208,10 @@ describe('what this target says that both of the others refuse', () => {
 
   it('writes a list where the items are not ones a set holds', () => {
     const set: Described = {
-      kind: 'typed',
-      name: 'array',
+      kind: 'set',
       admitsNull: false,
       meta: noMeta,
-      assertions: {
-        items: { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false, meta: noMeta },
-        unique: true
-      }
+      items: { kind: 'typed', name: 'boolean', assertions: {}, admitsNull: false, meta: noMeta }
     }
 
     const spelled = spellDynamo(set)

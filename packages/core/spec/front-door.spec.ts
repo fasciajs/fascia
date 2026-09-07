@@ -1,3 +1,4 @@
+import { spellAtd } from '@fasciajs/atd'
 import type { Naming } from '@fasciajs/core'
 import { describeAll, isError, refusing } from '@fasciajs/core'
 import { spellJsonSchema } from '@fasciajs/json-schema'
@@ -65,6 +66,19 @@ describe('a caller names a schema without touching it', () => {
 })
 
 describe('a caller refuses a loss rather than reading about one', () => {
+  /** 2020-12 reports no widening at all, so what a caller refuses needs a target that widens. */
+  function spelledAsAtd(schema: z.core.$ZodType) {
+    const described = describeAll([{ schema, io: 'input' }], zodSource, { sides })
+    if (isError(described)) {
+      throw new Error(described.message)
+    }
+    const term = described.terms[0]
+    if (term === undefined) {
+      throw new Error('nothing was described')
+    }
+    return spellAtd(term)
+  }
+
   function spelled(schema: z.core.$ZodType) {
     const described = describeAll([{ schema, io: 'input' }], zodSource, { sides })
     if (isError(described)) {
@@ -84,17 +98,16 @@ describe('a caller refuses a loss rather than reading about one', () => {
   })
 
   it('refuses one that widened, and says what it gave up', () => {
-    // A tuple states values at positions and a term does not say which must be present, so the
-    // document accepts a shorter list. A caller publishing a contract may not want that.
-    const held = refusing(spelled(z.tuple([z.string()])), ['wider'])
+    // ATD has no keyword for a count, so the document accepts a list the schema turns away.
+    const held = refusing(spelledAsAtd(z.array(z.string()).min(1)), ['wider'])
 
-    expect(isError(held) ? held.message : 'written').toContain('must be present')
+    expect(isError(held) ? held.message : 'written').toContain('no keyword for a count')
   })
 
   it('takes the same spelling where the caller refuses only a narrowing', () => {
     // Which losses stop a build is the caller's decision, and a widening is recoverable: a caller
     // sends something a reader allows and the service refuses it.
-    expect(isError(refusing(spelled(z.tuple([z.string()])), ['narrower']))).toBe(false)
+    expect(isError(refusing(spelledAsAtd(z.array(z.string()).min(1)), ['narrower']))).toBe(false)
   })
 
   it('passes a refusal through, so this composes with a spelling that already failed', () => {

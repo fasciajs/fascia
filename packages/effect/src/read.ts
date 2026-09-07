@@ -316,12 +316,15 @@ function withoutUndefined(ast: SchemaAST.AST): SchemaAST.AST {
 function tupleType(ast: SchemaAST.TupleType, refined: Refined): Node<SchemaAST.AST> {
   const positions = ast.elements.map((element) => element.type)
   const [rest] = ast.rest
+  // effect states it on the element, so nothing has to be lifted.
+  const minPositions = ast.elements.filter((element) => !element.isOptional).length
 
   if (positions.length > 0) {
     return {
       kind: 'structural',
       of: 'tuple',
       positions,
+      minPositions,
       rest: rest === undefined ? { allows: 'nothing' } : { allows: 'schema', schema: rest.type }
     }
   }
@@ -331,6 +334,7 @@ function tupleType(ast: SchemaAST.TupleType, refined: Refined): Node<SchemaAST.A
         kind: 'structural',
         of: 'tuple',
         positions: [],
+        minPositions: 0,
         rest: { allows: 'nothing' }
       }
     : {
