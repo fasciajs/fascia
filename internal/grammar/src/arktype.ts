@@ -1,5 +1,5 @@
 import type { BaseRoot } from '@ark/schema'
-import { scope, type } from 'arktype'
+import { type } from 'arktype'
 import { pick, type Subject } from './draw.js'
 
 /**
@@ -24,21 +24,8 @@ import { pick, type Subject } from './draw.js'
  *   document's does not, so every such document refuses a value arktype takes. The spec beside this
  *   file states the divergence rather than leaving it to a comment here.
  */
-/**
- * A schema that holds itself, which arktype names with a scope.
- *
- * Drawn whole rather than through `schemaOf`, and never as a member of something else. arktype names
- * the alias rather than the schema and carries the scope in a type parameter, so a scoped type and a
- * `type.raw` one meet in no type this file can write. They meet at the cast below, which takes any
- * shape arktype gives it. Re-parsing to reconcile them inlines the alias and leaves a cycle nothing
- * names, which is what `type.raw` does to this.
- */
-const HELD = scope({ Held: { name: 'string', children: 'Held[]' } }).export().Held
-
 export function arkGrammar(next: () => number, depth: number): Subject<BaseRoot> {
-  // One round in ten, because it is one schema rather than a family and the rest of the grammar
-  // draws thousands.
-  const schema = next() < 0.1 ? HELD : schemaOf(next, depth)
+  const schema = schemaOf(next, depth)
 
   return {
     // One cast, here, because arktype publishes `Type` and keeps its node types private. A `Type`
@@ -94,7 +81,12 @@ function structure(next: () => number, depth: number): ArkType {
     () => type.raw({ a: inner() }),
     () => type.raw({ a: inner(), 'b?': inner() }),
     () => type.raw([inner()]),
-    () => type.raw([inner(), inner()])
+    () => type.raw([inner(), inner()]),
+    // A schema that holds itself. arktype resolves `this` to the type being parsed and names the
+    // alias itself, so this needs no scope and no name from a caller. `this[]` is not the same
+    // thing: the array operator resolves the alias where it stands, and arktype refuses the cycle.
+    () => type.raw({ name: 'string', 'next?': 'this' }),
+    () => type.raw({ name: 'string', next: 'this|null' })
   ])()
 }
 

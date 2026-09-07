@@ -3,7 +3,7 @@ import type { Describing, Description } from '@fasciajs/core'
 import { describeAll, describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { zodSource } from '@fasciajs/zod'
-import { scope } from 'arktype'
+import { scope, type } from 'arktype'
 import { Schema } from 'effect'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
@@ -58,6 +58,44 @@ describe('a schema that holds itself is described once and referred to', () => {
     // points back at what the walk began at. That schema is filed under the name when it finishes.
     expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false, meta: {} })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
+  })
+
+  it('describes two arktype schemas that hold each other', () => {
+    const types = scope({
+      Parent: { name: 'string', 'child?': 'Child' },
+      Child: { age: 'number', 'parent?': 'Parent' }
+    }).export()
+    const result = described(
+      description(
+        types.Parent as unknown as Parameters<typeof arktypeSource.read>[0],
+        arktypeSource,
+        'input'
+      )
+    )
+
+    // One name, not two. arktype keeps an alias only where one breaks a cycle, so `Child` is
+    // resolved before this library sees it and is described where it stands. The cycle is broken at
+    // `Parent`, which is the one that comes back as a reference.
+    expect(result.term).toEqual({ kind: 'ref', name: 'Parent', admitsNull: false, meta: {} })
+    expect([...result.definitions.keys()]).toEqual(['Parent'])
+  })
+
+  it('describes an arktype schema that holds itself under `this`', () => {
+    const result = described(
+      description(
+        type.raw({ name: 'string', 'next?': 'this' }) as unknown as Parameters<
+          typeof arktypeSource.read
+        >[0],
+        arktypeSource,
+        'input'
+      )
+    )
+
+    // `this` needs no scope and no name from a caller: arktype resolves it to the type being parsed
+    // and names the alias itself. `this[]` is a different thing, and arktype refuses it: the array
+    // operator resolves the alias where it stands, which is a cycle with nothing between.
+    expect(result.term.kind).toBe('ref')
+    expect([...result.definitions.keys()].length).toBe(1)
   })
 
   it('describes an effect tree, named by an annotation', () => {
