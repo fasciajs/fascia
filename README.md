@@ -145,7 +145,7 @@ Every target with a reader is measured against generated schemas, from every fro
 | JSON Schema 2020-12 | Ajv | 0 |
 | Arri Type Definition | arri's own reading, then Ajv | 0 |
 | OpenAPI 3.0 against 3.1 | Ajv, both sides | 0 |
-| DynamoDB AttributeValue | the AWS SDK marshaller | 0 |
+| DynamoDB AttributeValue, not published | the AWS SDK marshaller | 0 |
 
 `narrower` is the count of values a schema accepts and its document refuses. Zero at seeds 1, 7 and
 13 and depths 2, 3 and 4, from zod, arktype, effect and valibot.
