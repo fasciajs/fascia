@@ -299,15 +299,46 @@ function tuple(schema: Known, rest: Rest<ValibotSchema>): Node<ValibotSchema> {
     kind: 'structural',
     of: 'tuple',
     positions,
-    // Lifted onto the edge, the way a key's optionality is, and read by the same test.
-    minPositions: positions.filter((position) => !isOptionalPosition(position)).length,
+    // Lifted onto the edge, the way a key's optionality is.
+    minPositions: demanded(positions),
     rest
   }
 }
 
-/** Whether a position may be absent, which valibot states by wrapping the position. */
-function isOptionalPosition(schema: ValibotSchema): boolean {
-  return isType(schema, ['optional', 'exact_optional', 'undefinedable', 'nullish'])
+/**
+ * How many positions of a tuple valibot demands.
+ *
+ * valibot holds a tuple per position rather than to a length, so a position that takes an absent
+ * value is one the tuple does not demand: `v.tuple([v.unknown()])` takes the empty list.
+ *
+ * The count reaches a document as `minItems`, and one too large turns away a value the schema takes.
+ * One too small only widens, which is the direction a caller recovers from.
+ */
+function demanded(positions: readonly ValibotSchema[]): number {
+  let least = 0
+
+  for (const [index, position] of positions.entries()) {
+    if (!mayBeAbsent(position)) {
+      least = index + 1
+    }
+  }
+
+  return least
+}
+
+/** Whether a value at this position may be missing. */
+function mayBeAbsent(schema: ValibotSchema): boolean {
+  if (isType(schema, ['optional', 'exact_optional', 'undefinedable', 'nullish'])) {
+    return true
+  }
+  if (isType(schema, ['any', 'unknown', 'undefined', 'void'])) {
+    return true
+  }
+
+  return (
+    isType(schema, ['union', 'variant']) &&
+    asList(schema['options']).map(asSchema).some(mayBeAbsent)
+  )
 }
 
 function members(schema: Known): readonly [ValibotSchema, ValibotSchema, ...ValibotSchema[]] {

@@ -294,6 +294,32 @@ describe('a tuple says what it admits past its positions', () => {
     })
   })
 
+  it('demands a position where zod holds the tuple to a length', () => {
+    // `z.tuple([z.unknown()])` refuses the empty list. zod checks a closed tuple against a length,
+    // and the length counts every position a caller did not mark optional.
+    expect(nodeOf(z.tuple([z.unknown()]))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodUnknown)],
+      minPositions: 1,
+      rest: { allows: 'nothing' }
+    })
+  })
+
+  it('demands nothing where a rest makes zod hold the tuple per position', () => {
+    // The same position, and the opposite answer: `z.tuple([z.unknown()], z.number())` takes the
+    // empty list, because past a rest zod asks each position about `undefined` rather than counting.
+    // A count too large would write `minItems` a document turns a working value away by.
+    expect(z.tuple([z.unknown()], z.number()).safeParse([]).success).toBe(true)
+    expect(nodeOf(z.tuple([z.unknown()], z.number()))).toEqual({
+      kind: 'structural',
+      of: 'tuple',
+      positions: [expect.any(z.ZodUnknown)],
+      minPositions: 0,
+      rest: { allows: 'schema', schema: expect.any(z.ZodNumber) }
+    })
+  })
+
   it('names the schema a rest is held to where the tuple states one', () => {
     expect(nodeOf(z.tuple([z.string()], z.number()))).toEqual({
       kind: 'structural',

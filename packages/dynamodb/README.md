@@ -13,7 +13,13 @@ The one target here that does not describe JSON. It has ten types, no keyword fo
 reference form, and a native set, so it says things the others refuse and refuses most of what they
 state exactly.
 
-Nothing reads this format yet. A green check says the shape is well formed, not that it is true.
+The AWS SDK reads it. `convertToAttr` turns a value into the attribute a table holds, and the check
+beside this package asks the one question that matters: a value the schema takes marshals to an
+attribute this description admits, over schemas drawn from all four validators.
+
+This target is the newest here and the one with the fewest words. Read what it gives up: it has no
+keyword for an assertion, no room for what a caller said about a schema, and no form for a
+disjunction, so a description is wider than its schema wherever any of those was stated.
 
 ```ts
 import { spellDynamo } from '@fasciajs/dynamodb'
