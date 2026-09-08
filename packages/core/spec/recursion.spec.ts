@@ -2,9 +2,11 @@ import { arktypeSource } from '@fasciajs/arktype'
 import type { Describing, Description } from '@fasciajs/core'
 import { describeAll, describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
+import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { scope, type } from 'arktype'
 import { Schema } from 'effect'
+import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -58,6 +60,69 @@ describe('a schema that holds itself is described once and referred to', () => {
     // points back at what the walk began at. That schema is filed under the name when it finishes.
     expect(result.term).toEqual({ kind: 'ref', name: 'Tree', admitsNull: false, meta: {} })
     expect(shapeOf(result, 'Tree')).toBe('typed/object')
+  })
+
+  it('describes two zod schemas that hold each other', () => {
+    const Child: z.ZodType = z
+      .lazy(() => z.object({ age: z.number(), parent: z.optional(Parent) }))
+      .meta({ id: 'Child' })
+    const Parent: z.ZodType = z
+      .lazy(() => z.object({ name: z.string(), child: z.optional(Child) }))
+      .meta({ id: 'Parent' })
+
+    const result = described(description(Parent, zodSource, 'input'))
+
+    // Two names, because a caller named both and the walk meets each where it is named. The one it
+    // began at is bound before its body is walked, so meeting it again from below yields a
+    // reference rather than a second descent.
+    expect(result.term).toEqual({ kind: 'ref', name: 'Parent', admitsNull: false, meta: {} })
+    expect([...result.definitions.keys()].sort()).toEqual(['Child', 'Parent'])
+  })
+
+  it('describes two effect schemas that hold each other', () => {
+    interface Parent {
+      readonly name: string
+      readonly child?: Child | undefined
+    }
+    interface Child {
+      readonly age: number
+      readonly parent?: Parent | undefined
+    }
+    const Parent: Schema.Schema<Parent> = Schema.Struct({
+      name: Schema.String,
+      child: Schema.optional(Schema.suspend((): Schema.Schema<Child> => Child))
+    }).annotations({ identifier: 'Parent' })
+    const Child: Schema.Schema<Child> = Schema.Struct({
+      age: Schema.Number,
+      parent: Schema.optional(Schema.suspend((): Schema.Schema<Parent> => Parent))
+    }).annotations({ identifier: 'Child' })
+
+    const result = described(description(Parent.ast, effectSource, 'input'))
+
+    expect(result.term).toEqual({ kind: 'ref', name: 'Parent', admitsNull: false, meta: {} })
+    expect([...result.definitions.keys()].sort()).toEqual(['Child', 'Parent'])
+  })
+
+  it('describes two valibot schemas that hold each other', () => {
+    const Child: v.GenericSchema = v.pipe(
+      v.lazy(() => v.object({ age: v.number(), parent: v.optional(Parent) })),
+      v.metadata({ id: 'Child' })
+    )
+    const Parent: v.GenericSchema = v.pipe(
+      v.lazy(() => v.object({ name: v.string(), child: v.optional(Child) })),
+      v.metadata({ id: 'Parent' })
+    )
+
+    const result = described(
+      description(
+        Parent as unknown as Parameters<typeof valibotSource.read>[0],
+        valibotSource,
+        'input'
+      )
+    )
+
+    expect(result.term).toEqual({ kind: 'ref', name: 'Parent', admitsNull: false, meta: {} })
+    expect([...result.definitions.keys()].sort()).toEqual(['Child', 'Parent'])
   })
 
   it('describes two arktype schemas that hold each other', () => {
