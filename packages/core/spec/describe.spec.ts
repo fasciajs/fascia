@@ -178,6 +178,54 @@ describe('a combination becomes the law it was read under', () => {
   it('describes all of as every', () => {
     expect(termOf({ ...three, root: { ...three.root, law: 'all' } }).kind).toBe('every')
   })
+
+  const withNull = {
+    root: {
+      kind: 'combination' as const,
+      law: 'all' as const,
+      members: ['a', 'n'] as [Named, Named],
+      discriminant: undefined
+    },
+    a: { kind: 'scalar' as const, name: 'string' as const, assertions: {} },
+    n: { kind: 'scalar' as const, name: 'null' as const, assertions: {} }
+  }
+
+  it('holds an intersection to its null member rather than admitting null beside it', () => {
+    // A disjunction takes a null member out and admits null beside the rest. An intersection holds
+    // every member at once, so the same move turned `A & null` into `A` admitting null, which
+    // admits every A. A document written from that took what the schema refuses.
+    expect(termOf(withNull)).toEqual({
+      kind: 'every',
+      members: [
+        { kind: 'typed', name: 'string', assertions: {}, admitsNull: false, meta: {} },
+        { kind: 'values', admitted: [{ of: 'null' }], admitsNull: true, meta: {} }
+      ],
+      admitsNull: false,
+      meta: {}
+    })
+  })
+
+  it('admits null where every member of an intersection does', () => {
+    const term = termOf({
+      ...withNull,
+      root: { ...withNull.root, members: ['n', 'n2'] as [Named, Named] },
+      n2: { kind: 'scalar' as const, name: 'null' as const, assertions: {} }
+    })
+
+    expect(term.admitsNull).toBe(true)
+  })
+
+  it('takes a null member out of a disjunction, which is what a disjunction means', () => {
+    const term = termOf({ ...withNull, root: { ...withNull.root, law: 'any' } })
+
+    expect(term).toEqual({
+      kind: 'typed',
+      name: 'string',
+      assertions: {},
+      admitsNull: true,
+      meta: {}
+    })
+  })
 })
 
 describe('an object states on the edge what the edge was read with', () => {

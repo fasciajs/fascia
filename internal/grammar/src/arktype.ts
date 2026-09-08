@@ -96,6 +96,17 @@ function combination(next: () => number, depth: number): ArkType {
   return pick(next, [
     () => inner().or(inner()),
     () => inner().or('null'),
-    () => type.raw({ a: 'string' }).and({ b: 'number' })
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured.
+    // arktype refuses to build one it can prove uninhabited, and it throws where the other
+    // validators wait for a value, so a draw that lands on one falls back to a pair that stands.
+    () => {
+      const left = inner()
+      const right = inner()
+      try {
+        return left.and(right)
+      } catch {
+        return type.raw({ a: 'string' }).and({ b: 'number' })
+      }
+    }
   ])()
 }

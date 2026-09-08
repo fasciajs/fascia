@@ -80,7 +80,8 @@ function structure(next: () => number, depth: number): z.ZodType {
     () => z.tuple([inner()]),
     () => z.tuple([inner(), inner()]),
     () => z.tuple([inner()], z.number()),
-    () => recursive()
+    () => recursive(),
+    () => underName(inner())
   ])()
 }
 
@@ -97,13 +98,31 @@ function recursive(): z.ZodType {
   return held
 }
 
+/**
+ * A schema under a name, which is what a reference is written from.
+ *
+ * A name stands on any schema, and until this only a schema that held itself carried one, so every
+ * target's reference form was exercised over one shape. The count keeps two names apart inside one
+ * draw: two schemas claiming one name is an error this library reports, and not what is measured
+ * here.
+ */
+let named = 0
+
+function underName(schema: z.ZodType): z.ZodType {
+  named += 1
+  return schema.meta({ id: `Named${named}` })
+}
+
 function combination(next: () => number, depth: number): z.ZodType {
   const inner = () => schemaOf(next, depth - 1)
 
   return pick(next, [
     () => z.union([inner(), inner()]),
     () => inner().nullable(),
-    () => z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })),
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured and
+    // every target does something different with one. An uninhabited intersection is drawn too, and
+    // what each target writes for one is the answer being measured.
+    () => z.intersection(inner(), inner()),
     () =>
       z.discriminatedUnion('kind', [
         z.object({ kind: z.literal('a') }),

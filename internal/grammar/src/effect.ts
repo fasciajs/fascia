@@ -87,7 +87,8 @@ function structure(next: () => number, depth: number): EffectSchema {
     () => Schema.Tuple(inner()),
     () => Schema.Tuple(inner(), inner()),
     () => Schema.Tuple([inner()], Schema.Number),
-    () => recursive()
+    () => recursive(),
+    () => underName(inner())
   ])()
 }
 
@@ -104,6 +105,21 @@ const HeldSchema: Schema.Schema<Held> = Schema.Struct({
 
 function recursive(): EffectSchema {
   return HeldSchema
+}
+
+/**
+ * A schema under a name, which is what a reference is written from.
+ *
+ * A name stands on any schema, and until this only a schema that held itself carried one, so every
+ * target's reference form was exercised over one shape. The count keeps two names apart inside one
+ * draw: two schemas claiming one name is an error this library reports, and not what is measured
+ * here.
+ */
+let named = 0
+
+function underName(schema: EffectSchema): EffectSchema {
+  named += 1
+  return schema.annotations({ identifier: `Named${named}` })
 }
 
 function combination(next: () => number, depth: number): EffectSchema {

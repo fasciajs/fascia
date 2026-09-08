@@ -81,7 +81,8 @@ function structure(next: () => number, depth: number): Any {
     () => v.tuple([inner()]),
     () => v.tuple([inner(), inner()]),
     () => v.tupleWithRest([inner()], v.number()),
-    () => recursive()
+    () => recursive(),
+    () => underName(inner())
   ])() as Any
 }
 
@@ -101,13 +102,29 @@ function recursive(): Any {
   return held
 }
 
+/**
+ * A schema under a name, which is what a reference is written from.
+ *
+ * A name stands on any schema, and until this only a schema that held itself carried one, so every
+ * target's reference form was exercised over one shape. The count keeps two names apart inside one
+ * draw: two schemas claiming one name is an error this library reports, and not what is measured
+ * here.
+ */
+let named = 0
+
+function underName(schema: Any): Any {
+  named += 1
+  return v.pipe(schema, v.metadata({ id: `Named${named}` }))
+}
+
 function combination(next: () => number, depth: number): Any {
   const inner = () => schemaOf(next, depth - 1)
 
   return pick(next, [
     () => v.union([inner(), inner()]),
     () => v.nullable(inner()),
-    () => v.intersect([v.object({ a: v.string() }), v.object({ b: v.number() })]),
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured.
+    () => v.intersect([inner(), inner()]),
     () =>
       v.variant('kind', [
         v.object({ kind: v.literal('a') }),
