@@ -4,6 +4,22 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.4.1
+
+### Fixed
+
+**`@fasciajs/arktype` could not read an array whose element states nothing.** arktype records a
+constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carries a proto and a
+length and no structure node, and the reader had a shape only for the form that carries one. A
+caller writing that got no document at all. It is a list of anything with that length.
+
+### Not published
+
+Nothing else here reaches a registry. A schema that holds itself is drawn from every frontend now,
+and two that hold each other reach the specs, so the checks meet what they never met. Neither
+changed a published package: recursion was described before this release and is described the same
+way after it.
+
 ## 0.4.0
 
 ### Added
