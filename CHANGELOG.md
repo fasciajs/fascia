@@ -20,6 +20,20 @@ constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carrie
 length and no structure node, and the reader had a shape only for the form that carries one. A
 caller writing that got no document at all. It is a list of anything with that length.
 
+### Changed
+
+**`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
+no exclusive union of its own and tells the members of any union apart wherever it can, and the
+answer is on the node. A tag at one key is the form a document names, so a union carrying one
+excludes its members by construction and says which key says so. A `domain` discriminant tells a
+string from a number and names no key, and a tag nested inside a member is not one a document can
+state, so neither is read.
+
+What changes: 2020-12 writes `oneOf` where it wrote `anyOf`, OpenAPI writes a `discriminator` beside
+it, and ATD writes the discriminator form where it refused the schema outright, because a
+disjunction it cannot choose by a tag has no ATD form at all. Every one of those accepts the values
+it accepted before, where it accepted anything.
+
 ### Not published
 
 Nothing else here reaches a registry, and what is here is why the two above were found.

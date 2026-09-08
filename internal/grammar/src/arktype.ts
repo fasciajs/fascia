@@ -107,6 +107,9 @@ function combination(next: () => number, depth: number): ArkType {
       } catch {
         return type.raw({ a: 'string' }).and({ b: 'number' })
       }
-    }
+    },
+    // A union arktype can tell apart by a key. It states no exclusive union of its own, and this is
+    // the one shape where a document says which key the members are told apart by.
+    () => type.raw({ kind: "'a'" }).or({ kind: "'b'", b: 'number' })
   ])()
 }
