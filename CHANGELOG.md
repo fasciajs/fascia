@@ -8,6 +8,13 @@ readings of one core have nothing to say by moving apart.
 
 ### Fixed
 
+**An intersection admitted null where one member did.** A null member was taken out of a combination
+and null admitted beside the rest, for every law. That is what a disjunction means. An intersection
+holds every member at once, so `A & null` became `A` admitting null, which admits every A, and the
+same move made `admitsNull` the disjunction of the members where an intersection needs the
+conjunction. A document written from one took what the schema refuses, and no departure named it,
+because the loss was in the reading.
+
 **`@fasciajs/arktype` could not read an array whose element states nothing.** arktype records a
 constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carries a proto and a
 length and no structure node, and the reader had a shape only for the form that carries one. A
@@ -15,10 +22,15 @@ caller writing that got no document at all. It is a list of anything with that l
 
 ### Not published
 
-Nothing else here reaches a registry. A schema that holds itself is drawn from every frontend now,
-and two that hold each other reach the specs, so the checks meet what they never met. Neither
-changed a published package: recursion was described before this release and is described the same
-way after it.
+Nothing else here reaches a registry, and what is here is why the two above were found.
+
+A schema that holds itself is drawn from every frontend, and two that hold each other reach the
+specs. Recursion was described before this release and is described the same way after it.
+
+An intersection is drawn over drawn members rather than over two fixed objects, and a name stands on
+a drawn schema rather than only on one that holds itself. Both came from counting which shapes nest
+inside which: of 104 pairings, 53 were ever drawn, and the first of the two fixes above was in the
+half nothing reached.
 
 ## 0.4.0
 
