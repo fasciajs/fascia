@@ -118,6 +118,10 @@ function combination(next: () => number, depth: number): z.ZodType {
 
   return pick(next, [
     () => z.union([inner(), inner()]),
+    // An exclusive union of anything. A discriminated union is the other way to state this law and
+    // its members must be objects carrying a tag, so it was the only shape the law was measured
+    // over. `oneOf` is not `anyOf` where two members take one value, and that is what this draws.
+    () => z.xor([inner(), inner()]),
     () => inner().nullable(),
     // Drawn rather than fixed, because an intersection of two objects was the only one measured and
     // every target does something different with one. An uninhabited intersection is drawn too, and

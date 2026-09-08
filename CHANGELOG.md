@@ -27,10 +27,11 @@ Nothing else here reaches a registry, and what is here is why the two above were
 A schema that holds itself is drawn from every frontend, and two that hold each other reach the
 specs. Recursion was described before this release and is described the same way after it.
 
-An intersection is drawn over drawn members rather than over two fixed objects, and a name stands on
-a drawn schema rather than only on one that holds itself. Both came from counting which shapes nest
-inside which: of 104 pairings, 53 were ever drawn, and the first of the two fixes above was in the
-half nothing reached.
+An intersection is drawn over drawn members rather than over two fixed objects, an exclusive union
+over drawn members rather than only as a discriminated union of tagged objects, and a name stands on
+a drawn schema rather than only on one that holds itself. All three came from counting which shapes
+nest inside which: of 104 pairings, 53 were ever drawn, and the first of the two fixes above was in
+the half nothing reached. 82 are drawn now, and 20 of the 22 left are the set nothing produces.
 
 ## 0.4.0
 
