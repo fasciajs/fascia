@@ -165,6 +165,7 @@ reaches a document.
 | zod | yes | 32 | dropped where a schema is used once |
 | effect | its own, outside the spec | 58 | kept |
 | valibot | a separate package | not measured | not measured |
+| arri | a function of its own | not measured | not measured |
 
 arktype writes `$defs: { intersection216: … }` and the number moves when anything unrelated is parsed
 first, so a document kept in version control shows a diff nobody made. zod writes `prefixItems` for a
@@ -172,6 +173,11 @@ tuple with no `minItems`, so the document takes the empty list where zod refuses
 count correctly under the `openapi-3.0` target: one library, one schema, right in one dialect.
 effect names every definition well and writes `additionalProperties: false` for a struct it strips
 rather than refuses.
+
+A document read here is a frontend, whichever of those wrote it. arri states Standard Schema and
+writes its own document, and this repository never read an arri schema: `@fasciajs/atd` writes ATD
+and has no reading of it. It is described now by a package that was already here, and the term
+agrees with arri about what arri takes.
 
 Those are today's numbers and each one can be fixed by its author. The durable part is that nobody
 else measures it: two of the four ship a converter and neither run compares it against the validator

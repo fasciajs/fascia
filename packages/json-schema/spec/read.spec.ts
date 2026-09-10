@@ -1,3 +1,4 @@
+import { a, schemaToJsonSchema } from '@arrirpc/schema'
 import type { Described, Describing, Description } from '@fasciajs/core'
 import { admits, describe as description, isError } from '@fasciajs/core'
 import { jsonSchemaAt, jsonSchemaSource, spellJsonSchemaAll } from '@fasciajs/json-schema'
@@ -133,6 +134,28 @@ describe('a validator that writes its own document becomes a frontend', () => {
     })
     expect(admits(wholeOf(document as JSONSchema), { id: 'a', age: 1 })).toBe(true)
     expect(admits(wholeOf(document as JSONSchema), { id: 'a', age: -1 })).toBe(false)
+  })
+})
+
+describe('a library this repository never read becomes a frontend', () => {
+  it('describes an arri schema through the document arri writes', () => {
+    // arri states Standard Schema and writes its own document, and nothing here reads its
+    // internals. `@fasciajs/atd` writes ATD and never read one, so this is a fifth library
+    // described by a package that was already here.
+    const User = a.object({ id: a.string(), age: a.uint32() })
+    const document = schemaToJsonSchema(User) as JSONSchema
+
+    const whole = wholeOf(document)
+    expect(whole.term).toMatchObject({ kind: 'typed', name: 'object' })
+
+    // The term agrees with arri about what arri takes.
+    for (const value of [
+      { id: 'a', age: 1 },
+      { id: 'a', age: -1 },
+      { id: 1, age: 1 }
+    ]) {
+      expect(admits(whole, value)).toBe(a.validate(User, value))
+    }
   })
 })
 

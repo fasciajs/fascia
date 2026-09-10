@@ -35,6 +35,10 @@ A `$ref` is read under the name it points at, so a document holding itself is de
 schema that holds itself is. `uniqueItems` is read as a set, because that is the document this
 library writes for one.
 
+arri is the first library this shows. It states Standard Schema and writes its own document, and
+nothing here ever read an arri schema: `@fasciajs/atd` writes ATD and has no reading of it. It is
+described now by a package that was already here.
+
 ### Changed
 
 **`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
