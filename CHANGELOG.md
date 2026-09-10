@@ -20,6 +20,21 @@ constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carrie
 length and no structure node, and the reader had a shape only for the form that carries one. A
 caller writing that got no document at all. It is a list of anything with that length.
 
+### Added
+
+**`@fasciajs/json-schema` reads a document as well as writing one.** `jsonSchemaSource` is a frontend
+over 2020-12, so a validator that writes its own document becomes a frontend through it rather than
+through a reading of its internals. `~standard.jsonSchema` is that interface where a validator states
+one.
+
+It brings the round trip this repository never had. What this library writes, it writes the same
+after reading it, over every document written from every frontend here, and a term read from a
+document admits what the document admits.
+
+A `$ref` is read under the name it points at, so a document holding itself is described the way a
+schema that holds itself is. `uniqueItems` is read as a set, because that is the document this
+library writes for one.
+
 ### Changed
 
 **`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
