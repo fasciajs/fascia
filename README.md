@@ -163,16 +163,17 @@ reaches a document.
 | --- | --- | --- | --- |
 | arktype | yes | 0 | an internal node id |
 | zod | yes | 32 | dropped where a schema is used once |
+| valibot | a separate package | 3 | an ordinal |
 | effect | its own, outside the spec | 58 | kept |
-| valibot | a separate package | not measured | not measured |
-| arri | a function of its own | not measured | not measured |
+| arri | a function of its own | no grammar here draws one | dropped where used once |
 
 arktype writes `$defs: { intersection216: … }` and the number moves when anything unrelated is parsed
-first, so a document kept in version control shows a diff nobody made. zod writes `prefixItems` for a
-tuple with no `minItems`, so the document takes the empty list where zod refuses it, and writes the
-count correctly under the `openapi-3.0` target: one library, one schema, right in one dialect.
-effect names every definition well and writes `additionalProperties: false` for a struct it strips
-rather than refuses.
+first, so a document kept in version control shows a diff nobody made. valibot writes `$defs: { 0: … }`.
+zod writes `prefixItems` for a tuple with no `minItems`, so the document takes the empty list where
+zod refuses it, and writes the count correctly under the `openapi-3.0` target: one library, one
+schema, right in one dialect. valibot writes the count and writes it where the position takes an
+absent value, so the document refuses the empty list where valibot accepts one. effect names every
+definition well and writes `additionalProperties: false` for a struct it strips rather than refuses.
 
 A document read here is a frontend, whichever of those wrote it. arri states Standard Schema and
 writes its own document, and this repository never read an arri schema: `@fasciajs/atd` writes ATD

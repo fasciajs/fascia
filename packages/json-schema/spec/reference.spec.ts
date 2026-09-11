@@ -4,6 +4,7 @@ import {
   effectGrammar,
   numbers,
   VALUES,
+  valibotGrammar,
   valuesNear,
   zodGrammar
 } from '@fascia-internal/grammar'
@@ -12,11 +13,14 @@ import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
+import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
+import { toJsonSchema } from '@valibot/to-json-schema'
 import { default as Ajv } from 'ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
 import { JSONSchema, Schema } from 'effect'
+import type * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -147,6 +151,19 @@ const surveys = [
       effectGrammar,
       // The grammar hands the AST, and effect writes from a schema.
       (ast: Parameters<typeof effectSource.read>[0]) => JSONSchema.make(Schema.make(ast)),
+      'draft-07'
+    )
+  ],
+  [
+    'valibot',
+    3,
+    survey(
+      valibotSource,
+      valibotGrammar,
+      // valibot states its own document through a package beside it rather than through the
+      // converter interface, which changes nothing here: a document is a document.
+      (schema: Parameters<typeof valibotSource.read>[0]) =>
+        toJsonSchema(schema as unknown as v.GenericSchema),
       'draft-07'
     )
   ]
