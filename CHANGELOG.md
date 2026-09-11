@@ -4,6 +4,68 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.4.1
+
+### Fixed
+
+**An intersection admitted null where one member did.** A null member was taken out of a combination
+and null admitted beside the rest, for every law. That is what a disjunction means. An intersection
+holds every member at once, so `A & null` became `A` admitting null, which admits every A, and the
+same move made `admitsNull` the disjunction of the members where an intersection needs the
+conjunction. A document written from one took what the schema refuses, and no departure named it,
+because the loss was in the reading.
+
+**`@fasciajs/arktype` could not read an array whose element states nothing.** arktype records a
+constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carries a proto and a
+length and no structure node, and the reader had a shape only for the form that carries one. A
+caller writing that got no document at all. It is a list of anything with that length.
+
+### Added
+
+**`@fasciajs/json-schema` reads a document as well as writing one.** `jsonSchemaSource` is a frontend
+over 2020-12, so a validator that writes its own document becomes a frontend through it rather than
+through a reading of its internals. `~standard.jsonSchema` is that interface where a validator states
+one.
+
+It brings the round trip this repository never had. What this library writes, it writes the same
+after reading it, over every document written from every frontend here, and a term read from a
+document admits what the document admits.
+
+A `$ref` is read under the name it points at, so a document holding itself is described the way a
+schema that holds itself is. `uniqueItems` is read as a set, because that is the document this
+library writes for one.
+
+arri is the first library this shows. It states Standard Schema and writes its own document, and
+nothing here ever read an arri schema: `@fasciajs/atd` writes ATD and has no reading of it. It is
+described now by a package that was already here.
+
+### Changed
+
+**`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
+no exclusive union of its own and tells the members of any union apart wherever it can, and the
+answer is on the node. A tag at one key is the form a document names, so a union carrying one
+excludes its members by construction and says which key says so. A `domain` discriminant tells a
+string from a number and names no key, and a tag nested inside a member is not one a document can
+state, so neither is read.
+
+What changes: 2020-12 writes `oneOf` where it wrote `anyOf`, OpenAPI writes a `discriminator` beside
+it, and ATD writes the discriminator form where it refused the schema outright, because a
+disjunction it cannot choose by a tag has no ATD form at all. Every one of those accepts the values
+it accepted before, where it accepted anything.
+
+### Not published
+
+Nothing else here reaches a registry, and what is here is why the two above were found.
+
+A schema that holds itself is drawn from every frontend, and two that hold each other reach the
+specs. Recursion was described before this release and is described the same way after it.
+
+An intersection is drawn over drawn members rather than over two fixed objects, an exclusive union
+over drawn members rather than only as a discriminated union of tagged objects, and a name stands on
+a drawn schema rather than only on one that holds itself. All three came from counting which shapes
+nest inside which: of 104 pairings, 53 were ever drawn, and the first of the two fixes above was in
+the half nothing reached. 82 are drawn now, and 20 of the 22 left are the set nothing produces.
+
 ## 0.4.0
 
 ### Added

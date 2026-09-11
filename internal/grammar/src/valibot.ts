@@ -16,8 +16,6 @@ import { pick, type Subject } from './draw.js'
  *   says an array is one. A document has no word for a domain holding both, so every document from
  *   one refuses a value valibot takes. arktype's index signature does the same, and the spec beside
  *   the JSON Schema property states that one.
- * - `v.lazy`, which needs a name and produces a reference. The value pool holds no value nested more
- *   than two deep, so a recursive schema and its first unrolling accept the same values in it.
  */
 export function valibotGrammar(next: () => number, depth: number): Subject<VSchema> {
   const schema = schemaOf(next, depth)
@@ -82,8 +80,41 @@ function structure(next: () => number, depth: number): Any {
     () => v.objectWithRest({ a: inner() }, v.number()),
     () => v.tuple([inner()]),
     () => v.tuple([inner(), inner()]),
-    () => v.tupleWithRest([inner()], v.number())
+    () => v.tupleWithRest([inner()], v.number()),
+    () => recursive(),
+    () => underName(inner())
   ])() as Any
+}
+
+/**
+ * A schema that holds itself, named by a `metadata` action.
+ *
+ * valibot states nothing about a schema on its own, and `nameOf` reads an `id` from the metadata a
+ * caller piped on. The name stands on the lazy rather than under it, so the walk meets a named
+ * schema where the schema refers to itself: met at a bare `v.lazy`, it would find no name there and
+ * report a cycle nothing names.
+ */
+function recursive(): Any {
+  const held: Any = v.pipe(
+    v.lazy(() => v.object({ name: v.string(), children: v.array(held) })),
+    v.metadata({ id: 'Held' })
+  )
+  return held
+}
+
+/**
+ * A schema under a name, which is what a reference is written from.
+ *
+ * A name stands on any schema, and until this only a schema that held itself carried one, so every
+ * target's reference form was exercised over one shape. The count keeps two names apart inside one
+ * draw: two schemas claiming one name is an error this library reports, and not what is measured
+ * here.
+ */
+let named = 0
+
+function underName(schema: Any): Any {
+  named += 1
+  return v.pipe(schema, v.metadata({ id: `Named${named}` }))
 }
 
 function combination(next: () => number, depth: number): Any {
@@ -92,7 +123,8 @@ function combination(next: () => number, depth: number): Any {
   return pick(next, [
     () => v.union([inner(), inner()]),
     () => v.nullable(inner()),
-    () => v.intersect([v.object({ a: v.string() }), v.object({ b: v.number() })]),
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured.
+    () => v.intersect([inner(), inner()]),
     () =>
       v.variant('kind', [
         v.object({ kind: v.literal('a') }),

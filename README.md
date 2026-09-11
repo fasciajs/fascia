@@ -15,6 +15,7 @@
 <p align="center">
   <a href="#a-schema-has-two-sides">Two sides</a> ·
   <a href="#three-outcomes-not-two">Three outcomes</a> ·
+  <a href="#what-about-standard-schema">Standard Schema</a> ·
   <a href="#what-it-refuses">What it refuses</a> ·
   <a href="#the-numbers">The numbers</a> ·
   <a href="#the-packages">The packages</a>
@@ -125,6 +126,63 @@ import { refusing } from '@fasciajs/core'
 
 refusing(spelled, ['narrower'])   // the spelling, or the reason it is refused
 ```
+
+## What about Standard Schema
+
+Standard Schema states one interface for running a validator. It exposes no structure, so nothing
+can be written from it. That is a different problem and the two do not overlap.
+
+**Standard JSON Schema is the one that overlaps.** `~standard.jsonSchema.input(options)` converts a
+schema to `draft-2020-12`, `draft-07` or `openapi-3.0`. Where that is what you need, use it: one
+call, no dependency, and nobody reading a validator's internals.
+
+Three things are outside it, and they are outside by shape rather than by omission.
+
+**It returns a JSON Schema document.** ATD is not one. A DynamoDB AttributeValue shape is not one.
+Two of the five targets here are outside the type the interface returns.
+
+**It converts one schema.** `components.schemas` is one block shared by many operations, and there is
+no argument that could carry a name scope across several conversions. Two operations holding one
+`User` get two documents, each with its own copy.
+
+```ts
+describeAll([{ schema: Post, io: 'input' }, { schema: Note, io: 'input' }], zodSource, naming)
+// definitions: User, Post, Note
+```
+
+**It has two outcomes.** A document, or a throw where the conversion is unsupported. Almost every
+conversion is the third thing: it says less and stays sound. A caller cannot ask what was given up,
+and cannot stop a build on it.
+
+### What the converters do today
+
+Measured against each validator's own verdict, over 300 drawn schemas, and again on how a name
+reaches a document.
+
+| | a converter | wrong about its own schema | a name in `$defs` |
+| --- | --- | --- | --- |
+| arktype | yes | 0 | an internal node id |
+| zod | yes | 32 | dropped where a schema is used once |
+| valibot | a separate package | 3 | an ordinal |
+| effect | its own, outside the spec | 58 | kept |
+| arri | a function of its own | no grammar here draws one | dropped where used once |
+
+arktype writes `$defs: { intersection216: … }` and the number moves when anything unrelated is parsed
+first, so a document kept in version control shows a diff nobody made. valibot writes `$defs: { 0: … }`.
+zod writes `prefixItems` for a tuple with no `minItems`, so the document takes the empty list where
+zod refuses it, and writes the count correctly under the `openapi-3.0` target: one library, one
+schema, right in one dialect. valibot writes the count and writes it where the position takes an
+absent value, so the document refuses the empty list where valibot accepts one. effect names every
+definition well and writes `additionalProperties: false` for a struct it strips rather than refuses.
+
+A document read here is a frontend, whichever of those wrote it. arri states Standard Schema and
+writes its own document, and this repository never read an arri schema: `@fasciajs/atd` writes ATD
+and has no reading of it. It is described now by a package that was already here, and the term
+agrees with arri about what arri takes.
+
+Those are today's numbers and each one can be fixed by its author. The durable part is that nobody
+else measures it: two of the four ship a converter and neither run compares it against the validator
+it came from. The runs in this repository do, for this library and for them.
 
 ## What it refuses
 

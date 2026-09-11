@@ -13,6 +13,20 @@ npm install @fasciajs/json-schema
 gives up it reports rather than drops: a discriminant tells the members of a disjunction apart, and
 `oneOf` states what the document accepts without one.
 
+It reads one too. A validator that writes its own 2020-12 becomes a frontend through this package,
+so a fifth library is a document rather than a reading of its internals.
+
+```ts
+import { describe } from '@fasciajs/core'
+import { jsonSchemaAt, jsonSchemaSource } from '@fasciajs/json-schema'
+
+describe(jsonSchemaAt(document), jsonSchemaSource, 'input')
+```
+
+What this library writes, it reads: `spell` then `read` then `spell` is where it started, over every
+document written from every frontend here. A term read from a document admits what the document
+admits, asked of Ajv.
+
 ```ts
 import { spellJsonSchema } from '@fasciajs/json-schema'
 

@@ -1,4 +1,5 @@
 import type { BaseRoot, nodeOfKind, RootKind } from '@ark/schema'
+import { intrinsic } from '@ark/schema'
 import type {
   AdmittedValue,
   Bound,
@@ -165,12 +166,34 @@ function union(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
     )
   }
 
+  // arktype tells the members of a union apart wherever it can, and the answer is on the node. A tag
+  // at one key is the one form a document names, so a union carrying one is exclusive by
+  // construction and says which key it is told apart by.
+  const tag = tagOf(schema)
+
   return {
     kind: 'combination',
-    law: 'any',
+    law: tag === undefined ? 'any' : 'exactlyOne',
     members: [first, second, ...rest],
-    discriminant: undefined
+    discriminant: tag
   }
+}
+
+/**
+ * The key a union tells its members apart by, where a document has a word for it.
+ *
+ * A `domain` discriminant tells a string from a number and names no key, and a `unit` one at a path
+ * of several keys names a value nested inside the member. Neither is what a document states beside a
+ * disjunction, so only a tag at one key is read.
+ */
+function tagOf(schema: nodeOfKind<'union'>): string | undefined {
+  const discriminant = schema.discriminant
+  if (discriminant === null || discriminant.kind !== 'unit') {
+    return undefined
+  }
+
+  const [key, ...rest] = discriminant.path
+  return typeof key === 'string' && rest.length === 0 ? key : undefined
 }
 
 function isBoolean(branches: readonly BaseRoot[]): boolean {
@@ -259,6 +282,24 @@ function intersection(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
 
   if (basis?.hasKind('proto') && basis.builtinName === 'Date') {
     return { kind: 'scalar', name: 'date', assertions: dateAssertions(schema) }
+  }
+
+  // An array whose element states nothing carries no structure node, because arktype records a
+  // constraint and `unknown` is none. So `unknown[] >= 1` states a proto and a length and nothing
+  // else, and it is a list of anything with that length.
+  if (basis?.hasKind('proto') && basis.builtinName === 'Array') {
+    const minItems = schema.inner.minLength?.rule
+    const maxItems = schema.inner.maxLength?.rule ?? schema.inner.exactLength?.rule
+
+    return {
+      kind: 'structural',
+      of: 'list',
+      items: intrinsic.unknown,
+      assertions: {
+        ...(minItems !== undefined && { minItems }),
+        ...(maxItems !== undefined && { maxItems })
+      }
+    }
   }
 
   return new UnreadableSchema(

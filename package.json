@@ -34,6 +34,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@seriousme/openapi-schema-validator": "^2.9.1",
     "@types/node": "^24.13.3",
+    "@valibot/to-json-schema": "^1.3.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "arktype": "^2.2.3",

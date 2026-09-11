@@ -4,6 +4,7 @@ import {
   effectGrammar,
   numbers,
   VALUES,
+  valibotGrammar,
   valuesNear,
   zodGrammar
 } from '@fascia-internal/grammar'
@@ -12,11 +13,14 @@ import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
 import { effectSource } from '@fasciajs/effect'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
+import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
+import { toJsonSchema } from '@valibot/to-json-schema'
 import { default as Ajv } from 'ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
 import { JSONSchema, Schema } from 'effect'
+import type * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 
@@ -120,7 +124,7 @@ function survey<S>(
 /**
  * Each reference, and how often its own document differs from its own verdict at this seed.
  *
- * zod's 61 are one tuple written with neither `minItems` nor `items`. effect's 58 are one struct
+ * zod's 32 are one tuple written with neither `minItems` nor `items`. effect's 65 are one struct
  * written `additionalProperties: false`, which effect itself strips rather than refuses. The number
  * moves when the reference changes, which is what a run against one has to notice.
  */
@@ -134,19 +138,32 @@ const surveys = [
   ],
   [
     'zod',
-    61,
+    32,
     survey(zodSource, zodGrammar, (schema: z.core.$ZodType) =>
       z.toJSONSchema(schema, { io: 'input' })
     )
   ],
   [
     'effect',
-    58,
+    65,
     survey(
       effectSource,
       effectGrammar,
       // The grammar hands the AST, and effect writes from a schema.
       (ast: Parameters<typeof effectSource.read>[0]) => JSONSchema.make(Schema.make(ast)),
+      'draft-07'
+    )
+  ],
+  [
+    'valibot',
+    3,
+    survey(
+      valibotSource,
+      valibotGrammar,
+      // valibot states its own document through a package beside it rather than through the
+      // converter interface, which changes nothing here: a document is a document.
+      (schema: Parameters<typeof valibotSource.read>[0]) =>
+        toJsonSchema(schema as unknown as v.GenericSchema),
       'draft-07'
     )
   ]

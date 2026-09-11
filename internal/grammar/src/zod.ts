@@ -17,8 +17,6 @@ import { pick, type Subject } from './draw.js'
  * - `.catch()` and `z.coerce.*`, which accept more than any document states. The parser was widened
  *   deliberately and a document narrower than one is the decision rather than a finding, so
  *   including them without reading the report would count a decision as a defect.
- * - `z.lazy()`, which needs a name and produces a reference. The value pool holds no value nested
- *   more than two deep, so a recursive schema and its first unrolling accept the same values in it.
  */
 export function zodGrammar(next: () => number, depth: number): Subject<z.core.$ZodType> {
   const schema = schemaOf(next, depth)
@@ -81,8 +79,38 @@ function structure(next: () => number, depth: number): z.ZodType {
     () => z.record(z.string(), inner()),
     () => z.tuple([inner()]),
     () => z.tuple([inner(), inner()]),
-    () => z.tuple([inner()], z.number())
+    () => z.tuple([inner()], z.number()),
+    () => recursive(),
+    () => underName(inner())
   ])()
+}
+
+/**
+ * A schema that holds itself, which is what a reference is for.
+ *
+ * zod names nothing on its own, so a caller states one. `valuesNear` draws a value that nests
+ * through the reference, which is what tells this apart from its first unrolling.
+ */
+function recursive(): z.ZodType {
+  const held: z.ZodType = z
+    .lazy(() => z.object({ name: z.string(), children: z.array(held) }))
+    .meta({ id: 'Held' })
+  return held
+}
+
+/**
+ * A schema under a name, which is what a reference is written from.
+ *
+ * A name stands on any schema, and until this only a schema that held itself carried one, so every
+ * target's reference form was exercised over one shape. The count keeps two names apart inside one
+ * draw: two schemas claiming one name is an error this library reports, and not what is measured
+ * here.
+ */
+let named = 0
+
+function underName(schema: z.ZodType): z.ZodType {
+  named += 1
+  return schema.meta({ id: `Named${named}` })
 }
 
 function combination(next: () => number, depth: number): z.ZodType {
@@ -90,8 +118,15 @@ function combination(next: () => number, depth: number): z.ZodType {
 
   return pick(next, [
     () => z.union([inner(), inner()]),
+    // An exclusive union of anything. A discriminated union is the other way to state this law and
+    // its members must be objects carrying a tag, so it was the only shape the law was measured
+    // over. `oneOf` is not `anyOf` where two members take one value, and that is what this draws.
+    () => z.xor([inner(), inner()]),
     () => inner().nullable(),
-    () => z.intersection(z.object({ a: z.string() }), z.object({ b: z.number() })),
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured and
+    // every target does something different with one. An uninhabited intersection is drawn too, and
+    // what each target writes for one is the answer being measured.
+    () => z.intersection(inner(), inner()),
     () =>
       z.discriminatedUnion('kind', [
         z.object({ kind: z.literal('a') }),
