@@ -451,7 +451,7 @@ export function spellJsonSchemaAll(described: {
   // A boolean root has no place for `$schema`, so it is written as the object stating the same.
   const body = typeof root.written === 'boolean' ? (root.written ? {} : { not: {} }) : root.written
   const written: JSONSchema = {
-    $schema: SCHEMA_URIS['2020-12'],
+    $schema: SCHEMA_URIS['2020-12'][0],
     ...body,
     ...(described.definitions.size > 0 && { $defs })
   }

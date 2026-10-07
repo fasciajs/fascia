@@ -529,13 +529,49 @@ describe('a dialect is named, never assumed', () => {
 
   it('refuses a $schema that names no dialect this package reads', () => {
     expect(
+      refusalOf({ $schema: 'https://example.com/my-dialect', type: 'string' }, '2020-12')
+    ).toContain(
+      'this names https://example.com/my-dialect in $schema, which is no dialect this package reads'
+    )
+  })
+
+  it('refuses an OpenAPI 3.1 document read as plain 2020-12, because it names its own dialect', () => {
+    expect(
       refusalOf(
         { $schema: 'https://spec.openapis.org/oas/3.1/dialect/base', type: 'string' },
         '2020-12'
       )
-    ).toContain(
-      'this names https://spec.openapis.org/oas/3.1/dialect/base in $schema, which is no dialect this package reads'
-    )
+    ).toContain('this names oas-3.1 in $schema, and it was read as 2020-12')
+  })
+
+  it('reads the OpenAPI 3.1 dialect by either URI, and its discriminator changes no verdict', () => {
+    for (const uri of [
+      'https://spec.openapis.org/oas/3.1/dialect/base',
+      'https://spec.openapis.org/oas/3.1/dialect/2024-11-10'
+    ]) {
+      const document = {
+        $schema: uri,
+        oneOf: [
+          { type: 'object', properties: { kind: { const: 'a' } }, required: ['kind'] },
+          { type: 'object', properties: { kind: { const: 'b' } }, required: ['kind'] }
+        ],
+        discriminator: { propertyName: 'kind' },
+        example: { kind: 'a' }
+      }
+
+      // The dialect asserts what 2020-12 asserts, so Ajv is asked under the 2020-12 URI.
+      const validate = new Ajv2020({ strict: false }).compile({
+        ...document,
+        $schema: 'https://json-schema.org/draft/2020-12/schema'
+      })
+      const whole = readIn(document, 'oas-3.1')
+      const values = [{ kind: 'a' }, { kind: 'b' }, { kind: 'c' }, {}]
+
+      expect({
+        byTerm: values.map((value) => admits(whole, value)),
+        byDocument: values.map((value) => validate(value) === true)
+      }).toEqual({ byTerm: [true, true, false, false], byDocument: [true, true, false, false] })
+    }
   })
 
   it('reads a $schema written with either scheme and with or without an empty fragment', () => {

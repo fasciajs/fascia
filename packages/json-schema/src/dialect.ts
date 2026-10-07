@@ -22,17 +22,29 @@ export function isKeyed(value: unknown): value is Readonly<Record<string, unknow
 }
 
 /** The dialects a document is read in. Each one is named explicitly, by `$schema` or by a caller. */
-const NAMES = ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12'] as const
+const NAMES = ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12', 'oas-3.1'] as const
 
 export type Dialect = (typeof NAMES)[number]
 
-/** The `$schema` each dialect is named by. The writer writes it, and the reader matches it. */
-export const SCHEMA_URIS: Readonly<Record<Dialect, string>> = {
-  'draft-04': 'http://json-schema.org/draft-04/schema#',
-  'draft-06': 'http://json-schema.org/draft-06/schema#',
-  'draft-07': 'http://json-schema.org/draft-07/schema#',
-  '2019-09': 'https://json-schema.org/draft/2019-09/schema',
-  '2020-12': 'https://json-schema.org/draft/2020-12/schema'
+/**
+ * The `$schema` URIs each dialect is named by. The writer writes the first, and the reader matches
+ * every one.
+ *
+ * OpenAPI 3.1 names its dialect `/dialect/base`, and publishes the same dialect under a dated `$id`.
+ * It is 2020-12 with `format` as an annotation and four keywords of its own: `discriminator`, `xml`,
+ * `externalDocs` and `example`. The specification says a discriminator "MUST NOT change the
+ * validation outcome", and the other three describe, so none of the four asserts.
+ */
+export const SCHEMA_URIS: Readonly<Record<Dialect, readonly [string, ...string[]]>> = {
+  'draft-04': ['http://json-schema.org/draft-04/schema#'],
+  'draft-06': ['http://json-schema.org/draft-06/schema#'],
+  'draft-07': ['http://json-schema.org/draft-07/schema#'],
+  '2019-09': ['https://json-schema.org/draft/2019-09/schema'],
+  '2020-12': ['https://json-schema.org/draft/2020-12/schema'],
+  'oas-3.1': [
+    'https://spec.openapis.org/oas/3.1/dialect/base',
+    'https://spec.openapis.org/oas/3.1/dialect/2024-11-10'
+  ]
 }
 
 /**
@@ -42,7 +54,7 @@ export const SCHEMA_URIS: Readonly<Record<Dialect, string>> = {
  */
 export function dialectNamed(uri: string): Dialect | undefined {
   const bare = (one: string): string => one.replace(/^https?:\/\//, '').replace(/#$/, '')
-  return NAMES.find((name) => bare(SCHEMA_URIS[name]) === bare(uri))
+  return NAMES.find((name) => SCHEMA_URIS[name].some((named) => bare(named) === bare(uri)))
 }
 
 interface Rules {
@@ -68,7 +80,10 @@ const SINCE_2019 = [
 const SINCE_07 = [...SINCE_2019, 'if', 'then', 'else']
 const SINCE_06 = [...SINCE_07, 'const', 'contains', 'propertyNames']
 
-const RULES: Readonly<Record<Exclude<Dialect, '2020-12'>, Rules>> = {
+/** The dialects read as they stand, because each one is 2020-12 in what it asserts. */
+type Current = '2020-12' | 'oas-3.1'
+
+const RULES: Readonly<Record<Exclude<Dialect, Current>, Rules>> = {
   'draft-04': { unknown: SINCE_06, refOverrides: true, booleanBounds: true },
   'draft-06': { unknown: SINCE_07, refOverrides: true, booleanBounds: false },
   'draft-07': { unknown: SINCE_2019, refOverrides: true, booleanBounds: false },
@@ -77,7 +92,7 @@ const RULES: Readonly<Record<Exclude<Dialect, '2020-12'>, Rules>> = {
 
 /** A document in a dialect, stated in 2020-12. */
 export function asCurrent(root: unknown, dialect: Dialect): unknown {
-  return dialect === '2020-12' ? root : translated(root, RULES[dialect])
+  return dialect === '2020-12' || dialect === 'oas-3.1' ? root : translated(root, RULES[dialect])
 }
 
 /** Keywords holding one schema. */

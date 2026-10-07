@@ -74,6 +74,10 @@ silence. `jsonSchemaAt` takes the dialect as an argument, and refuses a `$schema
 it or that names no dialect read here. `spellJsonSchema` writes one schema for a document to hold,
 and states no `$schema`, because the document holding it names the dialect.
 
+The OpenAPI 3.1 dialect is one of the dialects read, named `oas-3.1`, by `/dialect/base` and by its
+dated `$id`. It asserts what 2020-12 asserts: its four keywords describe, and the specification says
+a discriminator must not change a verdict.
+
 **`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
 no exclusive union of its own and tells the members of any union apart wherever it can, and the
 answer is on the node. A tag at one key is the form a document names, so a union carrying one
