@@ -12,6 +12,38 @@ import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
  */
 export const DEFS = '#/$defs/'
 
+/**
+ * The reference to a definition, and the name a reference points at.
+ *
+ * One pair, because a name holding `/` or `~` is escaped on the way out and unescaped on the way in.
+ * Two spellings of that rule wrote `a~1b` back as a definition named `a~1b`, and Ajv refused it.
+ */
+export function refTo(name: string): string {
+  return DEFS + encodeURIComponent(name.replaceAll('~', '~0').replaceAll('/', '~1'))
+}
+
+/**
+ * The steps of a pointer inside this document, or nothing for one that points somewhere else.
+ *
+ * The fragment is decoded before it is split, because a pointer is what the fragment encodes.
+ */
+export function stepsOf(reference: string): readonly string[] | undefined {
+  if (reference === '#') {
+    return []
+  }
+  if (!reference.startsWith('#/')) {
+    return undefined
+  }
+
+  let pointer: string
+  try {
+    pointer = decodeURIComponent(reference.slice(2))
+  } catch {
+    return undefined
+  }
+  return pointer.split('/').map((step) => step.replaceAll('~1', '/').replaceAll('~0', '~'))
+}
+
 export function refsAt(written: JSONSchema, prefix: string): JSONSchema {
   if (typeof written === 'boolean') {
     return written

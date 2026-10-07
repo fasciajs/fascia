@@ -9,6 +9,7 @@ import type {
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
+import { refTo } from './refs.js'
 
 /**
  * A term, written as JSON Schema 2020-12.
@@ -64,7 +65,7 @@ function body(term: Described): Spelling<JSONSchema> {
     case 'tuple':
       return tuple(term)
     case 'ref':
-      return faithful(orNull({ $ref: `#/$defs/${term.name}` }, term.admitsNull))
+      return faithful(orNull({ $ref: refTo(term.name) }, term.admitsNull))
     case 'untyped':
       // Nothing is stated, and 2020-12 states nothing with an empty schema. A `null` is a value like
       // any other where no type is named, so admitting one needs no keyword.

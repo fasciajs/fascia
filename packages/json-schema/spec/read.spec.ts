@@ -2,6 +2,7 @@ import { a, schemaToJsonSchema } from '@arrirpc/schema'
 import type { Described, Describing, Description } from '@fasciajs/core'
 import { admits, describe as description, isError } from '@fasciajs/core'
 import { jsonSchemaAt, jsonSchemaSource, spellJsonSchemaAll } from '@fasciajs/json-schema'
+import { Ajv2020 } from 'ajv/dist/2020.js'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
@@ -181,4 +182,147 @@ describe('what this library writes, it reads', () => {
       expect(spelled.written).toEqual(document)
     })
   }
+})
+
+/**
+ * Each value's verdict, asked of the term read from a document and of Ajv over the document.
+ *
+ * Both sides are returned, so a test states the verdicts the business needs and that Ajv gives them.
+ */
+function verdictsOf(document: JSONSchema, values: readonly unknown[]) {
+  const validate = new Ajv2020({ strict: false }).compile(document as object)
+  const whole = wholeOf(document)
+
+  return {
+    byTerm: values.map((value) => admits(whole, value)),
+    byDocument: values.map((value) => validate(value) === true)
+  }
+}
+
+function refusalOf(document: JSONSchema): string {
+  const refusal = description(jsonSchemaAt(document), jsonSchemaSource, 'input')
+  return isError(refusal) ? refusal.message : 'described'
+}
+
+describe('a schema holds every keyword it states at once', () => {
+  it('holds a disjunction to the type stated beside it', () => {
+    const verdicts = verdictsOf({ type: 'string', anyOf: [{ minLength: 3 }, { pattern: '^x' }] }, [
+      5,
+      'xy',
+      'ab',
+      'abc'
+    ])
+
+    expect(verdicts).toEqual({
+      byTerm: [false, true, false, true],
+      byDocument: [false, true, false, true]
+    })
+  })
+
+  it('conjoins two patterns written under one type', () => {
+    const verdicts = verdictsOf({ type: 'string', allOf: [{ pattern: '^a' }, { pattern: 'b$' }] }, [
+      5,
+      'ab',
+      'a'
+    ])
+
+    expect(verdicts).toEqual({ byTerm: [false, true, false], byDocument: [false, true, false] })
+  })
+
+  it('carries an assertion that names no type into the disjunction beside it', () => {
+    // arktype writes a uuid as `{ anyOf: [...], format: 'uuid' }`, and every member names a type.
+    const verdicts = verdictsOf(
+      { anyOf: [{ type: 'string', maxLength: 3 }, { const: 'abcd' }], minLength: 2 },
+      ['a', 'ab', 'abcd', 5]
+    )
+
+    expect(verdicts).toEqual({
+      byTerm: [false, true, true, false],
+      byDocument: [false, true, true, false]
+    })
+  })
+
+  it('admits only the listed values that are of the type beside them', () => {
+    const verdicts = verdictsOf({ type: 'string', enum: ['a', 1] }, ['a', 1])
+
+    expect(verdicts).toEqual({ byTerm: [true, false], byDocument: [true, false] })
+  })
+
+  it('holds a required key that no property names to the rest of the object', () => {
+    const verdicts = verdictsOf(
+      { type: 'object', required: ['a'], additionalProperties: { type: 'number' } },
+      [{}, { a: 1 }, { a: 'x' }]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [false, true, false], byDocument: [false, true, false] })
+  })
+
+  it('holds a tuple to a count past its positions', () => {
+    const verdicts = verdictsOf(
+      {
+        type: 'array',
+        prefixItems: [{ type: 'string' }],
+        items: { type: 'number' },
+        minItems: 3,
+        maxItems: 4
+      },
+      [['a'], ['a', 1, 2], ['a', 1, 2, 3], ['a', 1, 2, 3, 4], ['a', 1, 'b']]
+    )
+
+    expect(verdicts).toEqual({
+      byTerm: [false, true, true, false, false],
+      byDocument: [false, true, true, false, false]
+    })
+  })
+
+  it('holds a value to the stricter of two bounds on one side', () => {
+    const verdicts = verdictsOf({ type: 'number', minimum: 5, exclusiveMinimum: 1 }, [3, 5])
+
+    expect(verdicts).toEqual({ byTerm: [false, true], byDocument: [false, true] })
+  })
+})
+
+describe('a document the term cannot state is refused, and the refusal names why', () => {
+  it('refuses an assertion that names no type, which admits every value of another type', () => {
+    expect(refusalOf({ properties: { a: { type: 'string' } } })).toContain(
+      'this states properties and names no type'
+    )
+  })
+
+  it('refuses a keyword no term has a word for, rather than reading the rest', () => {
+    expect(refusalOf({ type: 'object', minProperties: 1 })).toContain('this states minProperties')
+  })
+
+  it('refuses a reference to another document, naming the reference', () => {
+    expect(refusalOf({ $ref: 'other.json#/A' })).toContain(
+      'this refers to other.json#/A, which is not a place in this document'
+    )
+  })
+
+  it('refuses a tuple whose counts no list meets', () => {
+    expect(
+      refusalOf({ type: 'array', prefixItems: [{ type: 'string' }], items: false, minItems: 2 })
+    ).toContain('this needs at least 2 values and holds at most 1')
+  })
+})
+
+describe('a name holding a pointer character reaches the definition it names', () => {
+  it('writes a definition named with a slash back under that name', () => {
+    const document: JSONSchema = {
+      type: 'object',
+      properties: { p: { $ref: '#/$defs/a~1b' } },
+      $defs: { 'a/b': { type: 'string' } }
+    }
+
+    const spelled = spellJsonSchemaAll(wholeOf(document))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled.written).toEqual(document)
+    expect(verdictsOf(spelled.written, [{ p: 'x' }, { p: 1 }])).toEqual({
+      byTerm: [true, false],
+      byDocument: [true, false]
+    })
+  })
 })
