@@ -186,6 +186,37 @@ describe('one structure node covers four shapes', () => {
     })
   })
 
+  it('names no key where two members share a tag, because both can take one value', () => {
+    // arktype starts at the tag and tries each member the case holds. A value carrying both `x` and
+    // `y` with the tag `a` passes both members, so the members do not exclude each other.
+    expect(
+      nodeOf(
+        type({ kind: "'a'", x: 'string' }).or({ kind: "'a'", y: 'number' }).or({ kind: "'b'" })
+      )
+    ).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.anything(), expect.anything(), expect.anything()],
+      discriminant: undefined
+    })
+  })
+
+  it('reads an exact length as both bounds of a list', () => {
+    // A length of exactly two admits no shorter list. Read as an upper bound alone, it admitted `[]`.
+    expect(nodeOf(type('unknown[]').exactlyLength(2))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 2, maxItems: 2 }
+    })
+    expect(nodeOf(type('string[]').exactlyLength(2))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 2, maxItems: 2 }
+    })
+  })
+
   it('reads a bounded array whose element states nothing', () => {
     // arktype records a constraint and `unknown` is none, so this carries a proto and a length and
     // no structure node. It was refused as a shape this package reads nothing from.

@@ -185,6 +185,10 @@ function union(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
  * A `domain` discriminant tells a string from a number and names no key, and a `unit` one at a path
  * of several keys names a value nested inside the member. Neither is what a document states beside a
  * disjunction, so only a tag at one key is read.
+ *
+ * A discriminant is where arktype starts, and a case may still hold several members that it tries
+ * in turn. Two members sharing a tag can both take a value, so the tag excludes them only where each
+ * member has a case of its own and no member falls to the default.
  */
 function tagOf(schema: nodeOfKind<'union'>): string | undefined {
   const discriminant = schema.discriminant
@@ -193,7 +197,15 @@ function tagOf(schema: nodeOfKind<'union'>): string | undefined {
   }
 
   const [key, ...rest] = discriminant.path
-  return typeof key === 'string' && rest.length === 0 ? key : undefined
+  if (typeof key !== 'string' || rest.length > 0) {
+    return undefined
+  }
+
+  const cases = Object.entries(discriminant.cases)
+  const apart =
+    cases.length === schema.branches.length &&
+    cases.every(([name, held]) => name !== 'default' && (held === true || !held.hasKind('union')))
+  return apart ? key : undefined
 }
 
 function isBoolean(branches: readonly BaseRoot[]): boolean {
@@ -288,18 +300,7 @@ function intersection(schema: BaseRoot): Node<BaseRoot> | UnreadableSchema {
   // constraint and `unknown` is none. So `unknown[] >= 1` states a proto and a length and nothing
   // else, and it is a list of anything with that length.
   if (basis?.hasKind('proto') && basis.builtinName === 'Array') {
-    const minItems = schema.inner.minLength?.rule
-    const maxItems = schema.inner.maxLength?.rule ?? schema.inner.exactLength?.rule
-
-    return {
-      kind: 'structural',
-      of: 'list',
-      items: intrinsic.unknown,
-      assertions: {
-        ...(minItems !== undefined && { minItems }),
-        ...(maxItems !== undefined && { maxItems })
-      }
-    }
+    return { kind: 'structural', of: 'list', items: intrinsic.unknown, assertions: countOf(schema) }
   }
 
   return new UnreadableSchema(
@@ -333,18 +334,7 @@ function structured(
     }
 
     if (items !== undefined) {
-      const minItems = schema.inner.minLength?.rule
-      const maxItems = schema.inner.maxLength?.rule ?? schema.inner.exactLength?.rule
-
-      return {
-        kind: 'structural',
-        of: 'list',
-        items,
-        assertions: {
-          ...(minItems !== undefined && { minItems }),
-          ...(maxItems !== undefined && { maxItems })
-        }
-      }
+      return { kind: 'structural', of: 'list', items, assertions: countOf(schema) }
     }
   }
 
@@ -383,6 +373,18 @@ function structured(
   }
 
   return { kind: 'structural', of: 'object', properties, rest: { allows: 'anything' } }
+}
+
+/** How many values a list holds. An exact length is both bounds, where a string reads it the same way. */
+function countOf(schema: nodeOfKind<'intersection'>): { minItems?: number; maxItems?: number } {
+  const { exactLength, minLength, maxLength } = schema.inner
+  const minItems = minLength?.rule ?? exactLength?.rule
+  const maxItems = maxLength?.rule ?? exactLength?.rule
+
+  return {
+    ...(minItems !== undefined && { minItems }),
+    ...(maxItems !== undefined && { maxItems })
+  }
 }
 
 function stringAssertions(
