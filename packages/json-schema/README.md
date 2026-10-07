@@ -25,7 +25,10 @@ describe(jsonSchemaAt(document), jsonSchemaSource, 'input')
 
 What this library writes, it reads: `spell` then `read` then `spell` is where it started, over every
 document written from every frontend here. A term read from a document admits what the document
-admits, asked of Ajv.
+admits, asked of Ajv, over those documents and over the ones arktype and zod write themselves.
+
+A schema is read as every keyword it states at once. A keyword no term states, and an assertion
+stated under no type, are refused with the reason rather than dropped.
 
 ```ts
 import { spellJsonSchema } from '@fasciajs/json-schema'

@@ -164,7 +164,7 @@ reaches a document.
 | arktype | yes | 0 | an internal node id |
 | zod | yes | 32 | dropped where a schema is used once |
 | valibot | a separate package | 3 | an ordinal |
-| effect | its own, outside the spec | 58 | kept |
+| effect | its own, outside the spec | 65 | kept |
 | arri | a function of its own | no grammar here draws one | dropped where used once |
 
 arktype writes `$defs: { intersection216: … }` and the number moves when anything unrelated is parsed

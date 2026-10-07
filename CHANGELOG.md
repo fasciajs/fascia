@@ -20,6 +20,14 @@ constraint and `unknown` is none, so `type('unknown[]').atLeastLength(1)` carrie
 length and no structure node, and the reader had a shape only for the form that carries one. A
 caller writing that got no document at all. It is a list of anything with that length.
 
+**`@fasciajs/arktype` read an exact length on an array as an upper bound alone.** So
+`type('string[]').exactlyLength(2)` wrote a document taking the empty list. An exact length is both
+bounds, which is how a string's was read already.
+
+**`@fasciajs/json-schema` wrote a definition named with `/` or `~` under a reference that missed it.**
+A pointer escapes both characters, and the reference was written unescaped, so Ajv refused the
+document. One pair of functions now writes a pointer and reads one.
+
 ### Added
 
 **`@fasciajs/json-schema` reads a document as well as writing one.** `jsonSchemaSource` is a frontend
@@ -35,6 +43,17 @@ A `$ref` is read under the name it points at, so a document holding itself is de
 schema that holds itself is. `uniqueItems` is read as a set, because that is the document this
 library writes for one.
 
+A schema is read as every keyword it states at once, because that is what 2020-12 means by one. A
+type beside a disjunction holds in each member, a reference beside an assertion is held to both,
+and a count past the positions of a tuple is unrolled into positions. A keyword no term has a word
+for is refused rather than dropped, and so is an assertion stated under no type, which admits every
+value of another type. Dropped, either one would read a term wider than the document.
+
+The round trip reads only what this library writes, and this library writes one family of keywords
+per schema. So the documents arktype and zod write are read too, and the term agrees with Ajv over
+every one read. zod writes a schema holding itself at the root as `$ref: "#"`, and a root has no
+name to refer to, so those three are refused.
+
 arri is the first library this shows. It states Standard Schema and writes its own document, and
 nothing here ever read an arri schema: `@fasciajs/atd` writes ATD and has no reading of it. It is
 described now by a package that was already here.
@@ -44,7 +63,8 @@ described now by a package that was already here.
 **`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
 no exclusive union of its own and tells the members of any union apart wherever it can, and the
 answer is on the node. A tag at one key is the form a document names, so a union carrying one
-excludes its members by construction and says which key says so. A `domain` discriminant tells a
+excludes its members, and says which key says so, where each member has a case of its own. Two
+members sharing a tag can both take one value, and arktype tries both, so that union stays `anyOf`. A `domain` discriminant tells a
 string from a number and names no key, and a tag nested inside a member is not one a document can
 state, so neither is read.
 
