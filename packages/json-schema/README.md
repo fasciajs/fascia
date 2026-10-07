@@ -17,11 +17,15 @@ It reads one too. A validator that writes its own 2020-12 becomes a frontend thr
 so a fifth library is a document rather than a reading of its internals.
 
 ```ts
-import { describe } from '@fasciajs/core'
+import { describe, isError } from '@fasciajs/core'
 import { jsonSchemaAt, jsonSchemaSource } from '@fasciajs/json-schema'
 
-describe(jsonSchemaAt(document), jsonSchemaSource, 'input')
+// The dialect is named. A `$schema` in the document must agree with it, or the document is refused.
+const at = jsonSchemaAt(document, '2020-12')
+const described = isError(at) ? at : describe(at, jsonSchemaSource, 'input')
 ```
+
+A document this package writes names its dialect in `$schema`, so a reader chooses none.
 
 What this library writes, it reads: `spell` then `read` then `spell` is where it started, over every
 document written from every frontend here. A term read from a document admits what the document

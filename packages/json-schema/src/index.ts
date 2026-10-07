@@ -1,3 +1,4 @@
+export type { Dialect } from './dialect.js'
 export type { JsonSchemaAt } from './read.js'
 export { jsonSchemaAt, jsonSchemaSource } from './read.js'
 export { DEFS, refsAt } from './refs.js'

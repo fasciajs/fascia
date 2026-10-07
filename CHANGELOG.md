@@ -68,6 +68,12 @@ described now by a package that was already here.
 
 ### Changed
 
+**A dialect is named, never assumed.** `spellJsonSchemaAll` writes `$schema` at the root of every
+document, because a document naming no dialect reads differently in each and a reader chooses one in
+silence. `jsonSchemaAt` takes the dialect as an argument, and refuses a `$schema` that disagrees with
+it or that names no dialect read here. `spellJsonSchema` writes one schema for a document to hold,
+and states no `$schema`, because the document holding it names the dialect.
+
 **`@fasciajs/arktype` reads a union it can tell apart by a key as an exclusive one.** arktype states
 no exclusive union of its own and tells the members of any union apart wherever it can, and the
 answer is on the node. A tag at one key is the form a document names, so a union carrying one

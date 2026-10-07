@@ -1,6 +1,7 @@
 import { a, schemaToJsonSchema } from '@arrirpc/schema'
 import type { Described, Describing, Description } from '@fasciajs/core'
 import { admits, describe as description, isError } from '@fasciajs/core'
+import type { Dialect } from '@fasciajs/json-schema'
 import { jsonSchemaAt, jsonSchemaSource, spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { default as Ajv } from 'ajv'
 import { Ajv2019 } from 'ajv/dist/2019.js'
@@ -23,11 +24,19 @@ function described(describing: Describing): Description {
   return describing
 }
 
-const termOf = (document: JSONSchema): Described =>
-  described(description(jsonSchemaAt(document), jsonSchemaSource, 'input')).term
+/** A document, read in the dialect a test names. */
+function readIn(document: unknown, dialect: Dialect): Description {
+  const at = jsonSchemaAt(document, dialect)
+  if (isError(at)) {
+    throw new Error(`the document could not be read: ${at.message}`)
+  }
+  return described(description(at, jsonSchemaSource, 'input'))
+}
 
-const wholeOf = (document: JSONSchema): Description =>
-  described(description(jsonSchemaAt(document), jsonSchemaSource, 'input'))
+/** A document in 2020-12, the dialect this library writes. */
+const termOf = (document: JSONSchema): Described => readIn(document, '2020-12').term
+
+const wholeOf = (document: JSONSchema): Description => readIn(document, '2020-12')
 
 describe('a document states what a term states', () => {
   it('reads a string and every assertion beside it', () => {
@@ -119,9 +128,7 @@ describe('a document states what a term states', () => {
   })
 
   it('refuses a schema that admits no value', () => {
-    const refusal = description(jsonSchemaAt(false), jsonSchemaSource, 'input')
-
-    expect(isError(refusal) ? refusal.message : 'described').toContain('admits no value')
+    expect(refusalOf(false, '2020-12')).toContain('admits no value')
   })
 })
 
@@ -164,15 +171,37 @@ describe('a library this repository never read becomes a frontend', () => {
 })
 
 describe('what this library writes, it reads', () => {
+  // The writer names its dialect, so each document it writes states one.
+  const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema'
   const documents: readonly [string, JSONSchema][] = [
-    ['a string', { type: 'string', minLength: 2 }],
-    ['a whole number', { type: 'integer', maximum: 9 }],
-    ['an object', { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] }],
-    ['a list', { type: 'array', items: { type: 'number' }, minItems: 1 }],
-    ['a set', { type: 'array', items: { type: 'string' }, uniqueItems: true }],
-    ['a tuple', { type: 'array', prefixItems: [{ type: 'string' }], minItems: 1, items: false }],
-    ['a disjunction', { anyOf: [{ type: 'string' }, { type: 'number' }] }],
-    ['an enum', { type: 'string', enum: ['a', 'b'] }]
+    ['a string', { $schema: DRAFT_2020_12, type: 'string', minLength: 2 }],
+    ['a whole number', { $schema: DRAFT_2020_12, type: 'integer', maximum: 9 }],
+    [
+      'an object',
+      {
+        $schema: DRAFT_2020_12,
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a']
+      }
+    ],
+    ['a list', { $schema: DRAFT_2020_12, type: 'array', items: { type: 'number' }, minItems: 1 }],
+    [
+      'a set',
+      { $schema: DRAFT_2020_12, type: 'array', items: { type: 'string' }, uniqueItems: true }
+    ],
+    [
+      'a tuple',
+      {
+        $schema: DRAFT_2020_12,
+        type: 'array',
+        prefixItems: [{ type: 'string' }],
+        minItems: 1,
+        items: false
+      }
+    ],
+    ['a disjunction', { $schema: DRAFT_2020_12, anyOf: [{ type: 'string' }, { type: 'number' }] }],
+    ['an enum', { $schema: DRAFT_2020_12, type: 'string', enum: ['a', 'b'] }]
   ]
 
   for (const [what, document] of documents) {
@@ -202,8 +231,13 @@ function verdictsOf(document: JSONSchema, values: readonly unknown[]) {
   }
 }
 
-function refusalOf(document: unknown): string {
-  const refusal = description(jsonSchemaAt(document), jsonSchemaSource, 'input')
+/** Why a document is refused, at whichever step refuses it. */
+function refusalOf(document: unknown, dialect: Dialect): string {
+  const at = jsonSchemaAt(document, dialect)
+  if (isError(at)) {
+    return at.message
+  }
+  const refusal = description(at, jsonSchemaSource, 'input')
   return isError(refusal) ? refusal.message : 'described'
 }
 
@@ -287,24 +321,29 @@ describe('a schema holds every keyword it states at once', () => {
 
 describe('a document the term cannot state is refused, and the refusal names why', () => {
   it('refuses an assertion that names no type, which admits every value of another type', () => {
-    expect(refusalOf({ properties: { a: { type: 'string' } } })).toContain(
+    expect(refusalOf({ properties: { a: { type: 'string' } } }, '2020-12')).toContain(
       'this states properties and names no type'
     )
   })
 
   it('refuses a keyword no term has a word for, rather than reading the rest', () => {
-    expect(refusalOf({ type: 'object', minProperties: 1 })).toContain('this states minProperties')
+    expect(refusalOf({ type: 'object', minProperties: 1 }, '2020-12')).toContain(
+      'this states minProperties'
+    )
   })
 
   it('refuses a reference to another document, naming the reference', () => {
-    expect(refusalOf({ $ref: 'other.json#/A' })).toContain(
+    expect(refusalOf({ $ref: 'other.json#/A' }, '2020-12')).toContain(
       'this refers to other.json#/A, which is not a place in this document'
     )
   })
 
   it('refuses a tuple whose counts no list meets', () => {
     expect(
-      refusalOf({ type: 'array', prefixItems: [{ type: 'string' }], items: false, minItems: 2 })
+      refusalOf(
+        { type: 'array', prefixItems: [{ type: 'string' }], items: false, minItems: 2 },
+        '2020-12'
+      )
     ).toContain('this needs at least 2 values and holds at most 1')
   })
 })
@@ -312,6 +351,7 @@ describe('a document the term cannot state is refused, and the refusal names why
 describe('a name holding a pointer character reaches the definition it names', () => {
   it('writes a definition named with a slash back under that name', () => {
     const document: JSONSchema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
       type: 'object',
       properties: { p: { $ref: '#/$defs/a~1b' } },
       $defs: { 'a/b': { type: 'string' } }
@@ -335,7 +375,7 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
 
   function draft07VerdictsOf(document: object, values: readonly unknown[]) {
     const validate = new Ajv.default({ strict: false }).compile(document)
-    const whole = wholeOf(document as JSONSchema)
+    const whole = readIn(document, 'draft-07')
 
     return {
       byTerm: values.map((value) => admits(whole, value)),
@@ -365,7 +405,7 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
       definitions: { A: { type: 'string' } }
     }
 
-    expect(refusalOf(document as JSONSchema)).toContain(
+    expect(refusalOf(document, 'draft-07')).toContain(
       'this is a reference with an assertion beside it, which the dialect ignores and Ajv holds'
     )
   })
@@ -382,7 +422,7 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
 
   it('refuses a keyword only 2020-12 asserts by, which draft-07 ignores and Ajv may hold', () => {
     expect(
-      refusalOf({ $schema: DRAFT_07, type: 'array', prefixItems: [{ type: 'string' }] })
+      refusalOf({ $schema: DRAFT_07, type: 'array', prefixItems: [{ type: 'string' }] }, 'draft-07')
     ).toContain('this states prefixItems, which the dialect it names does not know')
   })
 })
@@ -390,12 +430,13 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
 describe('a document admits what it admits in the dialect it states', () => {
   /** Each dialect asked of the Ajv that reads it. */
   function verdictsIn(
+    dialect: Dialect,
     validator: { compile: (schema: object) => (value: unknown) => unknown },
     document: object,
     values: readonly unknown[]
   ) {
     const validate = validator.compile(document)
-    const whole = wholeOf(document as JSONSchema)
+    const whole = readIn(document, dialect)
 
     return {
       byTerm: values.map((value) => admits(whole, value)),
@@ -405,6 +446,7 @@ describe('a document admits what it admits in the dialect it states', () => {
 
   it('reads a draft-04 exclusive bound as excluding the number beside it', () => {
     const verdicts = verdictsIn(
+      'draft-04',
       new AjvDraft04.default({ strict: false }),
       {
         $schema: 'http://json-schema.org/draft-04/schema#',
@@ -432,24 +474,28 @@ describe('a document admits what it admits in the dialect it states', () => {
 
     // The draft ignores `const`, and Ajv refuses `b`. The document has no one answer.
     expect(new AjvDraft04.default({ strict: false }).compile(document)('b')).toBe(false)
-    expect(refusalOf(document)).toContain(
+    expect(refusalOf(document, 'draft-04')).toContain(
       'this states const, which the dialect it names does not know'
     )
   })
 
   it('refuses if and else in draft-06, which draft-07 added', () => {
     expect(
-      refusalOf({
-        $schema: 'http://json-schema.org/draft-06/schema#',
-        type: 'number',
-        if: { minimum: 0 },
-        else: { minimum: 100 }
-      })
+      refusalOf(
+        {
+          $schema: 'http://json-schema.org/draft-06/schema#',
+          type: 'number',
+          if: { minimum: 0 },
+          else: { minimum: 100 }
+        },
+        'draft-06'
+      )
     ).toContain('this states if, else, which the dialect it names does not know')
   })
 
   it('reads a 2019-09 tuple, and holds the keywords beside a reference', () => {
     const verdicts = verdictsIn(
+      '2019-09',
       new Ajv2019({ strict: false }),
       {
         $schema: 'https://json-schema.org/draft/2019-09/schema',
@@ -468,8 +514,42 @@ describe('a document admits what it admits in the dialect it states', () => {
   })
 
   it('refuses a boolean bound in a document that names no draft-04', () => {
-    expect(refusalOf({ type: 'number', minimum: 5, exclusiveMinimum: true })).toContain(
+    expect(refusalOf({ type: 'number', minimum: 5, exclusiveMinimum: true }, '2020-12')).toContain(
       "this states exclusiveMinimum as a boolean, which is draft-04's form"
     )
+  })
+})
+
+describe('a dialect is named, never assumed', () => {
+  it('refuses a document whose $schema names a dialect other than the one it is read in', () => {
+    expect(
+      refusalOf({ $schema: 'http://json-schema.org/draft-07/schema#', type: 'string' }, '2020-12')
+    ).toContain('this names draft-07 in $schema, and it was read as 2020-12')
+  })
+
+  it('refuses a $schema that names no dialect this package reads', () => {
+    expect(
+      refusalOf(
+        { $schema: 'https://spec.openapis.org/oas/3.1/dialect/base', type: 'string' },
+        '2020-12'
+      )
+    ).toContain(
+      'this names https://spec.openapis.org/oas/3.1/dialect/base in $schema, which is no dialect this package reads'
+    )
+  })
+
+  it('reads a $schema written with either scheme and with or without an empty fragment', () => {
+    for (const uri of [
+      'https://json-schema.org/draft-07/schema',
+      'http://json-schema.org/draft-07/schema#'
+    ]) {
+      expect(readIn({ $schema: uri, type: 'string' }, 'draft-07').term).toEqual({
+        kind: 'typed',
+        name: 'string',
+        assertions: {},
+        admitsNull: false,
+        meta: {}
+      })
+    }
   })
 })

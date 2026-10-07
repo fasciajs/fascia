@@ -21,9 +21,31 @@ export function isKeyed(value: unknown): value is Readonly<Record<string, unknow
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** The dialects a document is read in. Each one is named explicitly, by `$schema` or by a caller. */
+const NAMES = ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12'] as const
+
+export type Dialect = (typeof NAMES)[number]
+
+/** The `$schema` each dialect is named by. The writer writes it, and the reader matches it. */
+export const SCHEMA_URIS: Readonly<Record<Dialect, string>> = {
+  'draft-04': 'http://json-schema.org/draft-04/schema#',
+  'draft-06': 'http://json-schema.org/draft-06/schema#',
+  'draft-07': 'http://json-schema.org/draft-07/schema#',
+  '2019-09': 'https://json-schema.org/draft/2019-09/schema',
+  '2020-12': 'https://json-schema.org/draft/2020-12/schema'
+}
+
+/**
+ * The dialect a `$schema` names, or nothing where it names none listed here.
+ *
+ * The scheme and an empty fragment are written both ways by validators, and name one dialect.
+ */
+export function dialectNamed(uri: string): Dialect | undefined {
+  const bare = (one: string): string => one.replace(/^https?:\/\//, '').replace(/#$/, '')
+  return NAMES.find((name) => bare(SCHEMA_URIS[name]) === bare(uri))
+}
+
 interface Rules {
-  /** The `$schema` a document states this dialect by. */
-  readonly uri: RegExp
   /** Keywords a later dialect asserts by and this one does not know. */
   readonly unknown: readonly string[]
   /** Whether a `$ref` overrides the keywords beside it. */
@@ -46,39 +68,16 @@ const SINCE_2019 = [
 const SINCE_07 = [...SINCE_2019, 'if', 'then', 'else']
 const SINCE_06 = [...SINCE_07, 'const', 'contains', 'propertyNames']
 
-const DIALECTS: readonly Rules[] = [
-  {
-    uri: /^https?:\/\/json-schema\.org\/draft-04\/schema#?$/,
-    unknown: SINCE_06,
-    refOverrides: true,
-    booleanBounds: true
-  },
-  {
-    uri: /^https?:\/\/json-schema\.org\/draft-06\/schema#?$/,
-    unknown: SINCE_07,
-    refOverrides: true,
-    booleanBounds: false
-  },
-  {
-    uri: /^https?:\/\/json-schema\.org\/draft-07\/schema#?$/,
-    unknown: SINCE_2019,
-    refOverrides: true,
-    booleanBounds: false
-  },
-  {
-    uri: /^https:\/\/json-schema\.org\/draft\/2019-09\/schema#?$/,
-    unknown: SINCE_2020,
-    refOverrides: false,
-    booleanBounds: false
-  }
-]
+const RULES: Readonly<Record<Exclude<Dialect, '2020-12'>, Rules>> = {
+  'draft-04': { unknown: SINCE_06, refOverrides: true, booleanBounds: true },
+  'draft-06': { unknown: SINCE_07, refOverrides: true, booleanBounds: false },
+  'draft-07': { unknown: SINCE_2019, refOverrides: true, booleanBounds: false },
+  '2019-09': { unknown: SINCE_2020, refOverrides: false, booleanBounds: false }
+}
 
-/** A document, in 2020-12. A document stating no dialect, or one not listed, is read as 2020-12. */
-export function asCurrent(root: unknown): unknown {
-  const stated = isKeyed(root) ? root['$schema'] : undefined
-  const rules =
-    typeof stated === 'string' ? DIALECTS.find((one) => one.uri.test(stated)) : undefined
-  return rules === undefined ? root : translated(root, rules)
+/** A document in a dialect, stated in 2020-12. */
+export function asCurrent(root: unknown, dialect: Dialect): unknown {
+  return dialect === '2020-12' ? root : translated(root, RULES[dialect])
 }
 
 /** Keywords holding one schema. */

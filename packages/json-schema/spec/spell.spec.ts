@@ -256,6 +256,7 @@ describe('a description reaches a document, definitions and all', () => {
     }
 
     expect(spelled.written).toEqual({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
       $ref: '#/$defs/Tree',
       $defs: {
         Tree: {

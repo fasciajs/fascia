@@ -11,7 +11,7 @@ import type {
   StringFormat
 } from '@fasciajs/core'
 import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
-import { asCurrent, contestOf, isKeyed } from './dialect.js'
+import { asCurrent, contestOf, type Dialect, dialectNamed, isKeyed } from './dialect.js'
 import { stepsOf } from './refs.js'
 
 /**
@@ -34,12 +34,34 @@ export interface JsonSchemaAt {
 }
 
 /**
- * A document, read from its root. A document in an older dialect is stated again in 2020-12 first.
+ * A document, read from its root in the dialect a caller names.
  *
- * Unknown rather than one dialect's type, because the document is parsed here and any dialect enters.
+ * Named rather than assumed: a document stating no `$schema` reads differently in each dialect, and
+ * a default would choose one in silence. A `$schema` the document states must agree with the name,
+ * and one naming no dialect read here is refused. A dialect before 2020-12 is stated again in
+ * 2020-12 first.
+ *
+ * The document is unknown rather than one dialect's type, because it is parsed here.
  */
-export function jsonSchemaAt(document: unknown): JsonSchemaAt {
-  const root = asCurrent(document)
+export function jsonSchemaAt(document: unknown, dialect: Dialect): JsonSchemaAt | UnreadableSchema {
+  const stated = isKeyed(document) ? document['$schema'] : undefined
+  if (stated !== undefined) {
+    const named = typeof stated === 'string' ? dialectNamed(stated) : undefined
+    if (named === undefined) {
+      return new UnreadableSchema(
+        document,
+        `this names ${String(stated)} in $schema, which is no dialect this package reads`
+      )
+    }
+    if (named !== dialect) {
+      return new UnreadableSchema(
+        document,
+        `this names ${named} in $schema, and it was read as ${dialect}`
+      )
+    }
+  }
+
+  const root = asCurrent(document, dialect)
   return beside({ root, schema: root }, root)
 }
 

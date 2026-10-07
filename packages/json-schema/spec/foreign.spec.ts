@@ -17,7 +17,6 @@ import { default as Ajv } from 'ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
 import { JSONSchema, Schema } from 'effect'
-import type { JSONSchema as Document } from 'json-schema-typed/draft-2020-12'
 import type * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
@@ -75,7 +74,8 @@ function survey<S>(
       continue
     }
 
-    const described = description(jsonSchemaAt(document as Document), jsonSchemaSource, 'input')
+    const at = jsonSchemaAt(document, dialect)
+    const described = isError(at) ? at : description(at, jsonSchemaSource, 'input')
     if (isError(described)) {
       refused += 1
       continue

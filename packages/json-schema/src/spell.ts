@@ -9,6 +9,7 @@ import type {
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
+import { SCHEMA_URIS } from './dialect.js'
 import { refTo } from './refs.js'
 
 /**
@@ -422,7 +423,9 @@ function atLeast(positions: number): { readonly minItems?: number } {
 /**
  * A whole description, written as a 2020-12 document.
  *
- * The definitions go under `$defs`, which is where every `$ref` this target writes points.
+ * The definitions go under `$defs`, which is where every `$ref` this target writes points. The root
+ * names its dialect in `$schema`, so a reader chooses none: a document naming none reads differently
+ * in each.
  */
 export function spellJsonSchemaAll(described: {
   readonly term: Described
@@ -445,10 +448,13 @@ export function spellJsonSchemaAll(described: {
     departures.push(...under(name, spelled.departures))
   }
 
-  const written: JSONSchema =
-    typeof root.written === 'boolean' || described.definitions.size === 0
-      ? root.written
-      : { ...root.written, $defs }
+  // A boolean root has no place for `$schema`, so it is written as the object stating the same.
+  const body = typeof root.written === 'boolean' ? (root.written ? {} : { not: {} }) : root.written
+  const written: JSONSchema = {
+    $schema: SCHEMA_URIS['2020-12'],
+    ...body,
+    ...(described.definitions.size > 0 && { $defs })
+  }
 
   return { written, departures }
 }

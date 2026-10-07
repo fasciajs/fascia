@@ -17,7 +17,6 @@ import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
-import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -59,7 +58,12 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
       continue
     }
 
-    const back = description(jsonSchemaAt(once.written as JSONSchema), jsonSchemaSource, 'input')
+    const at = jsonSchemaAt(once.written, '2020-12')
+    if (isError(at)) {
+      differed.push(`a document written here names a dialect it is not read in: ${at.message}`)
+      continue
+    }
+    const back = description(at, jsonSchemaSource, 'input')
     if (isError(back)) {
       differed.push(`this library wrote a document it cannot read: ${back.message}`)
       continue
