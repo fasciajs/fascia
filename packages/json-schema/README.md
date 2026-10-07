@@ -26,7 +26,8 @@ describe(jsonSchemaAt(document), jsonSchemaSource, 'input')
 What this library writes, it reads: `spell` then `read` then `spell` is where it started, over every
 document written from every frontend here. A term read from a document admits what the document
 admits, asked of Ajv, over those documents and over the ones arktype, zod, effect and valibot write
-themselves. A draft-07 document is read as well, so effect and valibot need no reading of their own.
+themselves. A document stating draft-04, draft-06, draft-07 or 2019-09 is read as well, so effect
+and valibot need no reading of their own.
 
 A schema is read as every keyword it states at once. A keyword no term states, and an assertion
 stated under no type, are refused with the reason rather than dropped.

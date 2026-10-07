@@ -3,7 +3,9 @@ import type { Described, Describing, Description } from '@fasciajs/core'
 import { admits, describe as description, isError } from '@fasciajs/core'
 import { jsonSchemaAt, jsonSchemaSource, spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { default as Ajv } from 'ajv'
+import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as AjvDraft04 } from 'ajv-draft-04'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
@@ -200,7 +202,7 @@ function verdictsOf(document: JSONSchema, values: readonly unknown[]) {
   }
 }
 
-function refusalOf(document: JSONSchema): string {
+function refusalOf(document: unknown): string {
   const refusal = description(jsonSchemaAt(document), jsonSchemaSource, 'input')
   return isError(refusal) ? refusal.message : 'described'
 }
@@ -364,7 +366,7 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
     }
 
     expect(refusalOf(document as JSONSchema)).toContain(
-      'this is a draft-07 reference with an assertion beside it'
+      'this is a reference with an assertion beside it, which the dialect ignores and Ajv holds'
     )
   })
 
@@ -378,12 +380,96 @@ describe('a draft-07 document admits what it admits in draft-07', () => {
     expect(verdicts).toEqual({ byTerm: [true, false], byDocument: [true, false] })
   })
 
-  it('ignores a keyword only 2020-12 asserts by', () => {
-    const verdicts = draft07VerdictsOf(
-      { $schema: DRAFT_07, type: 'array', prefixItems: [{ type: 'string' }] },
-      [[1], ['a']]
+  it('refuses a keyword only 2020-12 asserts by, which draft-07 ignores and Ajv may hold', () => {
+    expect(
+      refusalOf({ $schema: DRAFT_07, type: 'array', prefixItems: [{ type: 'string' }] })
+    ).toContain('this states prefixItems, which the dialect it names does not know')
+  })
+})
+
+describe('a document admits what it admits in the dialect it states', () => {
+  /** Each dialect asked of the Ajv that reads it. */
+  function verdictsIn(
+    validator: { compile: (schema: object) => (value: unknown) => unknown },
+    document: object,
+    values: readonly unknown[]
+  ) {
+    const validate = validator.compile(document)
+    const whole = wholeOf(document as JSONSchema)
+
+    return {
+      byTerm: values.map((value) => admits(whole, value)),
+      byDocument: values.map((value) => validate(value) === true)
+    }
+  }
+
+  it('reads a draft-04 exclusive bound as excluding the number beside it', () => {
+    const verdicts = verdictsIn(
+      new AjvDraft04.default({ strict: false }),
+      {
+        $schema: 'http://json-schema.org/draft-04/schema#',
+        type: 'number',
+        minimum: 5,
+        exclusiveMinimum: true,
+        maximum: 9,
+        exclusiveMaximum: false
+      },
+      [5, 6, 9, 10]
     )
 
-    expect(verdicts).toEqual({ byTerm: [true, true], byDocument: [true, true] })
+    expect(verdicts).toEqual({
+      byTerm: [false, true, true, false],
+      byDocument: [false, true, true, false]
+    })
+  })
+
+  it('refuses a keyword draft-04 does not know, because Ajv asserts it anyway', () => {
+    const document = {
+      $schema: 'http://json-schema.org/draft-04/schema#',
+      type: 'string',
+      const: 'a'
+    }
+
+    // The draft ignores `const`, and Ajv refuses `b`. The document has no one answer.
+    expect(new AjvDraft04.default({ strict: false }).compile(document)('b')).toBe(false)
+    expect(refusalOf(document)).toContain(
+      'this states const, which the dialect it names does not know'
+    )
+  })
+
+  it('refuses if and else in draft-06, which draft-07 added', () => {
+    expect(
+      refusalOf({
+        $schema: 'http://json-schema.org/draft-06/schema#',
+        type: 'number',
+        if: { minimum: 0 },
+        else: { minimum: 100 }
+      })
+    ).toContain('this states if, else, which the dialect it names does not know')
+  })
+
+  it('reads a 2019-09 tuple, and holds the keywords beside a reference', () => {
+    const verdicts = verdictsIn(
+      new Ajv2019({ strict: false }),
+      {
+        $schema: 'https://json-schema.org/draft/2019-09/schema',
+        type: 'array',
+        items: [{ $ref: '#/$defs/A', type: 'string', maxLength: 1 }],
+        additionalItems: false,
+        $defs: { A: { type: 'string' } }
+      },
+      [['a'], ['ab'], ['a', 'b'], [1]]
+    )
+
+    expect(verdicts).toEqual({
+      byTerm: [true, false, false, false],
+      byDocument: [true, false, false, false]
+    })
+  })
+
+  it('refuses a boolean bound in a document that names no draft-04', () => {
+    expect(refusalOf({ type: 'number', minimum: 5, exclusiveMinimum: true })).toContain(
+      "this states exclusiveMinimum as a boolean, which is draft-04's form"
+    )
   })
 })

@@ -11,9 +11,7 @@ import type {
   StringFormat
 } from '@fasciajs/core'
 import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
-import type { JSONSchema as Draft07 } from 'json-schema-typed/draft-07'
-import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
-import { asCurrent, isContested, isKeyed } from './dialect.js'
+import { asCurrent, contestOf, isKeyed } from './dialect.js'
 import { stepsOf } from './refs.js'
 
 /**
@@ -35,8 +33,12 @@ export interface JsonSchemaAt {
   readonly schema: unknown
 }
 
-/** A document, read from its root. A draft-07 document is stated again in 2020-12 first. */
-export function jsonSchemaAt(document: JSONSchema | Draft07): JsonSchemaAt {
+/**
+ * A document, read from its root. A document in an older dialect is stated again in 2020-12 first.
+ *
+ * Unknown rather than one dialect's type, because the document is parsed here and any dialect enters.
+ */
+export function jsonSchemaAt(document: unknown): JsonSchemaAt {
   const root = asCurrent(document)
   return beside({ root, schema: root }, root)
 }
@@ -245,10 +247,11 @@ function partsOf(schema: Keyed): readonly unknown[] | UnreadableSchema {
 }
 
 function cutOf(schema: Keyed): readonly unknown[] | UnreadableSchema {
-  if (isContested(schema)) {
+  const contest = contestOf(schema)
+  if (contest !== undefined) {
     return new UnreadableSchema(
       schema,
-      'this is a draft-07 reference with an assertion beside it, which the draft ignores and Ajv holds, so the document admits two sets of values'
+      `${contest}, so the document admits two sets of values and a term states one`
     )
   }
 
@@ -569,6 +572,18 @@ function typed(at: JsonSchemaAt): Node<JsonSchemaAt> | UnreadableSchema {
 
 function typedAs(at: JsonSchemaAt, name: string): Node<JsonSchemaAt> | UnreadableSchema {
   const { schema } = at
+
+  // A boolean bound is draft-04's form, translated where a document states draft-04. Under any other
+  // dialect it has no meaning, and read as absent it would admit the bound itself.
+  const flagged = ['exclusiveMinimum', 'exclusiveMaximum'].filter(
+    (one) => typeof keyword(schema, one) === 'boolean'
+  )
+  if (flagged.length > 0) {
+    return new UnreadableSchema(
+      at,
+      `this states ${flagged.join(', ')} as a boolean, which is draft-04's form, and the document names no draft-04 in $schema`
+    )
+  }
 
   switch (name) {
     case 'string':

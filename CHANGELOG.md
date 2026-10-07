@@ -49,9 +49,13 @@ and a count past the positions of a tuple is unrolled into positions. A keyword 
 for is refused rather than dropped, and so is an assertion stated under no type, which admits every
 value of another type. Dropped, either one would read a term wider than the document.
 
-A draft-07 document is read too, by stating it again in 2020-12 where it enters. A tuple there is
-`items: [...]` with `additionalItems`. An assertion beside a `$ref` is refused, because the draft
-says to ignore it and Ajv holds it, so the document admits two sets of values.
+A document stating draft-04, draft-06, draft-07 or 2019-09 in `$schema` is read too, by stating it
+again in 2020-12 where it enters. Before 2020-12 a tuple is `items: [...]` with `additionalItems`,
+and in draft-04 an exclusive bound is a boolean beside `minimum` or `maximum`. Two things a dialect
+does not settle are refused, because the dialect says to ignore them and Ajv asserts them, so the
+document admits two sets of values: a keyword the dialect does not know, and before 2019-09 an
+assertion beside a `$ref`. A boolean bound in a document naming no draft-04 is refused, where it was
+read as absent and admitted the bound itself.
 
 The round trip reads only what this library writes, and this library writes one family of keywords
 per schema. So the documents arktype, zod, effect and valibot write are read too, and the term
