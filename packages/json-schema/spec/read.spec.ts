@@ -513,6 +513,64 @@ describe('a document admits what it admits in the dialect it states', () => {
     })
   })
 
+  it('reads OpenAPI 3.0 nullable as null joined to the one type beside it', () => {
+    const verdicts = verdictsIn(
+      'oas-3.0',
+      new AjvDraft04.default({ strict: false }),
+      { type: 'string', nullable: true },
+      [null, 'a', 1]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [true, true, false], byDocument: [true, true, false] })
+  })
+
+  it('holds an OpenAPI 3.0 enum beside nullable, which still refuses null', () => {
+    // "Other Schema Object constraints retain their defined behavior", so null must be listed.
+    const verdicts = verdictsIn(
+      'oas-3.0',
+      new AjvDraft04.default({ strict: false }),
+      { type: 'string', nullable: true, enum: ['a'] },
+      [null, 'a']
+    )
+
+    expect(verdicts).toEqual({ byTerm: [false, true], byDocument: [false, true] })
+  })
+
+  it('reads an OpenAPI 3.0 exclusive bound as excluding the number beside it', () => {
+    const verdicts = verdictsIn(
+      'oas-3.0',
+      new AjvDraft04.default({ strict: false }),
+      { type: 'number', minimum: 5, exclusiveMinimum: true },
+      [5, 6]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [false, true], byDocument: [false, true] })
+  })
+
+  it('refuses OpenAPI 3.0 nullable with no type beside it, which takes no effect', () => {
+    expect(refusalOf({ allOf: [{ type: 'string' }], nullable: true }, 'oas-3.0')).toContain(
+      'this states nullable with no type beside it'
+    )
+  })
+
+  it('refuses what OpenAPI 3.0 does not support: a type list, and a keyword it never mentions', () => {
+    expect(refusalOf({ type: ['string', 'null'] }, 'oas-3.0')).toContain(
+      'this states a list where the dialect it names allows one schema or one type'
+    )
+    expect(refusalOf({ type: 'string', const: 'a' }, 'oas-3.0')).toContain(
+      'this states const, which the dialect it names does not know'
+    )
+  })
+
+  it('refuses a $schema in an OpenAPI 3.0 Schema Object, which names its dialect elsewhere', () => {
+    expect(
+      refusalOf(
+        { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'string' },
+        'oas-3.0'
+      )
+    ).toContain('this names 2020-12 in $schema, and it was read as oas-3.0')
+  })
+
   it('refuses a boolean bound in a document that names no draft-04', () => {
     expect(refusalOf({ type: 'number', minimum: 5, exclusiveMinimum: true }, '2020-12')).toContain(
       "this states exclusiveMinimum as a boolean, which is draft-04's form"

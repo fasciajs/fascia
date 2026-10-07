@@ -24,6 +24,17 @@ caller writing that got no document at all. It is a list of anything with that l
 `type('string[]').exactlyLength(2)` wrote a document taking the empty list. An exact length is both
 bounds, which is how a string's was read already.
 
+**`@fasciajs/openapi` wrote a 3.0 schema admitting null where 3.0 reads no null.** OpenAPI 3.0 says
+`nullable` "only takes effect if `type` is explicitly defined within the same Schema Object". A
+reference admitting null was written `{ allOf: [{ $ref }], nullable: true }`, and null was pushed as a
+flag onto a schema with no type, so the document refused null, and Ajv refused to compile it. The flag
+is now written only beside a type with nothing that could refuse null. Anywhere else the schema is
+joined to `{ enum: [null] }`, which is exact. A disjunction of exactly one admitting null was widened
+to any of several before, and is exact now.
+
+**`@fasciajs/json-schema` wrote null twice in an `enum`** where the values held null and the term
+admitted it too. An `enum` holding a value twice is no schema, and Ajv refused to compile it.
+
 **`@fasciajs/json-schema` wrote a definition named with `/` or `~` under a reference that missed it.**
 A pointer escapes both characters, and the reference was written unescaped, so Ajv refused the
 document. One pair of functions now writes a pointer and reads one.
@@ -74,6 +85,10 @@ silence. `jsonSchemaAt` takes the dialect as an argument, and refuses a `$schema
 it or that names no dialect read here. `spellJsonSchema` writes one schema for a document to hold,
 and states no `$schema`, because the document holding it names the dialect.
 
+OpenAPI 3.0 is a dialect read, named `oas-3.0`. Its Schema Object states no `$schema`, so the caller
+names it. `nullable` joins null to the one type beside it, an exclusive bound is a boolean, and a type
+list, a list in `items`, `nullable` with no type and a keyword 3.0 does not mention are refused.
+
 The OpenAPI 3.1 dialect is one of the dialects read, named `oas-3.1`, by `/dialect/base` and by its
 dated `$id`. It asserts what 2020-12 asserts: its four keywords describe, and the specification says
 a discriminator must not change a verdict.
@@ -92,6 +107,12 @@ disjunction it cannot choose by a tag has no ATD form at all. Every one of those
 it accepted before, where it accepted anything.
 
 ### Not published
+
+The 3.0 checks asked Ajv about a 2020-12 schema recovered from 3.0 by a translation written in the
+specs, because Ajv was taken to have no `nullable`. It has one, and holds it as OpenAPI 3.0 states
+it. The translation read the flag wherever it stood, so it compiled the document the writer got
+wrong, and the check passed over the defect. The 3.0 document is now asked of Ajv directly, and the
+translation is deleted.
 
 Nothing else here reaches a registry, and what is here is why the two above were found.
 

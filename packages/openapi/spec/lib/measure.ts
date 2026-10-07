@@ -5,22 +5,20 @@ import { describe as description, isError } from '@fasciajs/core'
 import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { toV30 } from '@fasciajs/openapi'
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as AjvDraft04 } from 'ajv-draft-04'
 import { default as formats } from 'ajv-formats'
-import { fromV30 } from './reverse.js'
 
 /**
  * Whether the two dialects of one target accept the same values.
  *
- * **A differential rather than a new instrument.** Ajv reads JSON Schema and `nullable` is not one
- * of its words, so a 3.0 document cannot be handed to it. What can is the 2020-12 recovered from
- * one, and the claim then reads plainly: a schema and its round trip through 3.0 accept the same
- * values. The only thing under test is the translation, and the answers come from the validator that
- * already measures 3.1.
+ * Each document is asked of the Ajv for its own dialect. Ajv for draft-04 holds the boolean bounds
+ * 3.0 took from it, and holds `nullable` as OpenAPI 3.0 states it: null joins the one type beside
+ * the flag, and a flag with no type beside it does not compile. So nothing written here stands
+ * between the 3.0 document and the validator.
  *
- * So this is weaker than the 3.1 check in one way and stronger in another. Weaker, because the way
- * back was written here and a fault shared by both directions would cancel; the round trip spec is
- * what holds that down, by reading the recovered schema against what 2020-12 wrote. Stronger,
- * because it measures the claim two dialects make about each other rather than about a document.
+ * A way back from 3.0 was written here before. It read `nullable` wherever the flag stood, which the
+ * specification does not, and so it compiled a document Ajv refuses: a reference wrapped with the
+ * flag beside it. The check passed over the defect it existed to find.
  */
 
 export interface Measured {
@@ -43,6 +41,8 @@ export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Me
   // agreement. Ajv says so out loud: it prints `unknown format "uuid" ignored` and answers true.
   const ajv = new Ajv2020({ strict: false, allErrors: false })
   formats.default(ajv)
+  const ajv30 = new AjvDraft04.default({ strict: false, allErrors: false })
+  formats.default(ajv30)
   const next = numbers(run.seed)
   const measured: Measured = {
     narrower: [],
@@ -69,10 +69,10 @@ export function measure<S>(source: Source<S>, grammar: Grammar<S>, run: Run): Me
     }
 
     let asWritten: ReturnType<typeof ajv.compile>
-    let asRecovered: ReturnType<typeof ajv.compile>
+    let asRecovered: ReturnType<typeof ajv30.compile>
     try {
       asWritten = ajv.compile(spelled.written as object)
-      asRecovered = ajv.compile(fromV30(toV30(spelled.written).written) as object)
+      asRecovered = ajv30.compile(toV30(spelled.written).written as object)
     } catch {
       measured.uncompilable += 1
       continue

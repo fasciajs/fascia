@@ -1,17 +1,17 @@
 import { describe as description, isError } from '@fasciajs/core'
+import { jsonSchemaAt, jsonSchemaSource } from '@fasciajs/json-schema'
 import { spellJsonSchema, toV30 } from '@fasciajs/openapi'
 import { zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
-import { fromV30 } from './lib/reverse.js'
 
 /**
  * The translation into 3.0, read back.
  *
  * **A translation nothing reads backwards is a claim.** 3.0 says four things another way, and each
  * of the four is reversible: a flag beside one type is a type list, a flag beside a bound is the
- * exclusive keyword. So the way back is written here, in the check rather than in the library, and
- * a schema that survives the round trip is one the translation did not quietly change.
+ * exclusive keyword. The library reads OpenAPI 3.0 as a dialect of its own, so the way back is the
+ * reader, and a schema that survives the round trip is one the translation did not quietly change.
  *
  * What does not survive is what was reported. A positional form and a list of examples have no 3.0
  * keyword, and both are named in the departures rather than being lost in silence.
@@ -28,7 +28,17 @@ function roundTrip(schema: z.core.$ZodType): { there: unknown; back: unknown; sa
   }
 
   const there = toV30(spelled.written)
-  return { there: there.written, back: fromV30(there.written), said: there.departures.length }
+  const at = jsonSchemaAt(there.written, 'oas-3.0')
+  const read = isError(at) ? at : description(at, jsonSchemaSource, 'input')
+  if (isError(read)) {
+    throw new Error(read.message)
+  }
+  const back = spellJsonSchema(read.term)
+  if (isError(back)) {
+    throw new Error(back.message)
+  }
+
+  return { there: there.written, back: back.written, said: there.departures.length }
 }
 
 describe('what 3.0 says another way, it says reversibly', () => {

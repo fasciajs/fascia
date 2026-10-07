@@ -14,6 +14,7 @@ import { jsonSchemaAt, jsonSchemaSource } from '@fasciajs/json-schema'
 import type { valibotSource } from '@fasciajs/valibot'
 import { toJsonSchema } from '@valibot/to-json-schema'
 import { default as Ajv } from 'ajv'
+import { default as AjvDraft04 } from 'ajv-draft-04'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { default as formats } from 'ajv-formats'
 import { JSONSchema, Schema } from 'effect'
@@ -32,7 +33,8 @@ import * as z from 'zod'
  * document the reader refuses is counted, because a refusal says less and claims nothing.
  *
  * zod and arktype write 2020-12. effect and valibot write draft-07, which is translated where it
- * enters, so Ajv asks each document in the dialect it states.
+ * enters, so Ajv asks each document in the dialect it states. zod writes OpenAPI 3.0 as well, which
+ * Ajv for draft-04 holds, `nullable` included.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -47,12 +49,14 @@ interface Surveyed {
 function survey<S>(
   grammar: Grammar<S>,
   writes: (schema: S) => unknown,
-  dialect: '2020-12' | 'draft-07' = '2020-12'
+  dialect: '2020-12' | 'draft-07' | 'oas-3.0' = '2020-12'
 ): Surveyed {
   const ajv =
     dialect === '2020-12'
       ? new Ajv2020({ strict: false, allErrors: false })
-      : new Ajv.default({ strict: false, allErrors: false })
+      : dialect === 'draft-07'
+        ? new Ajv.default({ strict: false, allErrors: false })
+        : new AjvDraft04.default({ strict: false, allErrors: false })
   formats.default(ajv)
 
   const next = numbers(RUN.seed)
@@ -105,8 +109,11 @@ function survey<S>(
 /**
  * How many documents each converter writes that the reader refuses, at this seed.
  *
- * zod's 3 are a schema holding itself at the root, written `$ref: "#"`. A root has no name, and a
- * term names whatever holds itself.
+ * zod's 3, in either dialect, are a schema holding itself at the root, written `$ref: "#"`. A root
+ * has no name, and a term names whatever holds itself.
+ *
+ * zod's OpenAPI 3.0 writes `nullable` with no type beside it in some documents, which the
+ * specification reads as nothing and Ajv refuses to compile. Those are skipped as no document.
  */
 const surveys = [
   [
@@ -118,6 +125,15 @@ const surveys = [
     'zod',
     3,
     survey(zodGrammar, (schema: z.core.$ZodType) => z.toJSONSchema(schema, { io: 'input' }))
+  ],
+  [
+    'zod, as OpenAPI 3.0',
+    3,
+    survey(
+      zodGrammar,
+      (schema: z.core.$ZodType) => z.toJSONSchema(schema, { target: 'openapi-3.0', io: 'input' }),
+      'oas-3.0'
+    )
   ],
   [
     'effect',

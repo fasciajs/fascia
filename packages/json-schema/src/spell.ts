@@ -9,7 +9,7 @@ import type {
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
-import { SCHEMA_URIS } from './dialect.js'
+import { WRITTEN_URI } from './dialect.js'
 import { refTo } from './refs.js'
 
 /**
@@ -314,7 +314,8 @@ function values(term: DescribedOf<'values'>): Spelling<JSONSchema> {
   // a type list is where this target puts null and a value of null is not of the shared type.
   return faithful({
     ...(shared !== undefined && { type: typeOf(shared, term.admitsNull || admitsNullValue) }),
-    enum: term.admitsNull ? [...admitted, null] : admitted
+    // Null once, where the values already hold it: an `enum` holding a value twice is no schema.
+    enum: term.admitsNull && !admitsNullValue ? [...admitted, null] : admitted
   })
 }
 
@@ -451,7 +452,7 @@ export function spellJsonSchemaAll(described: {
   // A boolean root has no place for `$schema`, so it is written as the object stating the same.
   const body = typeof root.written === 'boolean' ? (root.written ? {} : { not: {} }) : root.written
   const written: JSONSchema = {
-    $schema: SCHEMA_URIS['2020-12'][0],
+    $schema: WRITTEN_URI,
     ...body,
     ...(described.definitions.size > 0 && { $defs })
   }

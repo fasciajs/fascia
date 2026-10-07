@@ -22,25 +22,38 @@ export function isKeyed(value: unknown): value is Readonly<Record<string, unknow
 }
 
 /** The dialects a document is read in. Each one is named explicitly, by `$schema` or by a caller. */
-const NAMES = ['draft-04', 'draft-06', 'draft-07', '2019-09', '2020-12', 'oas-3.1'] as const
+const NAMES = [
+  'draft-04',
+  'draft-06',
+  'draft-07',
+  '2019-09',
+  '2020-12',
+  'oas-3.0',
+  'oas-3.1'
+] as const
 
 export type Dialect = (typeof NAMES)[number]
 
+/** The `$schema` this library writes, which names 2020-12. */
+export const WRITTEN_URI = 'https://json-schema.org/draft/2020-12/schema'
+
 /**
- * The `$schema` URIs each dialect is named by. The writer writes the first, and the reader matches
- * every one.
+ * The `$schema` URIs each dialect is named by, which the reader matches.
+ *
+ * OpenAPI 3.0 has none. A Schema Object there states no `$schema`, so the caller names the dialect.
  *
  * OpenAPI 3.1 names its dialect `/dialect/base`, and publishes the same dialect under a dated `$id`.
  * It is 2020-12 with `format` as an annotation and four keywords of its own: `discriminator`, `xml`,
  * `externalDocs` and `example`. The specification says a discriminator "MUST NOT change the
  * validation outcome", and the other three describe, so none of the four asserts.
  */
-export const SCHEMA_URIS: Readonly<Record<Dialect, readonly [string, ...string[]]>> = {
+const SCHEMA_URIS: Readonly<Record<Dialect, readonly string[]>> = {
   'draft-04': ['http://json-schema.org/draft-04/schema#'],
   'draft-06': ['http://json-schema.org/draft-06/schema#'],
   'draft-07': ['http://json-schema.org/draft-07/schema#'],
   '2019-09': ['https://json-schema.org/draft/2019-09/schema'],
-  '2020-12': ['https://json-schema.org/draft/2020-12/schema'],
+  '2020-12': [WRITTEN_URI],
+  'oas-3.0': [],
   'oas-3.1': [
     'https://spec.openapis.org/oas/3.1/dialect/base',
     'https://spec.openapis.org/oas/3.1/dialect/2024-11-10'
@@ -64,6 +77,10 @@ interface Rules {
   readonly refOverrides: boolean
   /** Whether an exclusive bound is a boolean beside the bound. */
   readonly booleanBounds: boolean
+  /** Whether `nullable` adds null to the one type stated beside it. */
+  readonly nullableFlag: boolean
+  /** Whether `type` may be a list, and `items` a list of positions. */
+  readonly lists: boolean
 }
 
 const SINCE_2020 = ['prefixItems', '$dynamicRef']
@@ -83,11 +100,27 @@ const SINCE_06 = [...SINCE_07, 'const', 'contains', 'propertyNames']
 /** The dialects read as they stand, because each one is 2020-12 in what it asserts. */
 type Current = '2020-12' | 'oas-3.1'
 
+const BEFORE_2019 = { nullableFlag: false, lists: true } as const
+
+/**
+ * OpenAPI 3.0 states a Schema Object as a subset of JSON Schema Wright-00, and says that a keyword
+ * it does not mention "is strictly unsupported". `type` is one name, `items` one schema, and
+ * `nullable` "only takes effect if `type` is explicitly defined within the same Schema Object".
+ */
+const OAS_30: Rules = {
+  unknown: [...SINCE_06, 'patternProperties', 'dependencies', 'additionalItems'],
+  refOverrides: true,
+  booleanBounds: true,
+  nullableFlag: true,
+  lists: false
+}
+
 const RULES: Readonly<Record<Exclude<Dialect, Current>, Rules>> = {
-  'draft-04': { unknown: SINCE_06, refOverrides: true, booleanBounds: true },
-  'draft-06': { unknown: SINCE_07, refOverrides: true, booleanBounds: false },
-  'draft-07': { unknown: SINCE_2019, refOverrides: true, booleanBounds: false },
-  '2019-09': { unknown: SINCE_2020, refOverrides: false, booleanBounds: false }
+  'draft-04': { unknown: SINCE_06, refOverrides: true, booleanBounds: true, ...BEFORE_2019 },
+  'draft-06': { unknown: SINCE_07, refOverrides: true, booleanBounds: false, ...BEFORE_2019 },
+  'draft-07': { unknown: SINCE_2019, refOverrides: true, booleanBounds: false, ...BEFORE_2019 },
+  '2019-09': { unknown: SINCE_2020, refOverrides: false, booleanBounds: false, ...BEFORE_2019 },
+  'oas-3.0': OAS_30
 }
 
 /** A document in a dialect, stated in 2020-12. */
@@ -183,6 +216,26 @@ function translated(schema: unknown, rules: Rules): unknown {
   if (rules.booleanBounds) {
     exclusive(held, 'minimum', 'exclusiveMinimum')
     exclusive(held, 'maximum', 'exclusiveMaximum')
+  }
+
+  if (!rules.lists && (Array.isArray(schema['type']) || Array.isArray(items))) {
+    contested.set(
+      held,
+      'this states a list where the dialect it names allows one schema or one type'
+    )
+  }
+
+  if (rules.nullableFlag && Object.hasOwn(schema, 'nullable')) {
+    delete held['nullable']
+    const type = schema['type']
+    if (schema['nullable'] === true && typeof type === 'string') {
+      held['type'] = [type, 'null']
+    } else if (schema['nullable'] === true) {
+      contested.set(
+        held,
+        'this states nullable with no type beside it, which the dialect it names reads as nothing and Ajv refuses to compile'
+      )
+    }
   }
 
   return held
