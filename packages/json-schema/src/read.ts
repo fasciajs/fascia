@@ -11,7 +11,9 @@ import type {
   StringFormat
 } from '@fasciajs/core'
 import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
+import type { JSONSchema as Draft07 } from 'json-schema-typed/draft-07'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
+import { asCurrent, isContested, isKeyed } from './dialect.js'
 import { stepsOf } from './refs.js'
 
 /**
@@ -33,8 +35,9 @@ export interface JsonSchemaAt {
   readonly schema: unknown
 }
 
-/** A document, read from its root. */
-export function jsonSchemaAt(root: JSONSchema): JsonSchemaAt {
+/** A document, read from its root. A draft-07 document is stated again in 2020-12 first. */
+export function jsonSchemaAt(document: JSONSchema | Draft07): JsonSchemaAt {
+  const root = asCurrent(document)
   return beside({ root, schema: root }, root)
 }
 
@@ -69,11 +72,6 @@ function nameOf(at: JsonSchemaAt): string | undefined {
 
 function metaOf(at: JsonSchemaAt): Meta {
   return isKeyed(at.schema) ? metaFrom(at.schema) : {}
-}
-
-/** A document is unknown data, and this is where it is parsed. A schema is keyed or it is not. */
-function isKeyed(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** One keyword, where the schema is keyed rather than `true` or `false`. */
@@ -247,6 +245,13 @@ function partsOf(schema: Keyed): readonly unknown[] | UnreadableSchema {
 }
 
 function cutOf(schema: Keyed): readonly unknown[] | UnreadableSchema {
+  if (isContested(schema)) {
+    return new UnreadableSchema(
+      schema,
+      'this is a draft-07 reference with an assertion beside it, which the draft ignores and Ajv holds, so the document admits two sets of values'
+    )
+  }
+
   const unread = UNREAD.filter((name) => has(schema, name))
   if (unread.length > 0) {
     return new UnreadableSchema(

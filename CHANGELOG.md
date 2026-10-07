@@ -49,10 +49,14 @@ and a count past the positions of a tuple is unrolled into positions. A keyword 
 for is refused rather than dropped, and so is an assertion stated under no type, which admits every
 value of another type. Dropped, either one would read a term wider than the document.
 
+A draft-07 document is read too, by stating it again in 2020-12 where it enters. A tuple there is
+`items: [...]` with `additionalItems`. An assertion beside a `$ref` is refused, because the draft
+says to ignore it and Ajv holds it, so the document admits two sets of values.
+
 The round trip reads only what this library writes, and this library writes one family of keywords
-per schema. So the documents arktype and zod write are read too, and the term agrees with Ajv over
-every one read. zod writes a schema holding itself at the root as `$ref: "#"`, and a root has no
-name to refer to, so those three are refused.
+per schema. So the documents arktype, zod, effect and valibot write are read too, and the term
+agrees with Ajv over every one read. zod writes a schema holding itself at the root as `$ref: "#"`,
+and a root has no name to refer to, so those three are refused.
 
 arri is the first library this shows. It states Standard Schema and writes its own document, and
 nothing here ever read an arri schema: `@fasciajs/atd` writes ATD and has no reading of it. It is

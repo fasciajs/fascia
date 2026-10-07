@@ -2,6 +2,7 @@ import { a, schemaToJsonSchema } from '@arrirpc/schema'
 import type { Described, Describing, Description } from '@fasciajs/core'
 import { admits, describe as description, isError } from '@fasciajs/core'
 import { jsonSchemaAt, jsonSchemaSource, spellJsonSchemaAll } from '@fasciajs/json-schema'
+import { default as Ajv } from 'ajv'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
 import { describe, expect, it } from 'vitest'
@@ -324,5 +325,65 @@ describe('a name holding a pointer character reaches the definition it names', (
       byTerm: [true, false],
       byDocument: [true, false]
     })
+  })
+})
+
+describe('a draft-07 document admits what it admits in draft-07', () => {
+  const DRAFT_07 = 'http://json-schema.org/draft-07/schema#'
+
+  function draft07VerdictsOf(document: object, values: readonly unknown[]) {
+    const validate = new Ajv.default({ strict: false }).compile(document)
+    const whole = wholeOf(document as JSONSchema)
+
+    return {
+      byTerm: values.map((value) => admits(whole, value)),
+      byDocument: values.map((value) => validate(value) === true)
+    }
+  }
+
+  it('reads a list in items as positions, and additionalItems as what follows them', () => {
+    const verdicts = draft07VerdictsOf(
+      {
+        $schema: DRAFT_07,
+        type: 'array',
+        items: [{ type: 'string' }],
+        additionalItems: { type: 'number' }
+      },
+      [['a', 1], ['a', 'b'], [1]]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [true, false, false], byDocument: [true, false, false] })
+  })
+
+  it('refuses an assertion beside a reference, which the draft ignores and Ajv holds', () => {
+    const document = {
+      $schema: DRAFT_07,
+      type: 'object',
+      properties: { p: { $ref: '#/definitions/A', maxLength: 1 } },
+      definitions: { A: { type: 'string' } }
+    }
+
+    expect(refusalOf(document as JSONSchema)).toContain(
+      'this is a draft-07 reference with an assertion beside it'
+    )
+  })
+
+  it('reads a reference beside the definitions it points into', () => {
+    // effect and valibot write a root that refers to a definition and holds the definitions.
+    const verdicts = draft07VerdictsOf(
+      { $schema: DRAFT_07, $ref: '#/definitions/A', definitions: { A: { type: 'string' } } },
+      ['a', 1]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [true, false], byDocument: [true, false] })
+  })
+
+  it('ignores a keyword only 2020-12 asserts by', () => {
+    const verdicts = draft07VerdictsOf(
+      { $schema: DRAFT_07, type: 'array', prefixItems: [{ type: 'string' }] },
+      [[1], ['a']]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [true, true], byDocument: [true, true] })
   })
 })
