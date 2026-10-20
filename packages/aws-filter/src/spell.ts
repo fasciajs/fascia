@@ -122,10 +122,6 @@ const MOST_COMBINATIONS = 150
 /** The longest pattern Lambda takes, in characters of the wrapped pattern. */
 const LONGEST = 2048
 
-/** The widest number a numeric condition holds to, and its decimals, as SNS documents both. */
-const WIDEST = 1e9
-const DECIMALS = 5
-
 /**
  * What a policy states about the value at one place, as a lattice.
  *
@@ -621,9 +617,12 @@ function anchored(pattern: string): Condition | undefined {
 
 type NumberAssertions = Extract<TypedScalar, { readonly name: 'number' }>['assertions']
 
-/** Whether a numeric condition holds a number as it is, inside the width and decimals SNS keeps. */
+/**
+ * Whether a condition holds a number as it is. SNS and Lambda compare a double exactly, past the 1e9
+ * and the five decimals SNS documents, and JSON holds no infinity.
+ */
 function keeps(value: number): boolean {
-  return Math.abs(value) <= WIDEST && Number(value.toFixed(DECIMALS)) === value
+  return Number.isFinite(value)
 }
 
 function number(assertions: NumberAssertions, grammar: Grammar): Spelled<Pred> {
@@ -643,11 +642,7 @@ function number(assertions: NumberAssertions, grammar: Grammar): Spelled<Pred> {
     (minimum !== undefined && lower === undefined) ||
     (maximum !== undefined && upper === undefined)
   ) {
-    departures.push(
-      dropped(
-        `this states a bound past ${WIDEST} or finer than ${DECIMALS} decimals, which a numeric condition does not hold`
-      )
-    )
+    departures.push(dropped('this states an infinite bound, which no JSON number holds'))
   }
 
   const from = lower === undefined ? undefined : lower.exclusive ? '>' : '>='

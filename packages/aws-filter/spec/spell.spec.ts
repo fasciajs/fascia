@@ -93,6 +93,15 @@ describe('a subscriber receives each event its schema takes, and no other where 
     })
   })
 
+  it('holds a number past 1e9 and past five decimals, which SNS and Lambda compare exactly', () => {
+    const event = z.object({ amount: z.number().gt(0.1234567).lt(5e12), id: z.literal(9e15) })
+
+    expect(spelled(event, 'sns:body')).toEqual({
+      written: { amount: [{ numeric: ['>', 0.1234567, '<', 5e12] }], id: [9e15] },
+      said: [LIST]
+    })
+  })
+
   it('states a pattern held to one end as a prefix or a suffix', () => {
     const event = z.object({ id: z.string().regex(/^ord_/), file: z.string().regex(/\.json$/) })
 
