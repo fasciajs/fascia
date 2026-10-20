@@ -1,4 +1,5 @@
-import { isIPv4 } from 'node:net'
+import { isIPv4, isIPv6 } from 'node:net'
+import { Unheld } from './exact.js'
 
 /**
  * Whether a policy delivers a message, as SNS and Lambda decided over the recorded deliveries.
@@ -11,64 +12,65 @@ import { isIPv4 } from 'node:net'
  * holds back a value is then asked of the stricter reading, so it cannot pass on a guess.
  *
  * Each reading is one service in one place, because the two services disagree. SNS reads an
- * attribute that holds a string as the content of a JSON string. Lambda reads a body that is no
- * object as an object with no keys, and SNS delivers no such body. A Lambda message is the event
- * itself, `{ body, messageAttributes }`, as a pattern names it.
+ * attribute that holds a string as the content of a JSON string. A pattern below the root reads a
+ * value that is no object as an object with no keys, and so does an absent key. SNS delivers no
+ * body that is no object. A Lambda message is the event itself, `{ body, messageAttributes }`, as a
+ * pattern names it, so its body is below the root.
  */
 export type Reading = 'sns:attributes' | 'sns:body' | 'lambda'
 
 export function delivers(policy: unknown, message: unknown, reading: Reading): boolean {
   return (
     isRecord(policy) &&
-    matchesObject(
-      policy,
-      message,
-      { escaped: reading === 'sns:attributes', lambda: reading === 'lambda' },
-      false,
-      true
-    )
+    matchesObject(policy, message, { escaped: reading === 'sns:attributes' }, true, [])
   )
 }
 
 interface How {
   readonly escaped: boolean
-  /** Whether the message is a Lambda event, whose `body` may be no object. */
-  readonly lambda: boolean
 }
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+  typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Unheld)
 
 function matchesObject(
   pattern: Readonly<Record<string, unknown>>,
   value: unknown,
   how: How,
-  keyless: boolean,
-  root: boolean
+  root: boolean,
+  members: readonly Readonly<Record<string, unknown>>[]
 ): boolean {
-  // A list of objects matches where one member matches the whole pattern.
-  if (Array.isArray(value) && (value.some(isRecord) || !keyless)) {
-    return value.some((one) => matchesObject(pattern, one, how, false, false))
+  // A list of objects matches where one member matches the whole pattern. A member of any other
+  // type matches nothing, because no row records one beside an object.
+  if (Array.isArray(value) && (value.some(isRecord) || root)) {
+    const objects = value.filter(isRecord)
+    return objects.some((one) => matchesObject(pattern, one, how, false, objects))
+  }
+  // No row records a list that holds a list under a pattern.
+  if (Array.isArray(value) && value.some(Array.isArray)) {
+    return false
   }
   if (!isRecord(value)) {
-    return keyless && matchesObject(pattern, {}, how, false, false)
+    return !root && matchesObject(pattern, {}, how, false, [])
   }
 
   return Object.entries(pattern).every(([key, held]) => {
     if (key === '$or') {
       return (
         Array.isArray(held) &&
-        held.some((one) => isRecord(one) && matchesObject(one, value, how, keyless, root))
+        held.some((one) => isRecord(one) && matchesObject(one, value, how, root, members))
       )
     }
     const present = Object.hasOwn(value, key)
+    // A key that one member of a list lacks and another member holds is no absent key. Recorded for
+    // `exists: false`, which the other member holds back.
+    if (!present && members.some((one) => Object.hasOwn(one, key))) {
+      return false
+    }
     if (Array.isArray(held)) {
       return matchesKey(held, present, value[key], how.escaped)
     }
-    // A pattern reads an absent key as an object with no keys, on SNS and Lambda alike. Lambda reads
-    // a body that is no object the same way. Recorded for `body` alone.
-    const bodyless = how.lambda && root && key === 'body'
-    return isRecord(held) && matchesObject(held, present ? value[key] : {}, how, bodyless, false)
+    return isRecord(held) && matchesObject(held, present ? value[key] : {}, how, false, [])
   })
 }
 
@@ -78,16 +80,21 @@ function matchesKey(
   value: unknown,
   escaped: boolean
 ): boolean {
-  if (!present) {
+  // An empty list is an absent key.
+  if (!present || (Array.isArray(value) && value.length === 0)) {
     return conditions.some((one) => isRecord(one) && one['exists'] === false)
   }
-  // A list matches by any member, and an empty list by none.
+  // A list matches by any member.
   if (Array.isArray(value)) {
     return value.some((one) => matchesKey(conditions, true, one, escaped))
   }
   // An object is no leaf, so `exists: false` matches it and nothing else does.
   if (isRecord(value)) {
     return conditions.some((one) => isRecord(one) && one['exists'] === false)
+  }
+  // A number no double holds was recorded against a numeric condition alone, which held it back.
+  if (value instanceof Unheld) {
+    return false
   }
 
   // SNS reads an attribute that holds a string as the content of a JSON string, and an attribute
@@ -165,9 +172,9 @@ function butMatches(argument: unknown, value: unknown): boolean {
     const excluded: readonly unknown[] = Array.isArray(argument) ? argument : [argument]
     return !excluded.includes(value)
   }
-  // An operator under anything-but was recorded against strings alone.
+  // An operator under anything-but holds back strings alone, and delivers a value of any other type.
   if (typeof value !== 'string') {
-    return false
+    return true
   }
   return Object.entries(argument).every(([operator, held]) => {
     const each: readonly unknown[] = Array.isArray(held) ? held : [held]
@@ -216,14 +223,31 @@ function ranged(argument: readonly unknown[], value: number): boolean {
   return argument.length === 4 ? holds(first, second) && holds(third, fourth) : holds(first, second)
 }
 
-/** An IPv4 address inside a range. The deliveries recorded no IPv6 range. */
+/** An address inside a range of its own family. The deliveries recorded no IPv6 address that embeds IPv4. */
 function inRange(range: string, value: string): boolean {
-  const [address, width] = range.split('/')
-  if (address === undefined || width === undefined || !isIPv4(address) || !isIPv4(value)) {
+  const [address = '', width] = range.split('/')
+  const from = bitsOf(address)
+  const at = bitsOf(value)
+  if (from === undefined || at === undefined || width === undefined || from.size !== at.size) {
     return false
   }
-  const bits = (ip: string): number =>
-    ip.split('.').reduce((sum, octet) => sum * 256 + Number(octet), 0)
-  const kept = 2 ** (32 - Number(width))
-  return Math.floor(bits(address) / kept) === Math.floor(bits(value) / kept)
+  const kept = BigInt(from.size - Number(width))
+  return from.bits >> kept === at.bits >> kept
+}
+
+function bitsOf(ip: string): { readonly bits: bigint; readonly size: number } | undefined {
+  if (isIPv4(ip)) {
+    return { bits: ip.split('.').reduce((sum, octet) => sum * 256n + BigInt(octet), 0n), size: 32 }
+  }
+  if (!isIPv6(ip) || ip.includes('.')) {
+    return undefined
+  }
+  const groups = (part: string): readonly string[] => (part === '' ? [] : part.split(':'))
+  const [head = '', tail] = ip.split('::')
+  const named = [...groups(head), ...groups(tail ?? '')]
+  const all =
+    tail === undefined
+      ? named
+      : [...groups(head), ...Array<string>(8 - named.length).fill('0'), ...groups(tail)]
+  return { bits: all.reduce((sum, group) => sum * 65536n + BigInt(`0x${group}`), 0n), size: 128 }
 }

@@ -1,5 +1,6 @@
 import { isIPv4, isIPv6 } from 'node:net'
 import type { Scope } from '@fasciajs/aws-filter'
+import { Unheld } from './exact.js'
 
 /**
  * Whether AWS takes a policy in a scope, as the recorded verdicts show.
@@ -38,19 +39,36 @@ interface Rules {
   readonly bounded: boolean
   readonly empty: boolean
   readonly longest: ((policy: Readonly<Record<string, unknown>>) => unknown) | undefined
+  /** Whether a numeric bound with a fraction no double holds is read rounded. Measured on an SNS body. */
+  readonly rounds: boolean
 }
 
 const LONGEST = 2048
 
 const RULES: Readonly<Record<Scope, Rules>> = {
-  'sns:attributes': { nested: false, or: true, bounded: true, empty: true, longest: undefined },
-  'sns:body': { nested: true, or: true, bounded: true, empty: true, longest: undefined },
+  'sns:attributes': {
+    nested: false,
+    or: true,
+    bounded: true,
+    empty: true,
+    longest: undefined,
+    rounds: false
+  },
+  'sns:body': {
+    nested: true,
+    or: true,
+    bounded: true,
+    empty: true,
+    longest: undefined,
+    rounds: true
+  },
   'sqs:body': {
     nested: true,
     or: true,
     bounded: false,
     empty: false,
-    longest: (policy) => ({ body: policy })
+    longest: (policy) => ({ body: policy }),
+    rounds: false
   },
   'sqs:attributes': {
     nested: true,
@@ -61,15 +79,18 @@ const RULES: Readonly<Record<Scope, Rules>> = {
       messageAttributes: Object.fromEntries(
         Object.entries(policy).map(([key, held]) => [key, { stringValue: held }])
       )
-    })
+    }),
+    rounds: false
   }
 }
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+  typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Unheld)
 
+/** A number no double holds is a value both services take, though neither takes it as a bound. */
 const isScalar = (value: unknown): boolean =>
   value === null ||
+  value instanceof Unheld ||
   typeof value === 'string' ||
   typeof value === 'boolean' ||
   (typeof value === 'number' && Number.isFinite(value))
@@ -116,7 +137,7 @@ function walk(
       }
       walked.combinations *= sum
     } else if (Array.isArray(held)) {
-      if (held.length === 0 || !held.every(isCondition)) {
+      if (held.length === 0 || !held.every((one) => isCondition(one, rules))) {
         return undefined
       }
       const counts = held.flatMap((one) => {
@@ -143,7 +164,7 @@ function walk(
   return walked
 }
 
-function isCondition(condition: unknown): boolean {
+function isCondition(condition: unknown, rules: Rules): boolean {
   if (!isRecord(condition)) {
     return isScalar(condition)
   }
@@ -165,7 +186,7 @@ function isCondition(condition: unknown): boolean {
     case 'cidr':
       return isCidr(argument)
     case 'numeric':
-      return isNumeric(argument)
+      return isNumeric(argument, rules)
     case 'anything-but':
       return isExclusion(argument)
     default:
@@ -188,7 +209,7 @@ function isCidr(value: unknown): boolean {
   return rest.length === 0 && width > 0 && /^\d{1,3}$/.test(prefix ?? '') && Number(prefix) < width
 }
 
-function isNumeric(value: unknown): boolean {
+function isNumeric(value: unknown, rules: Rules): boolean {
   if (!Array.isArray(value)) {
     return false
   }
@@ -197,7 +218,8 @@ function isNumeric(value: unknown): boolean {
   const number = (one: unknown): one is number => typeof one === 'number' && Number.isFinite(one)
   const [first, second, third, fourth] = value
   if (value.length === 2) {
-    return (first === '=' || lower(first) || upper(first)) && number(second)
+    const rounded = rules.rounds && second instanceof Unheld && second.fraction
+    return (first === '=' || lower(first) || upper(first)) && (number(second) || rounded)
   }
   return (
     value.length === 4 &&

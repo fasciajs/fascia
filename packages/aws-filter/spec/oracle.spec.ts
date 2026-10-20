@@ -19,6 +19,7 @@ import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
 import { describe, expect, it } from 'vitest'
 import { accepts } from './lib/accepts.js'
+import { exactly } from './lib/exact.js'
 import { delivers } from './lib/match.js'
 
 /**
@@ -44,13 +45,16 @@ const rows = (name: string): readonly Readonly<Record<string, unknown>>[] => {
   return read
 }
 
-/** A message as SNS published it: JSON where it parses, and the text itself where it does not. */
+/**
+ * A message as SNS published it, or a body as Lambda received it: JSON where it parses, read so a
+ * number keeps its value, and the text itself where it does not parse.
+ */
 function published(message: unknown): unknown {
   if (typeof message !== 'string') {
     return message
   }
   try {
-    return JSON.parse(message)
+    return exactly(message)
   } catch {
     return message
   }
@@ -77,11 +81,11 @@ describe('the matching function delivers what AWS delivered', () => {
 
   it('agrees with every Lambda delivery', () => {
     const apart = rows('lambdaDeliveries').filter((row) => {
-      const pattern = typeof row['pattern'] === 'string' ? JSON.parse(row['pattern']) : undefined
+      const pattern = typeof row['pattern'] === 'string' ? exactly(row['pattern']) : undefined
       const message = isRecord(row['message']) ? row['message'] : {}
       const attributes = isRecord(message['attributes']) ? message['attributes'] : {}
       const event = {
-        ...(Object.hasOwn(message, 'body') && { body: message['body'] }),
+        ...(Object.hasOwn(message, 'body') && { body: published(message['body']) }),
         messageAttributes: Object.fromEntries(
           Object.entries(attributes).map(([key, value]) => [key, { stringValue: value }])
         )
@@ -100,6 +104,21 @@ describe('the acceptance model takes what AWS took', () => {
         (scope) =>
           Object.hasOwn(row, scope) && accepts(row['policy'], scope) !== (row[scope] === 'accepts')
       ).map((scope) => `${scope} ${String(row['name'])}`)
+    )
+
+    expect(apart).toEqual([])
+  })
+
+  it('agrees with every verdict on a number, read from the text AWS was sent', () => {
+    const scopes: readonly Scope[] = ['sns:body', 'sqs:body']
+    const apart = rows('numberVerdicts').flatMap((row) =>
+      scopes
+        .filter(
+          (scope) =>
+            typeof row['text'] !== 'string' ||
+            accepts(exactly(row['text']), scope) !== (row[scope] === 'accepts')
+        )
+        .map((scope) => `${scope} ${String(row['text'])}`)
     )
 
     expect(apart).toEqual([])
