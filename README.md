@@ -7,7 +7,7 @@
 <p align="center"><strong>Describe a schema once. Write it as anything.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/4%20frontends%20%C2%B7%205%20targets-ff9100?style=flat-square" alt="Four frontends and five targets" />
+  <img src="https://img.shields.io/badge/4%20frontends%20%C2%B7%206%20targets-ff9100?style=flat-square" alt="Four frontends and six targets" />
   <img src="https://img.shields.io/badge/narrower-0-04736a?style=flat-square" alt="Zero narrower departures" />
   <img src="https://img.shields.io/badge/licence-MIT-04736a?style=flat-square" alt="MIT licence" />
 </p>
@@ -35,9 +35,10 @@ flowchart LR
   term --> atd[Arri Type Definition]
   term --> mcp[Model Context Protocol]
   term --> dynamodb[DynamoDB AttributeValue]
+  term --> awsfilter[SNS and SQS filter policy]
 ```
 
-Four validators and five targets: nine packages and a core, rather than twenty. A frontend reads a
+Four validators and six targets: ten packages and a core, rather than twenty-four. A frontend reads a
 schema into one term and a target writes that term down. Neither knows the other exists.
 
 ## Why it is called fascia
@@ -46,7 +47,7 @@ Fascia is the connective tissue that wraps every muscle and organ. Two things ab
 of what this library is.
 
 **It is one continuous sheet rather than a joint between each pair of parts.** That is why four
-validators and five targets are nine packages and not twenty: there is one term in the middle, and a
+validators and six targets are ten packages and not twenty-four: there is one term in the middle, and a
 frontend and a target that have never heard of each other meet in it.
 
 **It transmits force and generates none.** Fascia does not contract; muscles do. This library
@@ -138,8 +139,9 @@ call, no dependency, and nobody reading a validator's internals.
 
 Three things are outside it, and they are outside by shape rather than by omission.
 
-**It returns a JSON Schema document.** ATD is not one. A DynamoDB AttributeValue shape is not one.
-Two of the five targets here are outside the type the interface returns.
+**It returns a JSON Schema document.** ATD is not one. A DynamoDB AttributeValue shape is not one,
+and a filter policy is not one. Three of the six targets here are outside the type the interface
+returns.
 
 **It converts one schema.** `components.schemas` is one block shared by many operations, and there is
 no argument that could carry a name scope across several conversions. Two operations holding one
@@ -236,6 +238,7 @@ places and a number moving is what a reader watches.
 | `@fasciajs/atd` | a term and a set of procedures, written for arri |
 | `@fasciajs/mcp` | tools, written as Model Context Protocol definitions |
 | `@fasciajs/dynamodb` | a term, written as the AttributeValue members a value may take. Not published yet |
+| `@fasciajs/aws-filter` | a term, written as the filter policy SNS and SQS deliver a message by. Not published yet |
 
 Install the frontend you use and the target you want. Nothing pulls in a validator you do not have.
 
