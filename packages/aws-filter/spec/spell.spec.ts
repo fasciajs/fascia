@@ -55,6 +55,24 @@ describe('a subscriber receives each event its schema takes, and no other where 
     })
   })
 
+  it('delivers an event without an optional object, by an object that lacks one of its keys', () => {
+    const event = z.object({
+      type: z.literal('a'),
+      shipping: z.object({ carrier: z.enum(['dhl', 'ups']) }).optional()
+    })
+
+    expect(spelled(event, 'sns:body')).toEqual({
+      written: {
+        type: ['a'],
+        shipping: { $or: [{ carrier: ['dhl', 'ups'] }, { carrier: [{ exists: false }] }] }
+      },
+      said: [
+        LIST,
+        'wider at [shipping]: this key may be absent, and a pattern reads an absent object as one with no keys, so a message where this is no object or an object without carrier is delivered too'
+      ]
+    })
+  })
+
   it('routes a union of objects under a key by $or under the key', () => {
     const event = z.object({
       payment: z.union([z.object({ card: z.literal('visa') }), z.object({ iban: z.string() })])

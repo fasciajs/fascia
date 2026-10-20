@@ -272,14 +272,21 @@ function object(term: TypedObject, grammar: Grammar): Spelling<Pred> {
     let pred = held.written
 
     if (!property.required) {
-      // An absent key is the join with `exists: false`, which `exists: true` absorbs into any.
-      const optional = joined(held, faithful(leafOf([{ exists: false }])), grammar)
+      // An absent key is the join with what the policy reads an absent key as.
+      const absent = absentAs(held.written)
+      const optional = joined(held, faithful(absent), grammar)
       pred = optional.written
       here.push(...optional.departures.slice(held.departures.length))
       if (pred.kind === 'leaf' && grammar.nested) {
         here.push(
           dropped(
             'this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
+          )
+        )
+      } else if (absent.kind === 'object' && pred.kind !== 'any') {
+        here.push(
+          dropped(
+            `this key may be absent, and a pattern reads an absent object as one with no keys, so a message where this is no object or an object without ${[...absent.keys.keys()].join('')} is delivered too`
           )
         )
       }
@@ -467,6 +474,19 @@ function meet(a: Pred, b: Pred): Spelled<Pred> {
     }
   }
   return { written: orOf(branches), departures }
+}
+
+/**
+ * What a policy reads an absent key as. A condition reads it by `exists: false`, which `exists: true`
+ * absorbs into any. A pattern reads an absent object as one with no keys, so the object without one
+ * key of the shape holds it.
+ */
+function absentAs(pred: Pred): Pred {
+  const [first] = pred.kind === 'object' || pred.kind === 'or' ? shapesOf(pred) : []
+  const [key] = first === undefined ? [] : first.keys.keys()
+  return key === undefined
+    ? leafOf([{ exists: false }])
+    : { kind: 'object', keys: new Map([[key, leafOf([{ exists: false }])]]) }
 }
 
 function shapesOf(pred: Shape | Extract<Pred, { readonly kind: 'or' }>): readonly Shape[] {
