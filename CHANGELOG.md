@@ -68,6 +68,10 @@ document admits two sets of values: a keyword the dialect does not know, and bef
 assertion beside a `$ref`. A boolean bound in a document naming no draft-04 is refused, where it was
 read as absent and admitted the bound itself.
 
+A `$ref` under an `$id` below the root is refused. Such a reference resolves against that `$id`, and
+the reader resolves every reference against the root, so it read a definition the document does not
+name. An `$id` that holds no reference is read, which is how effect writes one.
+
 The round trip reads only what this library writes, and this library writes one family of keywords
 per schema. So the documents arktype, zod, effect and valibot write are read too, and the term
 agrees with Ajv over every one read. zod writes a schema holding itself at the root as `$ref: "#"`,
@@ -115,6 +119,9 @@ wrong, and the check passed over the defect. The 3.0 document is now asked of Aj
 translation is deleted.
 
 Nothing else here reaches a registry, and what is here is why the two above were found.
+
+The reader knows a keyword from one table, and the lists the reader and the translation ask are
+derived from the table. A spec holds the table to the meta-schema each dialect publishes.
 
 A schema that holds itself is drawn from every frontend, and two that hold each other reach the
 specs. Recursion was described before this release and is described the same way after it.

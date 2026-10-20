@@ -346,6 +346,29 @@ describe('a document the term cannot state is refused, and the refusal names why
       )
     ).toContain('this needs at least 2 values and holds at most 1')
   })
+
+  it('refuses a reference under an $id below the root, which resolves against that $id', () => {
+    const document = {
+      $defs: { A: { type: 'string' } },
+      type: 'object',
+      properties: {
+        p: { $id: 'https://example.com/other', $defs: { A: { type: 'number' } }, $ref: '#/$defs/A' }
+      }
+    }
+
+    expect(refusalOf(document, '2020-12')).toContain(
+      'this states $id below the root and holds a $ref, which resolves against that $id'
+    )
+  })
+
+  it('reads an $id below the root that holds no reference, as effect writes one', () => {
+    const verdicts = verdictsOf(
+      { type: 'object', properties: { p: { $id: '/schemas/text', type: 'string' } } },
+      [{ p: 'a' }, { p: 1 }]
+    )
+
+    expect(verdicts).toEqual({ byTerm: [true, false], byDocument: [true, false] })
+  })
 })
 
 describe('a name holding a pointer character reaches the definition it names', () => {

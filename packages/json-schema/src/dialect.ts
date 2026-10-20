@@ -1,3 +1,5 @@
+import { asserts, DRAFTS, type Draft, keywordsWhere, knows } from './keywords.js'
+
 /**
  * A document in an older dialect, stated again in 2020-12.
  *
@@ -22,15 +24,7 @@ export function isKeyed(value: unknown): value is Readonly<Record<string, unknow
 }
 
 /** The dialects a document is read in. Each one is named explicitly, by `$schema` or by a caller. */
-const NAMES = [
-  'draft-04',
-  'draft-06',
-  'draft-07',
-  '2019-09',
-  '2020-12',
-  'oas-3.0',
-  'oas-3.1'
-] as const
+const NAMES = [...DRAFTS, 'oas-3.0', 'oas-3.1'] as const
 
 export type Dialect = (typeof NAMES)[number]
 
@@ -83,19 +77,11 @@ interface Rules {
   readonly lists: boolean
 }
 
-const SINCE_2020 = ['prefixItems', '$dynamicRef']
-const SINCE_2019 = [
-  ...SINCE_2020,
-  'dependentRequired',
-  'dependentSchemas',
-  'unevaluatedItems',
-  'unevaluatedProperties',
-  'minContains',
-  'maxContains',
-  '$recursiveRef'
-]
-const SINCE_07 = [...SINCE_2019, 'if', 'then', 'else']
-const SINCE_06 = [...SINCE_07, 'const', 'contains', 'propertyNames']
+/** The keywords a later dialect asserts by, which an older dialect does not know. */
+const unknownIn = (draft: Draft): readonly string[] =>
+  keywordsWhere(
+    (keyword) => asserts(keyword) && !knows(draft, keyword) && knows('2020-12', keyword)
+  )
 
 /** The dialects read as they stand, because each one is 2020-12 in what it asserts. */
 type Current = '2020-12' | 'oas-3.1'
@@ -108,7 +94,7 @@ const BEFORE_2019 = { nullableFlag: false, lists: true } as const
  * `nullable` "only takes effect if `type` is explicitly defined within the same Schema Object".
  */
 const OAS_30: Rules = {
-  unknown: [...SINCE_06, 'patternProperties', 'dependencies', 'additionalItems'],
+  unknown: [...unknownIn('draft-04'), 'patternProperties', 'dependencies', 'additionalItems'],
   refOverrides: true,
   booleanBounds: true,
   nullableFlag: true,
@@ -116,10 +102,30 @@ const OAS_30: Rules = {
 }
 
 const RULES: Readonly<Record<Exclude<Dialect, Current>, Rules>> = {
-  'draft-04': { unknown: SINCE_06, refOverrides: true, booleanBounds: true, ...BEFORE_2019 },
-  'draft-06': { unknown: SINCE_07, refOverrides: true, booleanBounds: false, ...BEFORE_2019 },
-  'draft-07': { unknown: SINCE_2019, refOverrides: true, booleanBounds: false, ...BEFORE_2019 },
-  '2019-09': { unknown: SINCE_2020, refOverrides: false, booleanBounds: false, ...BEFORE_2019 },
+  'draft-04': {
+    unknown: unknownIn('draft-04'),
+    refOverrides: true,
+    booleanBounds: true,
+    ...BEFORE_2019
+  },
+  'draft-06': {
+    unknown: unknownIn('draft-06'),
+    refOverrides: true,
+    booleanBounds: false,
+    ...BEFORE_2019
+  },
+  'draft-07': {
+    unknown: unknownIn('draft-07'),
+    refOverrides: true,
+    booleanBounds: false,
+    ...BEFORE_2019
+  },
+  '2019-09': {
+    unknown: unknownIn('2019-09'),
+    refOverrides: false,
+    booleanBounds: false,
+    ...BEFORE_2019
+  },
   'oas-3.0': OAS_30
 }
 
@@ -128,32 +134,15 @@ export function asCurrent(root: unknown, dialect: Dialect): unknown {
   return dialect === '2020-12' || dialect === 'oas-3.1' ? root : translated(root, RULES[dialect])
 }
 
-/** Keywords holding one schema. */
-const ONE = ['additionalProperties', 'not', 'if', 'then', 'else', 'propertyNames', 'contains']
+const holding = (holds: string): readonly string[] =>
+  keywordsWhere((keyword) => keyword.holds === holds)
 
-/** Keywords holding a list of schemas. */
-const LIST = ['anyOf', 'oneOf', 'allOf']
+const ONE = holding('one')
+const LIST = holding('list')
+const BY_NAME = holding('by name')
 
-/** Keywords holding schemas by name. `dependencies` holds a list of names beside a schema. */
-const BY_NAME = ['properties', 'patternProperties', 'definitions', '$defs', 'dependencies']
-
-/** What stands beside a `$ref` and still counts: where definitions live, and what a schema says. */
-const BESIDE_REF = [
-  '$ref',
-  '$schema',
-  '$id',
-  'id',
-  '$comment',
-  '$defs',
-  'definitions',
-  'title',
-  'description',
-  'default',
-  'examples',
-  'deprecated',
-  'readOnly',
-  'writeOnly'
-]
+/** What stands beside a `$ref` and still counts: the reference, and what asserts nothing. */
+const BESIDE_REF = ['$ref', ...keywordsWhere((keyword) => !asserts(keyword))]
 
 /** Each translated schema the dialect does not settle, and why. */
 const contested = new WeakMap<object, string>()

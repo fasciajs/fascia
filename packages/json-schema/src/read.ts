@@ -12,6 +12,7 @@ import type {
 } from '@fasciajs/core'
 import { isError, metaFrom, UnreadableSchema } from '@fasciajs/core'
 import { asCurrent, contestOf, type Dialect, dialectNamed, isKeyed } from './dialect.js'
+import { keywordsWhere, schemasIn } from './keywords.js'
 import { stepsOf } from './refs.js'
 
 /**
@@ -62,7 +63,53 @@ export function jsonSchemaAt(document: unknown, dialect: Dialect): JsonSchemaAt 
   }
 
   const root = asCurrent(document, dialect)
+  const resource = isKeyed(root) ? nestedResource(root, undefined, new WeakSet()) : undefined
+  if (resource !== undefined) {
+    return new UnreadableSchema(
+      resource,
+      'this states $id below the root and holds a $ref, which resolves against that $id, and this package resolves every $ref against the root'
+    )
+  }
+
   return beside({ root, schema: root }, root)
+}
+
+/**
+ * A schema below the root that names a resource by `$id` and refers to a place inside the resource.
+ *
+ * Such a `$ref` resolves against the nearest `$id` around it, not against the root. An `$id` that is
+ * only a fragment names a place, and changes no base.
+ */
+function nestedResource(
+  schema: Keyed,
+  around: Keyed | undefined,
+  seen: WeakSet<object>
+): Keyed | undefined {
+  if (seen.has(schema)) {
+    return undefined
+  }
+  seen.add(schema)
+
+  for (const [name, value] of Object.entries(schema)) {
+    for (const one of schemasIn(name, value)) {
+      if (!isKeyed(one)) {
+        continue
+      }
+
+      const id = one['$id']
+      const resource = typeof id === 'string' && !id.startsWith('#') ? one : around
+      const reference = one['$ref']
+      if (resource !== undefined && typeof reference === 'string' && reference.startsWith('#')) {
+        return resource
+      }
+
+      const found = nestedResource(one, resource, seen)
+      if (found !== undefined) {
+        return found
+      }
+    }
+  }
+  return undefined
 }
 
 /**
@@ -195,49 +242,12 @@ function family(at: JsonSchemaAt): Node<JsonSchemaAt> | UnreadableSchema {
  * Each holds only where the value is of its type, so a schema stating one and naming no type admits
  * every value of every other type.
  */
-const ASSERTED = [
-  'minLength',
-  'maxLength',
-  'pattern',
-  'format',
-  'minimum',
-  'maximum',
-  'exclusiveMinimum',
-  'exclusiveMaximum',
-  'multipleOf',
-  'items',
-  'prefixItems',
-  'minItems',
-  'maxItems',
-  'uniqueItems',
-  'properties',
-  'required',
-  'additionalProperties',
-  'propertyNames'
-] as const
+const ASSERTED = keywordsWhere((keyword) => keyword.role === 'asserted')
 
 /** Keywords that assert, and that no term has a word for. Dropped, each one would widen the term. */
-const UNREAD = [
-  'not',
-  'if',
-  'then',
-  'else',
-  'contains',
-  'minContains',
-  'maxContains',
-  'patternProperties',
-  'minProperties',
-  'maxProperties',
-  'dependentRequired',
-  'dependentSchemas',
-  'dependencies',
-  'unevaluatedItems',
-  'unevaluatedProperties',
-  '$dynamicRef',
-  '$recursiveRef'
-] as const
+const UNREAD = keywordsWhere((keyword) => keyword.role === 'unread')
 
-const COMBINED = ['anyOf', 'oneOf'] as const
+const COMBINED = keywordsWhere((keyword) => keyword.role === 'combined')
 
 const has = (schema: Keyed, name: string): boolean => Object.hasOwn(schema, name)
 
