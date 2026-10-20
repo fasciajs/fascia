@@ -47,6 +47,37 @@ const rows = (name: string): readonly Readonly<Record<string, unknown>>[] => {
 }
 
 /**
+ * An SQS attribute as the Lambda event carries it. A row gives the type and the value as sent, or a
+ * bare value of the type String.
+ */
+function carried(sent: unknown): Readonly<Record<string, unknown>> {
+  const dataType = isRecord(sent) ? sent['dataType'] : 'String'
+  const value = isRecord(sent) ? sent['value'] : sent
+  return {
+    dataType,
+    stringValue: dataType === 'Number' && typeof value === 'string' ? stored(value) : value
+  }
+}
+
+/**
+ * A Number as SQS stores it, which lambada read back from a queue: 5.0 as 5, 1e3 as 1000, 05 as 5,
+ * -0 as 0 and 5.50 as 5.5.
+ */
+function stored(text: string): string {
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] =
+    /^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text) ?? []
+  const digits = whole + fraction
+  const point = whole.length + Number(exponent)
+  const placed =
+    point < 0 ? '0'.repeat(-point) + digits : digits.padEnd(Math.max(point, digits.length), '0')
+  const at = Math.max(point, 0)
+  const integer = placed.slice(0, at).replace(/^0+/, '') || '0'
+  const decimals = placed.slice(at).replace(/0+$/, '')
+  const plain = decimals === '' ? integer : `${integer}.${decimals}`
+  return sign === '-' && plain !== '0' ? `-${plain}` : plain
+}
+
+/**
  * A message as SNS published it, or a body as Lambda received it: JSON where it parses, read so a
  * number keeps its value, and the text itself where it does not parse.
  */
@@ -88,7 +119,7 @@ describe('the matching function delivers what AWS delivered', () => {
       const event = {
         ...(Object.hasOwn(message, 'body') && { body: published(message['body']) }),
         messageAttributes: Object.fromEntries(
-          Object.entries(attributes).map(([key, value]) => [key, { stringValue: value }])
+          Object.entries(attributes).map(([key, sent]) => [key, carried(sent)])
         )
       }
       return delivers(pattern, event, 'lambda') !== row['delivered']

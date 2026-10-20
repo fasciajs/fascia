@@ -1403,5 +1403,130 @@
     "pattern": "{\"body\":{\"o\":{\"k\":[{\"exists\":false}]}}}",
     "message": { "body": "{\"o\":[[{\"j\":\"b\"}]]}" },
     "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\">\",1]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\">\",1]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5.0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\">\",1]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "1e3" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\">\",1]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\">\",1]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "String", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\"=\",5]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\"=\",5]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5.0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\"=\",5]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "1e3" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\"=\",5]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[{\"numeric\":[\"=\",5]}]}}}",
+    "message": { "attributes": { "k": { "dataType": "String", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[\"5\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[\"5\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5.0" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[\"5\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "1e3" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[\"5\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[\"5\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "String", "value": "5" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[5]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[5]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5.0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[5]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "1e3" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[5]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "0" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"stringValue\":[5]}}}",
+    "message": { "attributes": { "k": { "dataType": "String", "value": "5" } } },
+    "delivered": false
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"dataType\":[\"Number\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"dataType\":[\"Number\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "5.0" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"dataType\":[\"Number\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "1e3" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"dataType\":[\"Number\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "Number", "value": "0" } } },
+    "delivered": true
+  },
+  {
+    "pattern": "{\"messageAttributes\":{\"k\":{\"dataType\":[\"Number\"]}}}",
+    "message": { "attributes": { "k": { "dataType": "String", "value": "5" } } },
+    "delivered": false
   }
 ]
