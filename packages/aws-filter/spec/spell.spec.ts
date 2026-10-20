@@ -142,7 +142,7 @@ describe('a policy is never narrower than its schema, and says where it is wider
       written: { kind: ['a'] },
       said: [
         LIST,
-        'wider at [payment]: this is one of several shapes, and a policy has no form for them at one key, so the policy states nothing here and delivers what stands here whatever it is'
+        'wider at [payment]: this admits an object and a value at one place, and a policy has no form for both, so the policy states nothing here and delivers what stands here whatever it is'
       ]
     })
   })
@@ -151,7 +151,7 @@ describe('a policy is never narrower than its schema, and says where it is wider
     expect(spelled(z.object({ kind: z.literal('a') }).nullable(), 'sns:body')).toEqual({
       written: undefined,
       said: [
-        'wider at []: this admits null where a policy matches an object by its keys, so the policy states nothing here and delivers what stands here whatever it is'
+        'wider at []: this admits an object and a value at one place, and a policy has no form for both, so the policy states nothing here and delivers what stands here whatever it is'
       ]
     })
   })

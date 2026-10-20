@@ -28,19 +28,36 @@ export function spellFilterPolicy(
   scope: Scope
 ): Spelling<FilterPolicy | undefined> {
   const grammar = GRAMMARS[scope]
-  const spelled = policyFor(term, grammar)
+  const spelled = abstracted(term, grammar, 'root')
   if (isError(spelled)) {
     return spelled
   }
 
   const { written } = spelled
-  const departures = [...spelled.departures, ...annotated(term.meta)]
-  if (written === undefined) {
-    return { written, departures }
+  const departures = [...spelled.departures]
+  if (written.kind === 'leaf') {
+    departures.push(
+      ...nothing('this is no object, and a policy matches an object by its keys').departures
+    )
+  }
+  if (written.kind === 'none') {
+    departures.push(
+      ...nothing('this admits no message this scope carries, and no policy delivers none')
+        .departures
+    )
+  }
+  departures.push(...annotated(term.meta))
+  if (written.kind === 'any' || written.kind === 'leaf' || written.kind === 'none') {
+    return { written: undefined, departures }
   }
 
-  const refused = refusal(written, grammar)
-  return refused ?? { written, departures: [BY_ANY_MEMBER, ...departures] }
+  const policy = policyOf(written)
+  return (
+    refusal(written, policy, grammar) ?? {
+      written: policy,
+      departures: [BY_ANY_MEMBER, ...departures]
+    }
+  )
 }
 
 type Carried = 'string' | 'number' | 'boolean' | 'null'
@@ -117,6 +134,29 @@ const LONGEST = 2048
 const WIDEST = 1e9
 const DECIMALS = 5
 
+/**
+ * What a policy states about the value at one place, as a lattice.
+ *
+ * `any` states nothing, and `none` admits no value a message carries. A leaf is a disjunction of conditions on a value. An object is a
+ * conjunction of keys, and `or` is a disjunction of objects. A union of terms is the join, and an
+ * intersection is the meet, so each construct of a term is one law here and not one case per
+ * place it stands. A policy is written from this at the end.
+ */
+type Shape = { readonly kind: 'object'; readonly keys: ReadonlyMap<string, Pred> }
+
+type Pred =
+  | { readonly kind: 'any' }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'leaf'; readonly conditions: Conditions }
+  | Shape
+  | { readonly kind: 'or'; readonly branches: readonly [Shape, Shape, ...Shape[]] }
+
+const ANY: Pred = { kind: 'any' }
+const NONE: Pred = { kind: 'none' }
+
+/** Where a place stands: the message itself, or the value at a key. */
+type Place = 'root' | 'key'
+
 const BY_ANY_MEMBER: Departure = {
   at: [],
   direction: 'wider',
@@ -125,9 +165,9 @@ const BY_ANY_MEMBER: Departure = {
 }
 
 /** What a policy gives up where it states nothing about a part of the term. */
-function nothing(said: string): Spelled<undefined> {
+function nothing(said: string): Spelled<Pred> {
   return {
-    written: undefined,
+    written: ANY,
     departures: [
       {
         at: [],
@@ -169,35 +209,48 @@ function annotated(meta: Meta): readonly Departure[] {
       ]
 }
 
-/** A policy for the object at a place, or nothing where the term states no object there. */
-function policyFor(term: Described, grammar: Grammar): Spelling<FilterPolicy | undefined> {
-  if (term.kind === 'untyped') {
-    return faithful(undefined)
+/**
+ * The predicate for a term at a place.
+ *
+ * Null is a value, so a term admitting null is the join of the rest with `[null]`. A message that
+ * carries no null cannot carry the value, so at a key in such a scope there is nothing to join. A
+ * message itself that is null is no object, in every scope.
+ */
+function abstracted(term: Described, grammar: Grammar, place: Place): Spelling<Pred> {
+  const shaped = shapedAt(term, grammar, place)
+  if (
+    isError(shaped) ||
+    !term.admitsNull ||
+    (place === 'key' && !grammar.carries.includes('null'))
+  ) {
+    return shaped
   }
-  if (term.kind === 'ref') {
-    return referred(term)
-  }
-  // A policy matches by keys, and null has none. Read as an object, the policy holds null back.
-  if (term.admitsNull) {
-    return nothing('this admits null where a policy matches an object by its keys')
-  }
+  return joined(shaped, faithful(leafOf([null])), grammar)
+}
 
+function shapedAt(term: Described, grammar: Grammar, place: Place): Spelling<Pred> {
   switch (term.kind) {
+    case 'untyped':
+      return faithful(ANY)
+    case 'ref':
+      return referred(term)
     case 'typed':
-      return term.name === 'object'
-        ? object(term, grammar)
-        : nothing(
-            `this is ${term.name === 'array' ? 'a list' : `a ${term.name}`}, and a policy matches an object by its keys`
-          )
+      if (term.name === 'object') {
+        return place === 'root' || grammar.nested
+          ? object(term, grammar)
+          : nothing('this is an object, and a key in this scope holds a value')
+      }
+      return scalar(term, grammar)
+    case 'values':
+      return valued(term, grammar)
     case 'some':
     case 'exactlyOne':
-      return branches(term, grammar)
+      return anyOf(term, grammar, place)
     case 'every':
-      return conjoined(term.members, grammar)
-    case 'values':
+      return allOf(term.members, grammar, place)
     case 'set':
     case 'tuple':
-      return nothing('this is no object, and a policy matches an object by its keys')
+      return nothing('this is a list, and a policy matches a list by any one member')
     default:
       term satisfies never
       throw new Error('a term reached this target with a case it states no answer for')
@@ -206,8 +259,8 @@ function policyFor(term: Described, grammar: Grammar): Spelling<FilterPolicy | u
 
 type TypedObject = Extract<DescribedOf<'typed'>, { readonly name: 'object' }>
 
-function object(term: TypedObject, grammar: Grammar): Spelling<FilterPolicy | undefined> {
-  const policy: Record<string, Conditions | FilterPolicy> = {}
+function object(term: TypedObject, grammar: Grammar): Spelling<Pred> {
+  const keys = new Map<string, Pred>()
   const departures: Departure[] = []
   let demanded = false
 
@@ -219,60 +272,48 @@ function object(term: TypedObject, grammar: Grammar): Spelling<FilterPolicy | un
       continue
     }
 
-    const held = heldAt(property.term, grammar)
+    const held = abstracted(property.term, grammar, 'key')
     if (isError(held)) {
       return held
     }
-    departures.push(...under(key, held.departures))
+    const here = [...held.departures]
+    let pred = held.written
 
-    const { written } = held
-    if (written === undefined) {
-      if (property.required && held.departures.length === 0) {
-        departures.push(
-          ...under(key, [
-            dropped(
-              'this key is required, and no condition holds every value, so a message without the key is delivered too'
-            )
-          ])
+    if (!property.required) {
+      // An absent key is the join with `exists: false`, which `exists: true` absorbs into any.
+      const optional = joined(held, faithful(leafOf([{ exists: false }])), grammar)
+      pred = optional.written
+      here.push(...optional.departures.slice(held.departures.length))
+      if (pred.kind === 'leaf' && !grammar.absent) {
+        here.push(
+          ...nothing(
+            'this key may be absent, and no row records how this scope reads an absent key'
+          ).departures
         )
-      }
-    } else if (isConditions(written)) {
-      if (property.required) {
-        policy[key] = written
-        demanded = true
-      } else if (written.some((one) => isExists(one, true))) {
-        // Any value or none is no condition at all.
-      } else if (grammar.absent) {
-        policy[key] = [...written, { exists: false }]
-        if (grammar.nested) {
-          departures.push(
-            ...under(key, [
-              dropped(
-                'this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
-              )
-            ])
-          )
-        }
-      } else {
-        departures.push(
-          ...under(
-            key,
-            nothing('this key may be absent, and no row records how this scope reads an absent key')
-              .departures
+        pred = ANY
+      } else if (pred.kind === 'leaf' && grammar.nested) {
+        here.push(
+          dropped(
+            'this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
           )
         )
       }
-    } else if (property.required) {
-      policy[key] = written
-      demanded = true
-    } else {
-      departures.push(
-        ...under(
-          key,
-          nothing('this object may be absent, and a policy has no condition for an absent object')
-            .departures
+    } else if (pred.kind === 'any' && held.departures.length === 0) {
+      here.push(
+        dropped(
+          'this key is required, and no condition holds every value, so a message without the key is delivered too'
         )
       )
+    }
+
+    departures.push(...under(key, here))
+    if (pred.kind === 'none') {
+      // A required key no message can carry leaves no object to deliver.
+      return { written: NONE, departures }
+    }
+    if (pred.kind !== 'any') {
+      keys.set(key, pred)
+      demanded ||= property.required
     }
   }
 
@@ -281,8 +322,8 @@ function object(term: TypedObject, grammar: Grammar): Spelling<FilterPolicy | un
       dropped('this closes the object to other keys, and a policy ignores a key it does not name')
     )
   }
-  if (Object.keys(policy).length === 0) {
-    return { written: undefined, departures }
+  if (keys.size === 0) {
+    return { written: ANY, departures }
   }
   if (!demanded) {
     departures.push(
@@ -291,198 +332,205 @@ function object(term: TypedObject, grammar: Grammar): Spelling<FilterPolicy | un
       )
     )
   }
-
-  return { written: policy, departures }
+  return { written: { kind: 'object', keys }, departures }
 }
 
-/** Any one of several objects, as `$or`. */
-function branches(
+/** Any one of several terms, which is the join of each. */
+function anyOf(
   term: DescribedOf<'some'> | DescribedOf<'exactlyOne'>,
-  grammar: Grammar
-): Spelling<FilterPolicy | undefined> {
-  if (!grammar.or) {
-    return nothing('this is one of several shapes, and a policy in this scope has no $or')
-  }
-
-  const spelled: Spelled<FilterPolicy | undefined>[] = []
-  for (const member of term.members) {
-    const one = policyFor(member, grammar)
-    if (isError(one)) {
-      return one
-    }
-    spelled.push(one)
-  }
-
-  const departures = spelled.flatMap((one, index) => under(String(index), one.departures))
-  const [first, second, ...rest] = spelled.map((one) => one.written)
-  if (first === undefined || second === undefined || rest.some((one) => one === undefined)) {
-    // A member delivers everything, so the disjunction does too.
-    return { written: undefined, departures }
-  }
-
-  const others = rest.filter((one) => one !== undefined)
-  if (term.kind === 'exactlyOne' && term.discriminant === undefined) {
-    departures.push(
-      dropped(
-        'this admits exactly one member, and $or delivers a value that more than one member admits'
-      )
-    )
-  }
-  return { written: { $or: [first, second, ...others] }, departures }
-}
-
-/** Several objects at once, as one policy holding the keys of each. */
-function conjoined(
-  members: readonly Described[],
-  grammar: Grammar
-): Spelling<FilterPolicy | undefined> {
-  const policy: Record<string, FilterPolicy[string]> = {}
-  const departures: Departure[] = []
-
-  for (const [index, member] of members.entries()) {
-    const one = policyFor(member, grammar)
-    if (isError(one)) {
-      return one
-    }
-    departures.push(...under(String(index), one.departures))
-
-    for (const [key, held] of Object.entries(one.written ?? {})) {
-      if (Object.hasOwn(policy, key)) {
-        departures.push(
-          ...under(String(index), [
-            dropped(
-              `${key} is stated by two members at once, and a policy states a key once, so the first is kept`
-            )
-          ])
-        )
-      } else {
-        policy[key] = held
-      }
-    }
-  }
-
-  return { written: Object.keys(policy).length === 0 ? undefined : policy, departures }
-}
-
-/** What a key holds: conditions, a policy for the object under the key, or nothing. */
-function heldAt(
-  term: Described,
-  grammar: Grammar
-): Spelling<Conditions | FilterPolicy | undefined> {
-  switch (term.kind) {
-    case 'untyped':
-      return faithful(undefined)
-    case 'ref':
-      return referred(term)
-    case 'typed':
-      if (term.name === 'object') {
-        return grammar.nested
-          ? policyFor(term, grammar)
-          : nothing('this is an object, and a key in this scope holds a value')
-      }
-      return listed(scalar(term, grammar), term.admitsNull, grammar)
-    case 'values':
-      return listed(valued(term, grammar), term.admitsNull, grammar)
-    case 'some':
-    case 'exactlyOne':
-      return anyMember(term, grammar)
-    case 'every':
-      return nothing('this states several shapes at once, and a key holds one list of conditions')
-    case 'set':
-    case 'tuple':
-      return nothing('this is a list, and a policy matches a list by any one member')
-    default:
-      term satisfies never
-      throw new Error('a term reached this target with a case it states no answer for')
-  }
-}
-
-/** Conditions, with null among them where the term admits null and a message can carry one. */
-function listed(
-  spelled: Spelled<readonly Condition[] | undefined>,
-  admitsNull: boolean,
-  grammar: Grammar
-): Spelled<Conditions | undefined> {
-  const { written, departures } = spelled
-  if (written === undefined) {
-    return { written, departures }
-  }
-
-  // `exists: true` matches null already.
-  const asked =
-    admitsNull && grammar.carries.includes('null') && !written.some((one) => isExists(one, true))
-  const [first, ...rest] = asked ? [...written, null] : written
-  return first === undefined
-    ? { written: undefined, departures }
-    : { written: [first, ...rest], departures }
-}
-
-/** Any one of several values at a key, as the conditions of each. */
-function anyMember(
-  term: DescribedOf<'some'> | DescribedOf<'exactlyOne'>,
-  grammar: Grammar
-): Spelling<Conditions | FilterPolicy | undefined> {
-  const conditions: Condition[] = []
-  const policies: FilterPolicy[] = []
-  const departures: Departure[] = []
-
+  grammar: Grammar,
+  place: Place
+): Spelling<Pred> {
+  let joinedSoFar: Spelled<Pred> | undefined
   for (const [index, member] of term.members.entries()) {
-    const one = heldAt(member, grammar)
+    const one = abstracted(member, grammar, place)
     if (isError(one)) {
       return one
     }
-    departures.push(...under(String(index), one.departures))
-
-    const { written } = one
-    if (written === undefined) {
-      // A member delivers everything here, so the disjunction does too.
-      return { written: undefined, departures }
-    }
-    if (!isConditions(written)) {
-      policies.push(written)
-      continue
-    }
-    for (const condition of written) {
-      if (!conditions.some((held) => JSON.stringify(held) === JSON.stringify(condition))) {
-        conditions.push(condition)
-      }
-    }
+    const placed = { written: one.written, departures: under(String(index), one.departures) }
+    joinedSoFar = joinedSoFar === undefined ? placed : joined(joinedSoFar, placed, grammar)
   }
 
-  if (term.kind === 'exactlyOne' && term.discriminant === undefined) {
-    departures.push(
-      dropped(
-        'this admits exactly one member, and a policy delivers a value that more than one member admits'
-      )
-    )
-  }
-
-  // Objects under a key are `$or` under the key. A value and an object at one key have no form.
-  const [first, second, ...rest] = policies
-  if (first === undefined) {
-    return listed({ written: conditions, departures }, term.admitsNull, grammar)
-  }
-  if (conditions.length > 0 || second === undefined || !grammar.or || term.admitsNull) {
+  const spelled = joinedSoFar ?? faithful(ANY)
+  if (
+    term.kind === 'exactlyOne' &&
+    term.discriminant === undefined &&
+    spelled.written.kind !== 'any'
+  ) {
     return {
-      written: undefined,
+      written: spelled.written,
+      departures: [
+        ...spelled.departures,
+        dropped(
+          'this admits exactly one member, and a policy delivers a value that more than one member admits'
+        )
+      ]
+    }
+  }
+  return spelled
+}
+
+/** Several terms at once, which is the meet of each. */
+function allOf(members: readonly Described[], grammar: Grammar, place: Place): Spelling<Pred> {
+  let metSoFar: Spelled<Pred> = faithful(ANY)
+  for (const [index, member] of members.entries()) {
+    const one = abstracted(member, grammar, place)
+    if (isError(one)) {
+      return one
+    }
+    const met = meet(metSoFar.written, one.written)
+    metSoFar = {
+      written: met.written,
+      departures: [
+        ...metSoFar.departures,
+        ...under(String(index), [...one.departures, ...met.departures])
+      ]
+    }
+  }
+  return metSoFar
+}
+
+/**
+ * The join of two predicates, with what each already gave up.
+ *
+ * Two leaves join as one list of conditions, and two objects as `$or`. A leaf and an object at one
+ * place have no form, because a list of conditions matches a value and `$or` matches keys.
+ */
+function joined(left: Spelled<Pred>, right: Spelled<Pred>, grammar: Grammar): Spelled<Pred> {
+  const departures = [...left.departures, ...right.departures]
+  const a = left.written
+  const b = right.written
+  if (a.kind === 'none' || b.kind === 'none') {
+    return { written: a.kind === 'none' ? b : a, departures }
+  }
+  if (a.kind === 'any' || b.kind === 'any') {
+    return { written: ANY, departures }
+  }
+  if (a.kind === 'leaf' && b.kind === 'leaf') {
+    return { written: leafOf([...a.conditions, ...b.conditions]), departures }
+  }
+  if (a.kind === 'leaf' || b.kind === 'leaf') {
+    return {
+      written: ANY,
       departures: [
         ...departures,
-        ...nothing('this is one of several shapes, and a policy has no form for them at one key')
+        ...nothing(
+          'this admits an object and a value at one place, and a policy has no form for both'
+        ).departures
+      ]
+    }
+  }
+  if (!grammar.or) {
+    return {
+      written: ANY,
+      departures: [
+        ...departures,
+        ...nothing('this is one of several objects, and a policy in this scope has no $or')
           .departures
       ]
     }
   }
-  return { written: { $or: [first, second, ...rest] }, departures }
+  return { written: orOf([...shapesOf(a), ...shapesOf(b)]), departures }
+}
+
+/**
+ * The meet of two predicates.
+ *
+ * Two objects meet key by key, and a meet distributes over `$or`. Two leaves have no meet a list of
+ * conditions states, so the first is kept, which is wider.
+ */
+function meet(a: Pred, b: Pred): Spelled<Pred> {
+  if (a.kind === 'none' || b.kind === 'none') {
+    return faithful(NONE)
+  }
+  if (a.kind === 'any') {
+    return faithful(b)
+  }
+  if (b.kind === 'any') {
+    return faithful(a)
+  }
+  if (a.kind === 'leaf' || b.kind === 'leaf') {
+    return {
+      written: a,
+      departures: [
+        dropped(
+          'two shapes hold here at once, and a policy states one of them, so the first is kept'
+        )
+      ]
+    }
+  }
+
+  const departures: Departure[] = []
+  const branches: Shape[] = []
+  for (const one of shapesOf(a)) {
+    for (const other of shapesOf(b)) {
+      const keys = new Map(one.keys)
+      for (const [key, pred] of other.keys) {
+        const held = keys.get(key)
+        if (held === undefined) {
+          keys.set(key, pred)
+        } else {
+          const met = meet(held, pred)
+          departures.push(...under(key, met.departures))
+          keys.set(key, met.written)
+        }
+      }
+      // A key both sides hold and no value meets leaves this branch no object to deliver.
+      if (![...keys.values()].some((pred) => pred.kind === 'none')) {
+        branches.push({ kind: 'object', keys })
+      }
+    }
+  }
+  return { written: orOf(branches), departures }
+}
+
+function shapesOf(pred: Shape | Extract<Pred, { readonly kind: 'or' }>): readonly Shape[] {
+  return pred.kind === 'or' ? pred.branches : [pred]
+}
+
+function orOf(shapes: readonly Shape[]): Pred {
+  const [first, second, ...rest] = shapes
+  if (first === undefined) {
+    return NONE
+  }
+  return second === undefined ? first : { kind: 'or', branches: [first, second, ...rest] }
+}
+
+/**
+ * A disjunction of conditions, in its least form.
+ *
+ * `exists: true` matches every value present, so it absorbs every other condition on a value, and
+ * with `exists: false` beside it the two match anything.
+ */
+function leafOf(conditions: readonly Condition[]): Pred {
+  const unique = conditions.filter(
+    (one, index) =>
+      conditions.findIndex((other) => JSON.stringify(other) === JSON.stringify(one)) === index
+  )
+  const present = unique.some((one) => isExists(one, true))
+  const absent = unique.some((one) => isExists(one, false))
+  if (present && absent) {
+    return ANY
+  }
+
+  const [first, ...rest] = present ? unique.filter((one) => isExists(one, true)) : unique
+  return first === undefined ? NONE : { kind: 'leaf', conditions: [first, ...rest] }
+}
+
+function isExists(condition: Condition, exists: boolean): boolean {
+  return typeof condition === 'object' && condition !== null && 'exists' in condition
+    ? condition.exists === exists
+    : false
 }
 
 type TypedScalar = Exclude<DescribedOf<'typed'>, TypedObject>
 
 /** The conditions that hold a value to one type. */
-function scalar(term: TypedScalar, grammar: Grammar): Spelled<readonly Condition[] | undefined> {
+function scalar(term: TypedScalar, grammar: Grammar): Spelled<Pred> {
   switch (term.name) {
     case 'boolean':
       return grammar.carries.includes('boolean')
-        ? faithful([true, false])
+        ? faithful(leafOf([true, false]))
         : nothing('this is a boolean, and a message in this scope carries none')
     case 'string':
       return text(term.assertions, grammar)
@@ -499,22 +547,19 @@ function scalar(term: TypedScalar, grammar: Grammar): Spelled<readonly Condition
 }
 
 /** A present value, where no condition holds a value to its type. */
-function present(type: Carried, grammar: Grammar): Spelled<readonly Condition[]> {
-  return {
-    written: [{ exists: true }],
-    departures: grammar.carries.every((one) => one === type)
-      ? []
-      : [
-          dropped(
-            `this is a ${type}, and no condition holds a value to a type, so any value present here is delivered`
-          )
-        ]
-  }
+function present(type: Carried, grammar: Grammar): Departure[] {
+  return grammar.carries.every((one) => one === type)
+    ? []
+    : [
+        dropped(
+          `this is a ${type}, and no condition holds a value to a type, so any value present here is delivered`
+        )
+      ]
 }
 
 type StringAssertions = Extract<TypedScalar, { readonly name: 'string' }>['assertions']
 
-function text(assertions: StringAssertions, grammar: Grammar): Spelled<readonly Condition[]> {
+function text(assertions: StringAssertions, grammar: Grammar): Spelled<Pred> {
   const { minLength, maxLength, patterns = [], format } = assertions
   const unstated = [
     ...(minLength === undefined ? [] : ['minLength']),
@@ -533,14 +578,16 @@ function text(assertions: StringAssertions, grammar: Grammar): Spelled<readonly 
       ? []
       : [dropped(`this states ${said.join(', ')}, and a policy has no condition for that`)]
 
-  if (kept === undefined && grammar.anyString) {
-    return { written: [{ prefix: '' }], departures }
+  if (kept !== undefined) {
+    return { written: leafOf([kept]), departures }
   }
-  if (kept === undefined) {
-    const anyText = present('string', grammar)
-    return { written: anyText.written, departures: [...anyText.departures, ...departures] }
+  if (grammar.anyString) {
+    return { written: leafOf([{ prefix: '' }]), departures }
   }
-  return { written: [kept], departures }
+  return {
+    written: leafOf([{ exists: true }]),
+    departures: [...present('string', grammar), ...departures]
+  }
 }
 
 /**
@@ -574,10 +621,7 @@ function keeps(value: number): boolean {
   return Math.abs(value) <= WIDEST && Number(value.toFixed(DECIMALS)) === value
 }
 
-function number(
-  assertions: NumberAssertions,
-  grammar: Grammar
-): Spelled<readonly Condition[] | undefined> {
+function number(assertions: NumberAssertions, grammar: Grammar): Spelled<Pred> {
   const { minimum, maximum, multipleOf, integer } = assertions
   const departures: Departure[] = []
   if (integer === true || multipleOf !== undefined) {
@@ -611,28 +655,26 @@ function number(
         : upper !== undefined && to !== undefined
           ? [to, upper.value]
           : undefined
-    if (one === undefined) {
-      const anyNumber = present('number', grammar)
-      return { written: anyNumber.written, departures: [...anyNumber.departures, ...departures] }
-    }
-    return { written: [{ numeric: one }], departures }
+    return one === undefined
+      ? {
+          written: leafOf([{ exists: true }]),
+          departures: [...present('number', grammar), ...departures]
+        }
+      : { written: leafOf([{ numeric: one }]), departures }
   }
 
   // AWS refuses a range whose bottom is not below its top, even where both ends are inclusive.
   if (lower.value < upper.value) {
-    return { written: [{ numeric: [from, lower.value, to, upper.value] }], departures }
+    return { written: leafOf([{ numeric: [from, lower.value, to, upper.value] }]), departures }
   }
   if (lower.value === upper.value && !lower.exclusive && !upper.exclusive) {
-    return { written: [{ numeric: ['=', lower.value] }], departures }
+    return { written: leafOf([{ numeric: ['=', lower.value] }]), departures }
   }
   return nothing('this states a range no number meets')
 }
 
 /** A list of values, each as itself. */
-function valued(
-  term: DescribedOf<'values'>,
-  grammar: Grammar
-): Spelled<readonly Condition[] | undefined> {
+function valued(term: DescribedOf<'values'>, grammar: Grammar): Spelled<Pred> {
   const conditions: Condition[] = []
   for (const admitted of term.admitted) {
     switch (admitted.of) {
@@ -667,23 +709,46 @@ function valued(
     }
   }
 
-  return faithful(conditions)
+  return faithful(leafOf(conditions))
 }
 
-function isConditions(held: Conditions | FilterPolicy): held is Conditions {
-  return Array.isArray(held)
-}
+/** The policy an object or a disjunction of objects is written as. */
+function policyOf(pred: Shape | Extract<Pred, { readonly kind: 'or' }>): FilterPolicy {
+  if (pred.kind === 'or') {
+    const [first, second, ...rest] = pred.branches
+    return { $or: [policyOf(first), policyOf(second), ...rest.map(policyOf)] }
+  }
 
-function isExists(condition: Condition, exists: boolean): boolean {
-  return typeof condition === 'object' && condition !== null && 'exists' in condition
-    ? condition.exists === exists
-    : false
+  const policy: Record<string, FilterPolicy[string]> = {}
+  for (const [key, held] of pred.keys) {
+    switch (held.kind) {
+      case 'leaf':
+        policy[key] = held.conditions
+        break
+      case 'object':
+      case 'or':
+        policy[key] = policyOf(held)
+        break
+      case 'any':
+        break
+      case 'none':
+        throw new Error('an object holding a key no value meets reached the policy')
+      default:
+        held satisfies never
+        throw new Error('a predicate reached the policy with a kind it states no answer for')
+    }
+  }
+  return policy
 }
 
 /** The bound a policy passes, where SNS or Lambda would refuse it. */
-function refusal(policy: FilterPolicy, grammar: Grammar): UnsayableTerm | undefined {
+function refusal(
+  pred: Shape | Extract<Pred, { readonly kind: 'or' }>,
+  policy: FilterPolicy,
+  grammar: Grammar
+): UnsayableTerm | undefined {
   if (grammar.bounded) {
-    const { keys, combinations } = counted(policy, '', 1)
+    const { keys, combinations } = counted(pred, '', 1)
     if (keys.size > MOST_KEYS) {
       return new UnsayableTerm([], `this states ${keys.size} keys, past the ${MOST_KEYS} SNS takes`)
     }
@@ -715,34 +780,38 @@ interface Counted {
  * A key is a distinct path and list of values, and `$or` is no step of a path. Combinations
  * multiply across keys, times the depth of each key, and add across the branches of `$or`.
  */
-function counted(policy: FilterPolicy, path: string, depth: number): Counted {
-  const keys = new Set<string>()
-  let combinations = 1
-
-  for (const [key, held] of Object.entries(policy)) {
-    if (key === '$or' && Array.isArray(held)) {
-      const each = held.filter(isPolicy).map((branch) => counted(branch, path, depth))
-      for (const one of each) {
-        for (const pair of one.keys) {
-          keys.add(pair)
+function counted(pred: Pred, path: string, depth: number): Counted {
+  switch (pred.kind) {
+    case 'any':
+    case 'none':
+    case 'leaf':
+      return { keys: new Set(), combinations: 1 }
+    case 'or': {
+      const each = pred.branches.map((branch) => counted(branch, path, depth))
+      return {
+        keys: new Set(each.flatMap((one) => [...one.keys])),
+        combinations: each.reduce((sum, one) => sum + one.combinations, 0)
+      }
+    }
+    case 'object': {
+      const keys = new Set<string>()
+      let combinations = 1
+      for (const [key, held] of pred.keys) {
+        if (held.kind === 'leaf') {
+          keys.add(`${path}${key}=${JSON.stringify(held.conditions)}`)
+          combinations *= held.conditions.length * depth
+        } else {
+          const inner = counted(held, `${path}${key}.`, depth + 1)
+          for (const pair of inner.keys) {
+            keys.add(pair)
+          }
+          combinations *= inner.combinations
         }
       }
-      combinations *= each.reduce((sum, one) => sum + one.combinations, 0)
-    } else if (Array.isArray(held)) {
-      keys.add(`${path}${key}=${JSON.stringify(held)}`)
-      combinations *= held.length * depth
-    } else if (isPolicy(held)) {
-      const one = counted(held, `${path}${key}.`, depth + 1)
-      for (const pair of one.keys) {
-        keys.add(pair)
-      }
-      combinations *= one.combinations
+      return { keys, combinations }
     }
+    default:
+      pred satisfies never
+      throw new Error('a predicate reached the count with a kind it states no answer for')
   }
-
-  return { keys, combinations }
-}
-
-function isPolicy(held: unknown): held is FilterPolicy {
-  return typeof held === 'object' && held !== null && !Array.isArray(held)
 }
