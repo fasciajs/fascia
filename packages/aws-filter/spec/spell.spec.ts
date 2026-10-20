@@ -103,18 +103,15 @@ describe('a policy is never narrower than its schema, and says where it is wider
     })
   })
 
-  it('states nothing for an optional SQS attribute, because no row records an absent one', () => {
+  it('admits an absent SQS attribute by exists: false, which Lambda reads as no attribute', () => {
     expect(
       spelled(
         z.object({ kind: z.literal('a'), region: z.literal('eu').optional() }),
         'sqs:attributes'
       )
     ).toEqual({
-      written: { kind: ['a'] },
-      said: [
-        LIST,
-        'wider at [region]: this key may be absent, and no row records how this scope reads an absent key, so the policy states nothing here and delivers what stands here whatever it is'
-      ]
+      written: { kind: ['a'], region: ['eu', { exists: false }] },
+      said: [LIST]
     })
   })
 

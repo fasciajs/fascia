@@ -65,9 +65,10 @@ function matchesObject(
     if (Array.isArray(held)) {
       return matchesKey(held, present, value[key], how.escaped)
     }
-    // Lambda reads a body that is no object as one with no keys. Recorded for `body` alone.
+    // A pattern reads an absent key as an object with no keys, on SNS and Lambda alike. Lambda reads
+    // a body that is no object the same way. Recorded for `body` alone.
     const bodyless = how.lambda && root && key === 'body'
-    return isRecord(held) && present && matchesObject(held, value[key], how, bodyless, false)
+    return isRecord(held) && matchesObject(held, present ? value[key] : {}, how, bodyless, false)
   })
 }
 

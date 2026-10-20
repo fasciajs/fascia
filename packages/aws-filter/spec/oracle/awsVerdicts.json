@@ -4001,5 +4001,21 @@
       ]
     },
     "sqs:attributes": "rejects"
+  },
+  {
+    "name": "edges:nestedAbsent",
+    "policy": { "o": { "k": [{ "exists": false }] } },
+    "sns:body": "accepts",
+    "sqs:body": "accepts"
+  },
+  {
+    "name": "edges:attributeAbsent",
+    "policy": { "value": [{ "exists": false }] },
+    "sqs:attributes": "accepts"
+  },
+  {
+    "name": "edges:attributeOrAbsent",
+    "policy": { "value": ["a", { "exists": false }] },
+    "sqs:attributes": "accepts"
   }
 ]

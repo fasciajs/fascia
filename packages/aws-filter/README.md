@@ -15,8 +15,6 @@ union of events becomes `$or` over the tag, and a union of objects under a key b
 the key. An optional key gets `exists: false`, a range becomes a numeric condition, a pattern held to
 one end becomes a prefix or a suffix, and any string in a body becomes `prefix: ""`.
 
-An optional SQS attribute states nothing yet. No row records how Lambda reads an absent attribute.
-
 ```ts
 import { spellFilterPolicy } from '@fasciajs/aws-filter'
 

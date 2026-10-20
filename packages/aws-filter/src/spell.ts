@@ -74,8 +74,6 @@ interface Grammar {
   readonly wrapped: ((policy: FilterPolicy) => unknown) | undefined
   /** Whether `prefix: ""` is recorded to match every string and nothing else. */
   readonly anyString: boolean
-  /** Whether `exists: false` is recorded to match an absent key. */
-  readonly absent: boolean
 }
 
 const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
@@ -85,8 +83,7 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
     carries: ['string', 'number'],
     bounded: true,
     wrapped: undefined,
-    anyString: false,
-    absent: true
+    anyString: false
   },
   'sns:body': {
     nested: true,
@@ -94,8 +91,7 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
     carries: ['string', 'number', 'boolean', 'null'],
     bounded: true,
     wrapped: undefined,
-    anyString: true,
-    absent: true
+    anyString: true
   },
   'sqs:body': {
     nested: true,
@@ -103,8 +99,7 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
     carries: ['string', 'number', 'boolean', 'null'],
     bounded: false,
     wrapped: (policy) => ({ body: policy }),
-    anyString: true,
-    absent: true
+    anyString: true
   },
   'sqs:attributes': {
     nested: false,
@@ -116,10 +111,7 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
         Object.entries(policy).map(([key, held]) => [key, { stringValue: held }])
       )
     }),
-    // Lambda wraps an attribute as `messageAttributes.<key>.stringValue`, and no row records what
-    // `exists: false` does where the attribute, the parent of that path, is absent.
-    anyString: false,
-    absent: false
+    anyString: false
   }
 }
 
@@ -284,14 +276,7 @@ function object(term: TypedObject, grammar: Grammar): Spelling<Pred> {
       const optional = joined(held, faithful(leafOf([{ exists: false }])), grammar)
       pred = optional.written
       here.push(...optional.departures.slice(held.departures.length))
-      if (pred.kind === 'leaf' && !grammar.absent) {
-        here.push(
-          ...nothing(
-            'this key may be absent, and no row records how this scope reads an absent key'
-          ).departures
-        )
-        pred = ANY
-      } else if (pred.kind === 'leaf' && grammar.nested) {
+      if (pred.kind === 'leaf' && grammar.nested) {
         here.push(
           dropped(
             'this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
