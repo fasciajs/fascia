@@ -40,15 +40,13 @@ function matchesObject(
   root: boolean,
   members: readonly Readonly<Record<string, unknown>>[]
 ): boolean {
-  // A list of objects matches where one member matches the whole pattern. A member of any other
-  // type matches nothing, because no row records one beside an object.
-  if (Array.isArray(value) && (value.some(isRecord) || root)) {
-    const objects = value.filter(isRecord)
+  // A list of objects matches where one member matches the whole pattern, and a list inside a list
+  // is one list. A member of any other type matches nothing, because no row records one beside an
+  // object.
+  const listed = Array.isArray(value) ? flattened(value) : undefined
+  if (listed !== undefined && (listed.some(isRecord) || root)) {
+    const objects = listed.filter(isRecord)
     return objects.some((one) => matchesObject(pattern, one, how, false, objects))
-  }
-  // No row records a list that holds a list under a pattern.
-  if (Array.isArray(value) && value.some(Array.isArray)) {
-    return false
   }
   if (!isRecord(value)) {
     return !root && matchesObject(pattern, {}, how, false, [])
@@ -74,6 +72,15 @@ function matchesObject(
   })
 }
 
+const flattened = (list: readonly unknown[]): readonly unknown[] =>
+  list.flatMap((one) => (Array.isArray(one) ? flattened(one) : [one]))
+
+/** A number no double holds equals the same number written the same way, and no other value. */
+const same = (condition: unknown, value: unknown): boolean =>
+  condition instanceof Unheld && value instanceof Unheld
+    ? condition.text === value.text
+    : condition === value
+
 function matchesKey(
   conditions: readonly unknown[],
   present: boolean,
@@ -92,10 +99,6 @@ function matchesKey(
   if (isRecord(value)) {
     return conditions.some((one) => isRecord(one) && one['exists'] === false)
   }
-  // A number no double holds was recorded against a numeric condition alone, which held it back.
-  if (value instanceof Unheld) {
-    return false
-  }
 
   // SNS reads an attribute that holds a string as the content of a JSON string, and an attribute
   // that is no such content matches nothing at all.
@@ -112,7 +115,7 @@ function matchesKey(
 
 function matchesCondition(condition: unknown, value: unknown): boolean {
   if (!isRecord(condition)) {
-    return condition === value
+    return same(condition, value)
   }
 
   const [only, ...more] = Object.entries(condition)
@@ -170,7 +173,7 @@ function caseless(
 function butMatches(argument: unknown, value: unknown): boolean {
   if (!isRecord(argument)) {
     const excluded: readonly unknown[] = Array.isArray(argument) ? argument : [argument]
-    return !excluded.includes(value)
+    return !excluded.some((one) => same(one, value))
   }
   // An operator under anything-but holds back strings alone, and delivers a value of any other type.
   if (typeof value !== 'string') {

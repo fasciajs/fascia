@@ -31,8 +31,9 @@ import { delivers } from './lib/match.js'
  * is held to every row before it judges anything this package writes.
  */
 
+/** A file of rows, read so a number in a row keeps the value AWS was sent. */
 const oracle = (name: string): unknown =>
-  JSON.parse(readFileSync(new URL(`./oracle/${name}.json`, import.meta.url), 'utf8'))
+  exactly(readFileSync(new URL(`./oracle/${name}.json`, import.meta.url), 'utf8'))
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
