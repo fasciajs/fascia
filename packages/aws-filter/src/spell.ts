@@ -55,6 +55,10 @@ interface Grammar {
   readonly bounded: boolean
   /** The pattern Lambda holds to its length, as the event source mapping wraps the policy. */
   readonly wrapped: ((policy: FilterPolicy) => unknown) | undefined
+  /** Whether `prefix: ""` is recorded to match every string and nothing else. */
+  readonly anyString: boolean
+  /** Whether `exists: false` is recorded to match an absent key. */
+  readonly absent: boolean
 }
 
 const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
@@ -63,21 +67,27 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
     or: true,
     carries: ['string', 'number'],
     bounded: true,
-    wrapped: undefined
+    wrapped: undefined,
+    anyString: false,
+    absent: true
   },
   'sns:body': {
     nested: true,
     or: true,
     carries: ['string', 'number', 'boolean', 'null'],
     bounded: true,
-    wrapped: undefined
+    wrapped: undefined,
+    anyString: true,
+    absent: true
   },
   'sqs:body': {
     nested: true,
     or: true,
     carries: ['string', 'number', 'boolean', 'null'],
     bounded: false,
-    wrapped: (policy) => ({ body: policy })
+    wrapped: (policy) => ({ body: policy }),
+    anyString: true,
+    absent: true
   },
   'sqs:attributes': {
     nested: false,
@@ -88,7 +98,11 @@ const GRAMMARS: Readonly<Record<Scope, Grammar>> = {
       messageAttributes: Object.fromEntries(
         Object.entries(policy).map(([key, held]) => [key, { stringValue: held }])
       )
-    })
+    }),
+    // Lambda wraps an attribute as `messageAttributes.<key>.stringValue`, and no row records what
+    // `exists: false` does where the attribute, the parent of that path, is absent.
+    anyString: false,
+    absent: false
   }
 }
 
@@ -223,9 +237,31 @@ function object(term: TypedObject, grammar: Grammar): Spelling<FilterPolicy | un
         )
       }
     } else if (isConditions(written)) {
-      // `exists: false` matches an absent key and nothing else, so an optional key stays exact.
-      policy[key] = property.required ? written : [...written, { exists: false }]
-      demanded ||= property.required
+      if (property.required) {
+        policy[key] = written
+        demanded = true
+      } else if (written.some((one) => isExists(one, true))) {
+        // Any value or none is no condition at all.
+      } else if (grammar.absent) {
+        policy[key] = [...written, { exists: false }]
+        if (grammar.nested) {
+          departures.push(
+            ...under(key, [
+              dropped(
+                'this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
+              )
+            ])
+          )
+        }
+      } else {
+        departures.push(
+          ...under(
+            key,
+            nothing('this key may be absent, and no row records how this scope reads an absent key')
+              .departures
+          )
+        )
+      }
     } else if (property.required) {
       policy[key] = written
       demanded = true
@@ -385,8 +421,9 @@ function listed(
 function anyMember(
   term: DescribedOf<'some'> | DescribedOf<'exactlyOne'>,
   grammar: Grammar
-): Spelling<Conditions | undefined> {
+): Spelling<Conditions | FilterPolicy | undefined> {
   const conditions: Condition[] = []
+  const policies: FilterPolicy[] = []
   const departures: Departure[] = []
 
   for (const [index, member] of term.members.entries()) {
@@ -402,15 +439,8 @@ function anyMember(
       return { written: undefined, departures }
     }
     if (!isConditions(written)) {
-      return {
-        written: undefined,
-        departures: [
-          ...departures,
-          ...nothing(
-            'this is one of several shapes and one is an object, and a key holds one list of conditions'
-          ).departures
-        ]
-      }
+      policies.push(written)
+      continue
     }
     for (const condition of written) {
       if (!conditions.some((held) => JSON.stringify(held) === JSON.stringify(condition))) {
@@ -422,11 +452,27 @@ function anyMember(
   if (term.kind === 'exactlyOne' && term.discriminant === undefined) {
     departures.push(
       dropped(
-        'this admits exactly one member, and a list of conditions delivers a value that more than one member admits'
+        'this admits exactly one member, and a policy delivers a value that more than one member admits'
       )
     )
   }
-  return listed({ written: conditions, departures }, term.admitsNull, grammar)
+
+  // Objects under a key are `$or` under the key. A value and an object at one key have no form.
+  const [first, second, ...rest] = policies
+  if (first === undefined) {
+    return listed({ written: conditions, departures }, term.admitsNull, grammar)
+  }
+  if (conditions.length > 0 || second === undefined || !grammar.or || term.admitsNull) {
+    return {
+      written: undefined,
+      departures: [
+        ...departures,
+        ...nothing('this is one of several shapes, and a policy has no form for them at one key')
+          .departures
+      ]
+    }
+  }
+  return { written: { $or: [first, second, ...rest] }, departures }
 }
 
 type TypedScalar = Exclude<DescribedOf<'typed'>, TypedObject>
@@ -487,6 +533,9 @@ function text(assertions: StringAssertions, grammar: Grammar): Spelled<readonly 
       ? []
       : [dropped(`this states ${said.join(', ')}, and a policy has no condition for that`)]
 
+  if (kept === undefined && grammar.anyString) {
+    return { written: [{ prefix: '' }], departures }
+  }
   if (kept === undefined) {
     const anyText = present('string', grammar)
     return { written: anyText.written, departures: [...anyText.departures, ...departures] }

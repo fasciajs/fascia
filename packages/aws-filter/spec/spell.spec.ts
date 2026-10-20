@@ -48,6 +48,20 @@ describe('a subscriber receives each event its schema takes, and no other where 
 
     expect(spelled(event, 'sqs:body')).toEqual({
       written: { type: ['a'], region: ['eu', 'us', { exists: false }] },
+      said: [
+        LIST,
+        'wider at [region]: this key may be absent, and exists: false also matches a key holding an object, so a message holding an object here is delivered too'
+      ]
+    })
+  })
+
+  it('routes a union of objects under a key by $or under the key', () => {
+    const event = z.object({
+      payment: z.union([z.object({ card: z.literal('visa') }), z.object({ iban: z.string() })])
+    })
+
+    expect(spelled(event, 'sns:body')).toEqual({
+      written: { payment: { $or: [{ card: ['visa'] }, { iban: [{ prefix: '' }] }] } },
       said: [LIST]
     })
   })
@@ -72,13 +86,34 @@ describe('a subscriber receives each event its schema takes, and no other where 
 })
 
 describe('a policy is never narrower than its schema, and says where it is wider', () => {
-  it('delivers any present value where no condition holds a value to its type', () => {
+  it('states any string in a body as prefix "", which matches every string and nothing else', () => {
     expect(spelled(z.object({ name: z.string().min(2) }), 'sns:body')).toEqual({
+      written: { name: [{ prefix: '' }] },
+      said: [LIST, 'wider at [name]: this states minLength, and a policy has no condition for that']
+    })
+  })
+
+  it('delivers any present attribute where no row records a condition for a string', () => {
+    expect(spelled(z.object({ name: z.string() }), 'sns:attributes')).toEqual({
       written: { name: [{ exists: true }] },
       said: [
         LIST,
-        'wider at [name]: this is a string, and no condition holds a value to a type, so any value present here is delivered',
-        'wider at [name]: this states minLength, and a policy has no condition for that'
+        'wider at [name]: this is a string, and no condition holds a value to a type, so any value present here is delivered'
+      ]
+    })
+  })
+
+  it('states nothing for an optional SQS attribute, because no row records an absent one', () => {
+    expect(
+      spelled(
+        z.object({ kind: z.literal('a'), region: z.literal('eu').optional() }),
+        'sqs:attributes'
+      )
+    ).toEqual({
+      written: { kind: ['a'] },
+      said: [
+        LIST,
+        'wider at [region]: this key may be absent, and no row records how this scope reads an absent key, so the policy states nothing here and delivers what stands here whatever it is'
       ]
     })
   })
@@ -91,6 +126,23 @@ describe('a policy is never narrower than its schema, and says where it is wider
       said: [
         LIST,
         'wider at [count]: this is a number, and a message in this scope carries a number as a string, so the policy states nothing here and delivers what stands here whatever it is'
+      ]
+    })
+  })
+
+  it('states nothing for a union of objects that may be null, because $or holds null back', () => {
+    const event = z.object({
+      kind: z.literal('a'),
+      payment: z
+        .union([z.object({ card: z.literal('visa') }), z.object({ iban: z.string() })])
+        .nullable()
+    })
+
+    expect(spelled(event, 'sqs:body')).toEqual({
+      written: { kind: ['a'] },
+      said: [
+        LIST,
+        'wider at [payment]: this is one of several shapes, and a policy has no form for them at one key, so the policy states nothing here and delivers what stands here whatever it is'
       ]
     })
   })

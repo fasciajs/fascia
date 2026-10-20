@@ -114,13 +114,15 @@ it accepted before, where it accepted anything.
 
 **`@fasciajs/aws-filter` writes a term as the filter policy SNS and SQS deliver a message by.** The
 scope is a required argument, because SNS attributes, SNS bodies, SQS bodies and SQS attributes each
-take a different grammar. A tagged union becomes `$or` over the tag, an optional key gets `exists:
-false`, a range becomes a numeric condition, and a pattern held to one end becomes a prefix or a
-suffix. A policy is never narrower than its schema, and each place it is wider is a departure. A
+take a different grammar. A tagged union becomes `$or` over the tag, and a union of objects under a
+key becomes `$or` under the key. An optional key gets `exists: false`, a range becomes a numeric
+condition, a pattern held to one end becomes a prefix or a suffix, and any string in a body becomes
+`prefix: ""`. A policy is never narrower than its schema, and each place it is wider is a departure. A
 policy that AWS would refuse is not written.
 
 AWS answered for this target. lambada measured which policies SNS and Lambda take, and which messages
-each policy delivered. A matching function and an acceptance model are held to every recorded row,
+each policy delivered, and measured again for each rule the writer needed that no row recorded. A
+matching function and an acceptance model are held to every recorded row,
 and then every policy written from all four validators is held to both. The package is private
 until a caller uses it.
 

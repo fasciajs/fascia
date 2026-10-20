@@ -10,7 +10,7 @@ import {
   zodGrammar
 } from '@fascia-internal/grammar'
 import { arktypeSource } from '@fasciajs/arktype'
-import type { Scope } from '@fasciajs/aws-filter'
+import type { FilterPolicy, Scope } from '@fasciajs/aws-filter'
 import { spellFilterPolicy } from '@fasciajs/aws-filter'
 import type { Source } from '@fasciajs/core'
 import { describe as description, isError } from '@fasciajs/core'
@@ -44,14 +44,32 @@ const rows = (name: string): readonly Readonly<Record<string, unknown>>[] => {
   return read
 }
 
+/** A message as SNS published it: JSON where it parses, and the text itself where it does not. */
+function published(message: unknown): unknown {
+  if (typeof message !== 'string') {
+    return message
+  }
+  try {
+    return JSON.parse(message)
+  } catch {
+    return message
+  }
+}
+
 const SCOPES: readonly Scope[] = ['sns:attributes', 'sns:body', 'sqs:body', 'sqs:attributes']
 
 describe('the matching function delivers what AWS delivered', () => {
   it('agrees with every SNS delivery', () => {
     const apart = rows('snsDeliveries').filter((row) => {
-      const message = Object.hasOwn(row, 'published') ? { value: row['published'] } : {}
-      const escaped = row['scope'] === 'attributes'
-      return delivers({ value: row['condition'] }, message, escaped) !== row['delivered']
+      const body = row['scope'] === 'body'
+      // A row names one condition at `value`, or a whole policy and the exact message published.
+      const policy = Object.hasOwn(row, 'policy') ? row['policy'] : { value: row['condition'] }
+      const message = Object.hasOwn(row, 'message')
+        ? published(row['message'])
+        : Object.hasOwn(row, 'published')
+          ? { value: row['published'] }
+          : {}
+      return delivers(policy, message, body ? 'sns:body' : 'sns:attributes') !== row['delivered']
     })
 
     expect(apart).toEqual([])
@@ -68,7 +86,7 @@ describe('the matching function delivers what AWS delivered', () => {
           Object.entries(attributes).map(([key, value]) => [key, { stringValue: value }])
         )
       }
-      return delivers(pattern, event, false) !== row['delivered']
+      return delivers(pattern, event, 'lambda') !== row['delivered']
     })
 
     expect(apart).toEqual([])
@@ -129,6 +147,48 @@ function isMessage(value: unknown, scope: Scope): boolean {
   }
 }
 
+/** Each key's value as the event source mapping wraps it, which is what Lambda matches. */
+const asAttributes = (held: Readonly<Record<string, unknown>>) =>
+  Object.fromEntries(Object.entries(held).map(([key, one]) => [key, { stringValue: one }]))
+
+/**
+ * Whether a scope delivers a value, sent the way the scope receives it.
+ *
+ * A publisher escapes an SNS attribute holding `"` or `\` as JSON would, which is the rule the
+ * writer states. Lambda receives an event, and a policy is wrapped the way lambada wraps it.
+ */
+function deliveredIn(scope: Scope, written: FilterPolicy, value: unknown): boolean {
+  switch (scope) {
+    case 'sns:body':
+      return delivers(written, value, 'sns:body')
+    case 'sns:attributes': {
+      const sent = isRecord(value)
+        ? Object.fromEntries(
+            Object.entries(value).map(([key, one]) => [
+              key,
+              typeof one === 'string' ? JSON.stringify(one).slice(1, -1) : one
+            ])
+          )
+        : value
+      return delivers(written, sent, 'sns:attributes')
+    }
+    case 'sqs:body':
+      return delivers({ body: written }, { body: value }, 'lambda')
+    case 'sqs:attributes':
+      return (
+        isRecord(value) &&
+        delivers(
+          { messageAttributes: asAttributes(written) },
+          { messageAttributes: asAttributes(value) },
+          'lambda'
+        )
+      )
+    default:
+      scope satisfies never
+      throw new Error('a scope reached the survey with no delivery')
+  }
+}
+
 const holdsList = (value: unknown): boolean =>
   Array.isArray(value) || (isRecord(value) && Object.values(value).some(holdsList))
 
@@ -182,7 +242,7 @@ function survey<S>(grammar: Grammar<S>, source: Source<S>, scope: Scope): Survey
       }
       surveyed.verdicts += 1
 
-      const delivered = written === undefined || delivers(written, value, false)
+      const delivered = written === undefined || deliveredIn(scope, written, value)
       const named = `${JSON.stringify(value)} against ${JSON.stringify(written)}`
       if (taken && !delivered) {
         surveyed.narrower.push(named)

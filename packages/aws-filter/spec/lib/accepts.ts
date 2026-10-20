@@ -52,7 +52,17 @@ const RULES: Readonly<Record<Scope, Rules>> = {
     empty: false,
     longest: (policy) => ({ body: policy })
   },
-  'sqs:attributes': { nested: true, or: false, bounded: false, empty: false, longest: undefined }
+  'sqs:attributes': {
+    nested: true,
+    or: false,
+    bounded: false,
+    empty: false,
+    longest: (policy) => ({
+      messageAttributes: Object.fromEntries(
+        Object.entries(policy).map(([key, held]) => [key, { stringValue: held }])
+      )
+    })
+  }
 }
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>

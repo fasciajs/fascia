@@ -9,9 +9,31 @@ import { isIPv4 } from 'node:net'
  *
  * Where no recorded delivery says what AWS does, this delivers nothing. A check that a policy never
  * holds back a value is then asked of the stricter reading, so it cannot pass on a guess.
+ *
+ * Each reading is one service in one place, because the two services disagree. SNS reads an
+ * attribute that holds a string as the content of a JSON string. Lambda reads a body that is no
+ * object as an object with no keys, and SNS delivers no such body. A Lambda message is the event
+ * itself, `{ body, messageAttributes }`, as a pattern names it.
  */
-export function delivers(policy: unknown, message: unknown, escaped: boolean): boolean {
-  return isRecord(policy) && matchesObject(policy, message, escaped)
+export type Reading = 'sns:attributes' | 'sns:body' | 'lambda'
+
+export function delivers(policy: unknown, message: unknown, reading: Reading): boolean {
+  return (
+    isRecord(policy) &&
+    matchesObject(
+      policy,
+      message,
+      { escaped: reading === 'sns:attributes', lambda: reading === 'lambda' },
+      false,
+      true
+    )
+  )
+}
+
+interface How {
+  readonly escaped: boolean
+  /** Whether the message is a Lambda event, whose `body` may be no object. */
+  readonly lambda: boolean
 }
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -20,28 +42,32 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 function matchesObject(
   pattern: Readonly<Record<string, unknown>>,
   value: unknown,
-  escaped: boolean
+  how: How,
+  keyless: boolean,
+  root: boolean
 ): boolean {
   // A list of objects matches where one member matches the whole pattern.
-  if (Array.isArray(value)) {
-    return value.some((one) => matchesObject(pattern, one, escaped))
+  if (Array.isArray(value) && (value.some(isRecord) || !keyless)) {
+    return value.some((one) => matchesObject(pattern, one, how, false, false))
   }
   if (!isRecord(value)) {
-    return false
+    return keyless && matchesObject(pattern, {}, how, false, false)
   }
 
   return Object.entries(pattern).every(([key, held]) => {
     if (key === '$or') {
       return (
         Array.isArray(held) &&
-        held.some((one) => isRecord(one) && matchesObject(one, value, escaped))
+        held.some((one) => isRecord(one) && matchesObject(one, value, how, keyless, root))
       )
     }
     const present = Object.hasOwn(value, key)
     if (Array.isArray(held)) {
-      return matchesKey(held, present, value[key], escaped)
+      return matchesKey(held, present, value[key], how.escaped)
     }
-    return isRecord(held) && present && matchesObject(held, value[key], escaped)
+    // Lambda reads a body that is no object as one with no keys. Recorded for `body` alone.
+    const bodyless = how.lambda && root && key === 'body'
+    return isRecord(held) && present && matchesObject(held, value[key], how, bodyless, false)
   })
 }
 
@@ -58,8 +84,9 @@ function matchesKey(
   if (Array.isArray(value)) {
     return value.some((one) => matchesKey(conditions, true, one, escaped))
   }
+  // An object is no leaf, so `exists: false` matches it and nothing else does.
   if (isRecord(value)) {
-    return false
+    return conditions.some((one) => isRecord(one) && one['exists'] === false)
   }
 
   // SNS reads an attribute that holds a string as the content of a JSON string, and an attribute

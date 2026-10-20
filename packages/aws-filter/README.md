@@ -11,8 +11,11 @@ npm install @fasciajs/aws-filter
 
 A policy is a predicate over a message. The schema a subscriber parses with says which messages the
 subscriber can take, so the policy written from that schema delivers those messages to it. A tagged
-union of events becomes `$or` over the tag, an optional key gets `exists: false`, a range becomes a
-numeric condition, and a pattern held to one end becomes a prefix or a suffix.
+union of events becomes `$or` over the tag, and a union of objects under a key becomes `$or` under
+the key. An optional key gets `exists: false`, a range becomes a numeric condition, a pattern held to
+one end becomes a prefix or a suffix, and any string in a body becomes `prefix: ""`.
+
+An optional SQS attribute states nothing yet. No row records how Lambda reads an absent attribute.
 
 ```ts
 import { spellFilterPolicy } from '@fasciajs/aws-filter'
