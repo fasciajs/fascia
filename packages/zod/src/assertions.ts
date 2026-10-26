@@ -38,6 +38,23 @@ function upper(bag: Bag, key: string, value: Ordered): void {
 }
 
 /**
+ * zod parses base64 against a lax charset and checks the padding in code. The exact grammar is the
+ * pattern zod writes in its own document, and a document carries no code.
+ */
+const EXACT_PATTERNS = new Map<RegExp, RegExp>([
+  [core.base64Charset, core.regexes.base64],
+  [core.base64urlCharset, core.regexes.base64url]
+])
+
+function addPattern(bag: Bag, pattern: RegExp | undefined): void {
+  if (pattern === undefined) {
+    return
+  }
+  const patterns = bag['patterns'] instanceof Set ? bag['patterns'] : new Set<RegExp>()
+  bag['patterns'] = patterns.add(EXACT_PATTERNS.get(pattern) ?? pattern)
+}
+
+/**
  * The checks a schema holds, folded into one bag.
  *
  * zod before 4.6 folded each check into `_zod.bag` as a schema was built. zod 4.6 leaves that bag
@@ -59,7 +76,8 @@ function foldOf(schema: core.$ZodType): Bag {
       const { inclusive, value } = check._zod.def
       upper(bag, inclusive ? 'maximum' : 'exclusiveMaximum', value)
     } else if (check instanceof core.$ZodCheckMultipleOf) {
-      bag['multipleOf'] ??= check._zod.def.value
+      const divisors = Array.isArray(bag['multipleOf']) ? bag['multipleOf'] : []
+      bag['multipleOf'] = [...divisors, check._zod.def.value]
     } else if (check instanceof core.$ZodCheckNumberFormat) {
       const [minimum, maximum] = core.util.NUMBER_FORMAT_RANGES[check._zod.def.format]
       bag['format'] = check._zod.def.format
@@ -78,15 +96,58 @@ function foldOf(schema: core.$ZodType): Bag {
       lower(bag, 'minimum', check._zod.def.length)
       upper(bag, 'maximum', check._zod.def.length)
     } else if (check instanceof core.$ZodCheckStringFormat) {
-      const { format, pattern } = check._zod.def
-      bag['format'] = format
-      if (pattern !== undefined) {
-        const patterns = bag['patterns'] instanceof Set ? bag['patterns'] : new Set<RegExp>()
-        bag['patterns'] = patterns.add(pattern)
-      }
+      bag['format'] = check._zod.def.format
+      addPattern(bag, check._zod.def.pattern)
+    } else if (
+      // These three state a pattern under `string_format`, and zod does not build them as one.
+      check instanceof core.$ZodCheckStartsWith ||
+      check instanceof core.$ZodCheckEndsWith ||
+      check instanceof core.$ZodCheckIncludes
+    ) {
+      addPattern(bag, check._zod.def.pattern)
     }
   }
   return bag
+}
+
+/** A positive decimal as an integer over a power of ten, read from its text. */
+function decimalOf(value: number): { readonly digits: bigint; readonly scale: number } | undefined {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(String(value))
+  if (match === null) {
+    return undefined
+  }
+  const [, whole = '', fraction = ''] = match
+  return { digits: BigInt(whole + fraction), scale: fraction.length }
+}
+
+const gcd = (a: bigint, b: bigint): bigint => (b === 0n ? a : gcd(b, a % b))
+
+/**
+ * The one divisor whose multiples are the multiples of every divisor: the least common multiple.
+ *
+ * Computed on the decimal text, because a double has no exact common multiple of `0.5` and `0.3`.
+ * There is none to state where a divisor has no plain decimal text, or the result passes 2^53.
+ */
+function commonMultipleOf(divisors: readonly number[]): number | undefined {
+  // The fold starts at the first divisor. One is no identity here: lcm(1, 0.5) is 1.
+  const [first, ...rest] = divisors.map(decimalOf)
+  if (first === undefined || first.digits === 0n) {
+    return undefined
+  }
+  let held = first
+  for (const decimal of rest) {
+    if (decimal === undefined || decimal.digits === 0n) {
+      return undefined
+    }
+    const scale = Math.max(held.scale, decimal.scale)
+    const a = held.digits * 10n ** BigInt(scale - held.scale)
+    const b = decimal.digits * 10n ** BigInt(scale - decimal.scale)
+    held = { digits: (a / gcd(a, b)) * b, scale }
+  }
+  if (held.digits > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return undefined
+  }
+  return Number(held.digits) / 10 ** held.scale
 }
 
 function numberAt(bag: Bag, key: string): number | undefined {
@@ -229,12 +290,15 @@ export function stringAssertions(
 /** What a number asserts. `minimum` and `maximum` are values here. */
 export function numberAssertions(
   schema: core.$ZodType
-): Extract<Scalar, { name: 'number' }>['assertions'] {
+): Extract<Scalar, { name: 'number' }>['assertions'] | UnreadableSchema {
   const bag = foldOf(schema)
   const format = bag['format']
   const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', numberAt)
   const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', numberAt)
-  const multipleOf = numberAt(bag, 'multipleOf')
+  const multipleOf = multipleOfIn(schema, bag)
+  if (isError(multipleOf)) {
+    return multipleOf
+  }
 
   return {
     ...(minimum !== undefined && { minimum }),
@@ -243,6 +307,28 @@ export function numberAssertions(
     // `z.int()` states its format as the schema itself, which the fold reads as its first check.
     ...(typeof format === 'string' && WHOLE_NUMBER_FORMATS.has(format) && { integer: true })
   }
+}
+
+/**
+ * The divisor a number states. A value meets every divisor, so two read as their least common
+ * multiple, and two with no exact one are refused rather than read as the first.
+ */
+function multipleOfIn(schema: core.$ZodType, bag: Bag): number | undefined | UnreadableSchema {
+  const held = bag['multipleOf']
+  const divisors = [
+    ...new Set(Array.isArray(held) ? held.filter((one) => typeof one === 'number') : [])
+  ]
+  const [only, ...rest] = divisors
+  if (rest.length === 0) {
+    return only !== undefined && Number.isFinite(only) ? only : undefined
+  }
+  return (
+    commonMultipleOf(divisors) ??
+    new UnreadableSchema(
+      schema,
+      `this states the divisors ${divisors.join(' and ')}, and no single divisor holds exactly the multiples of each. Write the one divisor the schema means`
+    )
+  )
 }
 
 /** What a bigint asserts. */

@@ -144,6 +144,52 @@ describe('a pattern is carried as text', () => {
   })
 })
 
+describe('a prefix, a suffix and a substring each hold as a pattern', () => {
+  // zod states the three under `string_format` and builds none of them as a format check, so a
+  // reading that asked for a format check alone took each as a string with no constraint.
+  it('reads startsWith as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().startsWith('a.b'))).toEqual({ patterns: ['^a\\.b.*'] })
+  })
+
+  it('reads endsWith as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().endsWith('yz'))).toEqual({ patterns: ['.*yz$'] })
+  })
+
+  it('reads includes as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().includes('mm'))).toEqual({ patterns: ['mm'] })
+  })
+})
+
+/**
+ * zod parses base64 against a lax charset and checks the padding in code. The document carries the
+ * pattern alone, so the lax charset took `ab`, which zod refuses.
+ */
+describe('a base64 pattern accepts exactly what zod parses', () => {
+  const alphabet = ['A', 'z', '0', '+', '/', '_', '-', '=']
+  const strings = [''].concat(
+    ...[1, 2, 3, 4, 5].map((length) =>
+      Array.from({ length: alphabet.length ** length }, (_, index) =>
+        Array.from(
+          { length },
+          (_, at) => alphabet[Math.floor(index / alphabet.length ** at) % alphabet.length]
+        ).join('')
+      )
+    )
+  )
+
+  for (const [name, schema] of [
+    ['base64', z.base64()],
+    ['base64url', z.base64url()]
+  ] as const) {
+    it(`agrees with ${name} on every string of five characters or fewer`, () => {
+      const { patterns } = assertionsOf(schema) as { patterns: [string] }
+      const pattern = new RegExp(patterns[0])
+      const disagreed = strings.filter((one) => pattern.test(one) !== schema.safeParse(one).success)
+      expect(disagreed).toEqual([])
+    })
+  }
+})
+
 /**
  * **A document states a pattern as text and states no flag beside it.** So the source of a flagged
  * expression is a narrower pattern than the schema holds: `/^ab$/i` accepts `AB` and `^ab$` refuses
@@ -200,6 +246,22 @@ describe('a format no document names loses the name and keeps the constraint', (
 
   it('keeps a name a document does have', () => {
     expect(assertionsOf(z.uuid())).toEqual({ format: 'uuid', patterns: [expect.any(String)] })
+  })
+})
+
+describe('a value meets every divisor, so two divisors read as one', () => {
+  it('reads two whole divisors as their least common multiple', () => {
+    expect(assertionsOf(z.number().multipleOf(2).multipleOf(3))).toEqual({ multipleOf: 6 })
+  })
+
+  it('reads two fractional divisors as their least common multiple', () => {
+    expect(assertionsOf(z.number().multipleOf(0.5).multipleOf(0.3))).toEqual({ multipleOf: 1.5 })
+  })
+
+  it('refuses two divisors with no exact common multiple, rather than read the first', () => {
+    expect(refusalFor(z.number().multipleOf(1e-7).multipleOf(3))).toContain(
+      'this states the divisors 1e-7 and 3'
+    )
   })
 })
 

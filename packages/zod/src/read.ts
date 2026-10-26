@@ -112,7 +112,8 @@ function read(schema: core.$ZodType): Node<core.$ZodType> | UnreadableSchema {
     return isError(assertions) ? assertions : { kind: 'scalar', name: 'string', assertions }
   }
   if (isZodType(schema, ['number'])) {
-    return { kind: 'scalar', name: 'number', assertions: numberAssertions(schema) }
+    const assertions = numberAssertions(schema)
+    return isError(assertions) ? assertions : { kind: 'scalar', name: 'number', assertions }
   }
   if (isZodType(schema, ['bigint'])) {
     return { kind: 'scalar', name: 'bigint', assertions: bigintAssertions(schema) }
