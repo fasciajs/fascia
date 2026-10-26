@@ -7,10 +7,9 @@ import type * as core from 'zod/v4/core'
  * schema still reads as its type, the document is merely wider than the schema, and no test fails
  * because no test knew to ask. The lists below turn a check zod adds into a compile error naming it.
  *
- * The values are not read from here. zod folds a check into `_zod.bag` as a schema is built, and
- * that is where the reading takes them, because two constraints arrive at `bag` and never appear as
- * a check at all: `z.int()` and `z.email()` each carry a format and hold no check. So `bag` is where
- * the values are, and this file is where the guarantee is.
+ * The values are not read from here. `assertions.ts` folds the checks a schema holds, and a format
+ * schema such as `z.int()` or `z.email()` is its own first check there. So the fold is where the
+ * values are, and this file is where the guarantee is.
  */
 
 /**
@@ -39,7 +38,7 @@ export type ZodCheckName = keyof ZodChecksByCheck
 /**
  * The checks this package reads, each of which reaches an assertion on a node.
  *
- * A name here is a claim that `bag` carries what the check states. What holds the claim is the spec,
+ * A name here is a claim that the fold carries what the check states. What holds the claim is the spec,
  * which builds a schema per name and asserts the assertion arrives.
  */
 export const ReadZodChecks = [
@@ -73,6 +72,10 @@ export const UnreadZodChecks = {
 
   /** An assertion about one property of a value, which stands beside no single assertion. */
   property: 'this asserts about one property, and an assertion here describes the whole value',
+
+  /** The same for several properties at once, each held to its own schema. */
+  properties:
+    'this asserts about properties one by one, and an assertion here describes the whole value',
 
   /** A conversion. What a conversion produces is not what a caller may send. */
   overwrite: 'this converts the value, and what a conversion produces is not what a caller sends',

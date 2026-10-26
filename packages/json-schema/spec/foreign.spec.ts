@@ -109,8 +109,8 @@ function survey<S>(
 /**
  * How many documents each converter writes that the reader refuses, at this seed.
  *
- * zod's 3, in either dialect, are a schema holding itself at the root, written `$ref: "#"`. A root
- * has no name, and a term names whatever holds itself.
+ * zod has none since zod 4.6, which names a schema holding itself at the root in `$defs`. zod before
+ * 4.6 wrote it `$ref: "#"`, and a root has no name, while a term names whatever holds itself.
  *
  * zod's OpenAPI 3.0 writes `nullable` with no type beside it in some documents, which the
  * specification reads as nothing and Ajv refuses to compile. Those are skipped as no document.
@@ -123,12 +123,12 @@ const surveys = [
   ],
   [
     'zod',
-    3,
+    0,
     survey(zodGrammar, (schema: z.core.$ZodType) => z.toJSONSchema(schema, { io: 'input' }))
   ],
   [
     'zod, as OpenAPI 3.0',
-    3,
+    0,
     survey(
       zodGrammar,
       (schema: z.core.$ZodType) => z.toJSONSchema(schema, { target: 'openapi-3.0', io: 'input' }),

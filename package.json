@@ -46,7 +46,7 @@
     "rolldown-plugin-dts": "0.28.0",
     "typescript": "5.9.3",
     "valibot": "^1.1.0",
-    "vitest": "4.1.10",
-    "zod": "^4.4.3"
+    "vitest": "4.1.12",
+    "zod": "^4.6.7"
   }
 }

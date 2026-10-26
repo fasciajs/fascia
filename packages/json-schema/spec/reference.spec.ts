@@ -124,7 +124,8 @@ function survey<S>(
 /**
  * Each reference, and how often its own document differs from its own verdict at this seed.
  *
- * zod's 32 are one tuple written with neither `minItems` nor `items`. effect's 65 are one struct
+ * zod's 6 are a tuple whose element admits undefined: zod takes the array without the element, and
+ * its document holds the array to `minItems`. effect's 65 are one struct
  * written `additionalProperties: false`, which effect itself strips rather than refuses. The number
  * moves when the reference changes, which is what a run against one has to notice.
  */
@@ -138,7 +139,7 @@ const surveys = [
   ],
   [
     'zod',
-    32,
+    6,
     survey(zodSource, zodGrammar, (schema: z.core.$ZodType) =>
       z.toJSONSchema(schema, { io: 'input' })
     )

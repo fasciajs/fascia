@@ -83,6 +83,13 @@ describe('a bound says whether the bound itself is admitted', () => {
       minimum: { value: 2, exclusive: true }
     })
   })
+
+  it('takes the narrower of two bounds on one side, because a value meets both', () => {
+    expect(assertionsOf(z.number().min(3).min(1).max(5).max(9))).toEqual({
+      minimum: { value: 3, exclusive: false },
+      maximum: { value: 5, exclusive: false }
+    })
+  })
 })
 
 describe('one key of the bag means three things, and the reader is chosen by the type', () => {
@@ -135,6 +142,58 @@ describe('a pattern is carried as text', () => {
     const both = assertionsOf(z.string().regex(/^a/).regex(/z$/)) as { patterns: string[] }
     expect(both.patterns).toHaveLength(2)
   })
+})
+
+describe('a prefix, a suffix and a substring each hold as a pattern', () => {
+  // zod states the three under `string_format` and builds none of them as a format check, so a
+  // reading that asked for a format check alone took each as a string with no constraint.
+  it('reads startsWith as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().startsWith('a.b'))).toEqual({ patterns: ['^a\\.b.*'] })
+  })
+
+  it('reads endsWith as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().endsWith('yz'))).toEqual({ patterns: ['.*yz$'] })
+  })
+
+  it('reads includes as the pattern zod parses against', () => {
+    expect(assertionsOf(z.string().includes('mm'))).toEqual({ patterns: ['mm'] })
+  })
+})
+
+/**
+ * zod parses base64 against a lax charset and checks the padding in code. The document carries the
+ * pattern alone, so the lax charset took `ab`, which zod refuses.
+ */
+describe('a base64 pattern accepts exactly what zod parses', () => {
+  it('keeps the lax charset where a caller states it as a regex, because zod parses that alone', () => {
+    const lax = z.string().regex(z.core.base64Charset)
+    expect(lax.safeParse('ab').success).toBe(true)
+    expect(assertionsOf(lax)).toEqual({ patterns: [z.core.base64Charset.source] })
+  })
+
+  const alphabet = ['A', 'z', '0', '+', '/', '_', '-', '=']
+  const strings = [''].concat(
+    ...[1, 2, 3, 4, 5].map((length) =>
+      Array.from({ length: alphabet.length ** length }, (_, index) =>
+        Array.from(
+          { length },
+          (_, at) => alphabet[Math.floor(index / alphabet.length ** at) % alphabet.length]
+        ).join('')
+      )
+    )
+  )
+
+  for (const [name, schema] of [
+    ['base64', z.base64()],
+    ['base64url', z.base64url()]
+  ] as const) {
+    it(`agrees with ${name} on every string of five characters or fewer`, () => {
+      const { patterns } = assertionsOf(schema) as { patterns: [string] }
+      const pattern = new RegExp(patterns[0])
+      const disagreed = strings.filter((one) => pattern.test(one) !== schema.safeParse(one).success)
+      expect(disagreed).toEqual([])
+    })
+  }
 })
 
 /**
@@ -193,6 +252,55 @@ describe('a format no document names loses the name and keeps the constraint', (
 
   it('keeps a name a document does have', () => {
     expect(assertionsOf(z.uuid())).toEqual({ format: 'uuid', patterns: [expect.any(String)] })
+  })
+})
+
+describe('a value meets both bounds on one side, so the stricter one is the bound', () => {
+  it('reads an inclusive lower bound above an exclusive one', () => {
+    expect(assertionsOf(z.number().gt(5).min(10))).toEqual({
+      minimum: { value: 10, exclusive: false }
+    })
+  })
+
+  it('reads an inclusive upper bound below an exclusive one', () => {
+    expect(assertionsOf(z.number().lt(10).max(5))).toEqual({
+      maximum: { value: 5, exclusive: false }
+    })
+  })
+
+  it('reads the exclusive bound at one value, because it refuses the value itself', () => {
+    expect(assertionsOf(z.number().min(5).gt(5).max(9).lt(9))).toEqual({
+      minimum: { value: 5, exclusive: true },
+      maximum: { value: 9, exclusive: true }
+    })
+  })
+
+  it('reads a bigint the same way', () => {
+    expect(assertionsOf(z.bigint().gt(5n).min(10n))).toEqual({
+      minimum: { value: 10n, exclusive: false }
+    })
+  })
+})
+
+describe('a value meets every divisor, so two divisors read as one', () => {
+  it('reads two whole divisors as their least common multiple', () => {
+    expect(assertionsOf(z.number().multipleOf(2).multipleOf(3))).toEqual({ multipleOf: 6 })
+  })
+
+  it('reads two fractional divisors as their least common multiple', () => {
+    expect(assertionsOf(z.number().multipleOf(0.5).multipleOf(0.3))).toEqual({ multipleOf: 1.5 })
+  })
+
+  it('reads a common multiple a double holds, though its decimal text ends in zeros', () => {
+    expect(assertionsOf(z.number().multipleOf(0.1).multipleOf(9007199254740990))).toEqual({
+      multipleOf: 9007199254740990
+    })
+  })
+
+  it('refuses two divisors with no exact common multiple, rather than read the first', () => {
+    expect(refusalFor(z.number().multipleOf(1e-7).multipleOf(3))).toContain(
+      'this states the divisors 1e-7 and 3'
+    )
   })
 })
 

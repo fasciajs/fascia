@@ -4,6 +4,36 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.5.0
+
+Not published.
+
+### Fixed
+
+**`@fasciajs/zod` read no constraint from zod 4.6.** zod before 4.6 folded each check into
+`_zod.bag` as a schema was built, and the frontend read the bag. zod 4.6.0 leaves the bag empty. A
+schema on zod 4.6 lost every bound, length, multiple, format and pattern, and nothing reported the
+loss: the term still read as its type, and every document was wider than its schema. The frontend
+now folds the checks a schema holds, as zod folds them for its own document, and reads that fold.
+
+**`@fasciajs/zod` read four constraints wider than zod parses them.** Two divisors read as the
+first, so `multipleOf(2).multipleOf(3)` took 2. A value meets every divisor, so the reading is now
+the least common multiple, and two divisors with no exact one are refused. An exclusive bound won
+over an inclusive one on the same side, so `gt(5).min(10)` took 6. The stricter bound wins now.
+`startsWith`, `endsWith` and `includes` read as no constraint, and each now reads as the pattern zod
+parses against. base64 and base64url read as zod's lax charset, which took `ab`. Each now reads as
+the exact grammar that zod states in its own document.
+
+### Changed
+
+**`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before
+4.6.6 can exhaust memory while it validates a large collection (GHSA-mrhx-c7xc-m3w5). One reader for
+the patched line replaces two readers, one of them for a line a caller should leave.
+
+The workspace waits one day for a release, as `.npmrc` intended. npm reads `min-release-age` in
+days, and the value was written in minutes, so the workspace waited four years and refused every
+fix `npm audit` named.
+
 ## 0.4.1
 
 ### Fixed
