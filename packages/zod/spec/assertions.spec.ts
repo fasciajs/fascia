@@ -165,6 +165,12 @@ describe('a prefix, a suffix and a substring each hold as a pattern', () => {
  * pattern alone, so the lax charset took `ab`, which zod refuses.
  */
 describe('a base64 pattern accepts exactly what zod parses', () => {
+  it('keeps the lax charset where a caller states it as a regex, because zod parses that alone', () => {
+    const lax = z.string().regex(z.core.base64Charset)
+    expect(lax.safeParse('ab').success).toBe(true)
+    expect(assertionsOf(lax)).toEqual({ patterns: [z.core.base64Charset.source] })
+  })
+
   const alphabet = ['A', 'z', '0', '+', '/', '_', '-', '=']
   const strings = [''].concat(
     ...[1, 2, 3, 4, 5].map((length) =>
@@ -249,6 +255,33 @@ describe('a format no document names loses the name and keeps the constraint', (
   })
 })
 
+describe('a value meets both bounds on one side, so the stricter one is the bound', () => {
+  it('reads an inclusive lower bound above an exclusive one', () => {
+    expect(assertionsOf(z.number().gt(5).min(10))).toEqual({
+      minimum: { value: 10, exclusive: false }
+    })
+  })
+
+  it('reads an inclusive upper bound below an exclusive one', () => {
+    expect(assertionsOf(z.number().lt(10).max(5))).toEqual({
+      maximum: { value: 5, exclusive: false }
+    })
+  })
+
+  it('reads the exclusive bound at one value, because it refuses the value itself', () => {
+    expect(assertionsOf(z.number().min(5).gt(5).max(9).lt(9))).toEqual({
+      minimum: { value: 5, exclusive: true },
+      maximum: { value: 9, exclusive: true }
+    })
+  })
+
+  it('reads a bigint the same way', () => {
+    expect(assertionsOf(z.bigint().gt(5n).min(10n))).toEqual({
+      minimum: { value: 10n, exclusive: false }
+    })
+  })
+})
+
 describe('a value meets every divisor, so two divisors read as one', () => {
   it('reads two whole divisors as their least common multiple', () => {
     expect(assertionsOf(z.number().multipleOf(2).multipleOf(3))).toEqual({ multipleOf: 6 })
@@ -256,6 +289,12 @@ describe('a value meets every divisor, so two divisors read as one', () => {
 
   it('reads two fractional divisors as their least common multiple', () => {
     expect(assertionsOf(z.number().multipleOf(0.5).multipleOf(0.3))).toEqual({ multipleOf: 1.5 })
+  })
+
+  it('reads a common multiple a double holds, though its decimal text ends in zeros', () => {
+    expect(assertionsOf(z.number().multipleOf(0.1).multipleOf(9007199254740990))).toEqual({
+      multipleOf: 9007199254740990
+    })
   })
 
   it('refuses two divisors with no exact common multiple, rather than read the first', () => {

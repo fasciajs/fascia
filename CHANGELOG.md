@@ -16,12 +16,13 @@ schema on zod 4.6 lost every bound, length, multiple, format and pattern, and no
 loss: the term still read as its type, and every document was wider than its schema. The frontend
 now folds the checks a schema holds, as zod folds them for its own document, and reads that fold.
 
-**`@fasciajs/zod` read three constraints wider than zod parses them.** Two divisors read as the
+**`@fasciajs/zod` read four constraints wider than zod parses them.** Two divisors read as the
 first, so `multipleOf(2).multipleOf(3)` took 2. A value meets every divisor, so the reading is now
-the least common multiple, and two divisors with no exact one are refused. `startsWith`, `endsWith`
-and `includes` read as no constraint, and each now reads as the pattern zod parses against. base64
-and base64url read as zod's lax charset, which took `ab`. Each now reads as the exact grammar that
-zod states in its own document.
+the least common multiple, and two divisors with no exact one are refused. An exclusive bound won
+over an inclusive one on the same side, so `gt(5).min(10)` took 6. The stricter bound wins now.
+`startsWith`, `endsWith` and `includes` read as no constraint, and each now reads as the pattern zod
+parses against. base64 and base64url read as zod's lax charset, which took `ab`. Each now reads as
+the exact grammar that zod states in its own document.
 
 ### Changed
 

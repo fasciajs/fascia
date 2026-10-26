@@ -41,17 +41,17 @@ function upper(bag: Bag, key: string, value: Ordered): void {
  * zod parses base64 against a lax charset and checks the padding in code. The exact grammar is the
  * pattern zod writes in its own document, and a document carries no code.
  */
-const EXACT_PATTERNS = new Map<RegExp, RegExp>([
-  [core.base64Charset, core.regexes.base64],
-  [core.base64urlCharset, core.regexes.base64url]
-])
+const EXACT_PATTERNS: Partial<Record<string, readonly [lax: RegExp, exact: RegExp]>> = {
+  base64: [core.base64Charset, core.regexes.base64],
+  base64url: [core.base64urlCharset, core.regexes.base64url]
+}
 
 function addPattern(bag: Bag, pattern: RegExp | undefined): void {
   if (pattern === undefined) {
     return
   }
   const patterns = bag['patterns'] instanceof Set ? bag['patterns'] : new Set<RegExp>()
-  bag['patterns'] = patterns.add(EXACT_PATTERNS.get(pattern) ?? pattern)
+  bag['patterns'] = patterns.add(pattern)
 }
 
 /**
@@ -96,8 +96,11 @@ function foldOf(schema: core.$ZodType): Bag {
       lower(bag, 'minimum', check._zod.def.length)
       upper(bag, 'maximum', check._zod.def.length)
     } else if (check instanceof core.$ZodCheckStringFormat) {
-      bag['format'] = check._zod.def.format
-      addPattern(bag, check._zod.def.pattern)
+      const { format, pattern } = check._zod.def
+      bag['format'] = format
+      // Keyed by the format too: `.regex(core.base64Charset)` parses against the lax charset alone.
+      const [lax, exact] = EXACT_PATTERNS[format] ?? []
+      addPattern(bag, pattern !== undefined && pattern === lax ? exact : pattern)
     } else if (
       // These three state a pattern under `string_format`, and zod does not build them as one.
       check instanceof core.$ZodCheckStartsWith ||
@@ -144,6 +147,9 @@ function commonMultipleOf(divisors: readonly number[]): number | undefined {
     const b = decimal.digits * 10n ** BigInt(scale - decimal.scale)
     held = { digits: (a / gcd(a, b)) * b, scale }
   }
+  while (held.scale > 0 && held.digits % 10n === 0n) {
+    held = { digits: held.digits / 10n, scale: held.scale - 1 }
+  }
   if (held.digits > BigInt(Number.MAX_SAFE_INTEGER)) {
     return undefined
   }
@@ -168,23 +174,29 @@ function dateAt(bag: Bag, key: string): Date | undefined {
 /**
  * A bound on a value, and whether the bound itself is admitted.
  *
- * zod writes an exclusive bound under its own key rather than beside a flag, so the two keys are
- * read in order and the exclusive one wins. A schema stating both on one side is stating one thing
- * twice, and the stricter reading is the exclusive one.
+ * zod writes an exclusive bound under its own key rather than beside a flag. A value meets both
+ * bounds on one side, so the stricter one is the bound: `gt(5).min(10)` is `>= 10`. At one value
+ * the exclusive bound is the stricter.
  */
-function boundOf<T>(
+function boundOf<T extends Ordered>(
   bag: Bag,
-  inclusiveKey: string,
-  exclusiveKey: string,
+  side: 'lower' | 'upper',
   read: (bag: Bag, key: string) => T | undefined
 ): Bound<T> | undefined {
-  const exclusive = read(bag, exclusiveKey)
-  if (exclusive !== undefined) {
+  const inclusive = read(bag, side === 'lower' ? 'minimum' : 'maximum')
+  const exclusive = read(bag, side === 'lower' ? 'exclusiveMinimum' : 'exclusiveMaximum')
+  if (exclusive === undefined) {
+    return inclusive === undefined ? undefined : { value: inclusive, exclusive: false }
+  }
+  if (inclusive === undefined) {
     return { value: exclusive, exclusive: true }
   }
 
-  const inclusive = read(bag, inclusiveKey)
-  return inclusive === undefined ? undefined : { value: inclusive, exclusive: false }
+  const inclusiveIsStricter =
+    side === 'lower' ? rank(inclusive) > rank(exclusive) : rank(inclusive) < rank(exclusive)
+  return inclusiveIsStricter
+    ? { value: inclusive, exclusive: false }
+    : { value: exclusive, exclusive: true }
 }
 
 /**
@@ -293,8 +305,8 @@ export function numberAssertions(
 ): Extract<Scalar, { name: 'number' }>['assertions'] | UnreadableSchema {
   const bag = foldOf(schema)
   const format = bag['format']
-  const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', numberAt)
-  const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', numberAt)
+  const minimum = boundOf(bag, 'lower', numberAt)
+  const maximum = boundOf(bag, 'upper', numberAt)
   const multipleOf = multipleOfIn(schema, bag)
   if (isError(multipleOf)) {
     return multipleOf
@@ -336,8 +348,8 @@ export function bigintAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'bigint' }>['assertions'] {
   const bag = foldOf(schema)
-  const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', bigintAt)
-  const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', bigintAt)
+  const minimum = boundOf(bag, 'lower', bigintAt)
+  const maximum = boundOf(bag, 'upper', bigintAt)
 
   return {
     ...(minimum !== undefined && { minimum }),
@@ -350,8 +362,8 @@ export function dateAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'date' }>['assertions'] {
   const bag = foldOf(schema)
-  const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', dateAt)
-  const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', dateAt)
+  const minimum = boundOf(bag, 'lower', dateAt)
+  const maximum = boundOf(bag, 'upper', dateAt)
 
   return {
     ...(minimum !== undefined && { minimum }),
