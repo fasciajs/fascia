@@ -4,6 +4,28 @@ Every published package here carries one version, so one entry covers all of the
 did not change in a release still takes the release's number, because ten packages that are ten
 readings of one core have nothing to say by moving apart.
 
+## 0.5.0
+
+Not published.
+
+### Fixed
+
+**`@fasciajs/zod` read no constraint from zod 4.6.** zod before 4.6 folded each check into
+`_zod.bag` as a schema was built, and the frontend read the bag. zod 4.6.0 leaves the bag empty. A
+schema on zod 4.6 lost every bound, length, multiple, format and pattern, and nothing reported the
+loss: the term still read as its type, and every document was wider than its schema. The frontend
+now folds the checks a schema holds, as zod folds them for its own document, and reads that fold.
+
+### Changed
+
+**`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before
+4.6.6 can exhaust memory while it validates a large collection (GHSA-mrhx-c7xc-m3w5). One reader for
+the patched line replaces two readers, one of them for a line a caller should leave.
+
+The workspace waits one day for a release, as `.npmrc` intended. npm reads `min-release-age` in
+days, and the value was written in minutes, so the workspace waited four years and refused every
+fix `npm audit` named.
+
 ## 0.4.0
 
 ### Added

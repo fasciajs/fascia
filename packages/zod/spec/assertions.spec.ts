@@ -83,6 +83,13 @@ describe('a bound says whether the bound itself is admitted', () => {
       minimum: { value: 2, exclusive: true }
     })
   })
+
+  it('takes the narrower of two bounds on one side, because a value meets both', () => {
+    expect(assertionsOf(z.number().min(3).min(1).max(5).max(9))).toEqual({
+      minimum: { value: 3, exclusive: false },
+      maximum: { value: 5, exclusive: false }
+    })
+  })
 })
 
 describe('one key of the bag means three things, and the reader is chosen by the type', () => {

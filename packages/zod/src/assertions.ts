@@ -1,19 +1,93 @@
 import type { Bound, Scalar, StringFormat } from '@fasciajs/core'
 import { isError, UnreadableSchema } from '@fasciajs/core'
-import type * as core from 'zod/v4/core'
+import * as core from 'zod/v4/core'
 
 /**
- * What a schema asserts about its own values, read from where zod folds it.
+ * What a schema asserts about its own values, read from its checks folded into one bag.
  *
- * zod declares `bag` as `Record<string, unknown>`, so this file is a boundary: every value is
- * parsed into a precise type once, here, and nothing downstream reads an unknown.
+ * The bag holds `unknown` values, so this file is a boundary: every value is parsed into a precise
+ * type once, here, and nothing downstream reads an unknown.
  *
- * One key of `bag` means three things. `minimum` is a length on a string, a count on an array and a
+ * One key of the bag means three things. `minimum` is a length on a string, a count on an array and a
  * value on a number, a bigint or a date. So a reader is chosen by the scalar being read and never
  * shared, which is also why there is no general `boundOf`.
  */
 
 type Bag = Record<string, unknown>
+
+type Ordered = number | bigint | Date
+
+const rank = (value: Ordered): number | bigint => (value instanceof Date ? value.getTime() : value)
+
+const isOrdered = (value: unknown): value is Ordered =>
+  typeof value === 'number' || typeof value === 'bigint' || value instanceof Date
+
+/** Two checks on one side hold together, so the narrower bound is the one the schema states. */
+function lower(bag: Bag, key: string, value: Ordered): void {
+  const held = bag[key]
+  if (!isOrdered(held) || rank(value) > rank(held)) {
+    bag[key] = value
+  }
+}
+
+function upper(bag: Bag, key: string, value: Ordered): void {
+  const held = bag[key]
+  if (!isOrdered(held) || rank(value) < rank(held)) {
+    bag[key] = value
+  }
+}
+
+/**
+ * The checks a schema holds, folded into one bag.
+ *
+ * zod before 4.6 folded each check into `_zod.bag` as a schema was built. zod 4.6 leaves that bag
+ * empty, and folds the checks only where it writes its own document, in a function it does not
+ * export. This is that fold, for the checks this package reads. A format schema, such as `z.int()`
+ * or `z.email()`, is its own first check.
+ */
+function foldOf(schema: core.$ZodType): Bag {
+  const bag: Bag = {}
+  const checks = [
+    ...(schema instanceof core.$ZodCheck ? [schema] : []),
+    ...(schema._zod.def.checks ?? [])
+  ]
+  for (const check of checks) {
+    if (check instanceof core.$ZodCheckGreaterThan) {
+      const { inclusive, value } = check._zod.def
+      lower(bag, inclusive ? 'minimum' : 'exclusiveMinimum', value)
+    } else if (check instanceof core.$ZodCheckLessThan) {
+      const { inclusive, value } = check._zod.def
+      upper(bag, inclusive ? 'maximum' : 'exclusiveMaximum', value)
+    } else if (check instanceof core.$ZodCheckMultipleOf) {
+      bag['multipleOf'] ??= check._zod.def.value
+    } else if (check instanceof core.$ZodCheckNumberFormat) {
+      const [minimum, maximum] = core.util.NUMBER_FORMAT_RANGES[check._zod.def.format]
+      bag['format'] = check._zod.def.format
+      lower(bag, 'minimum', minimum)
+      upper(bag, 'maximum', maximum)
+    } else if (check instanceof core.$ZodCheckBigIntFormat) {
+      const [minimum, maximum] = core.util.BIGINT_FORMAT_RANGES[check._zod.def.format]
+      bag['format'] = check._zod.def.format
+      lower(bag, 'minimum', minimum)
+      upper(bag, 'maximum', maximum)
+    } else if (check instanceof core.$ZodCheckMinLength) {
+      lower(bag, 'minimum', check._zod.def.minimum)
+    } else if (check instanceof core.$ZodCheckMaxLength) {
+      upper(bag, 'maximum', check._zod.def.maximum)
+    } else if (check instanceof core.$ZodCheckLengthEquals) {
+      lower(bag, 'minimum', check._zod.def.length)
+      upper(bag, 'maximum', check._zod.def.length)
+    } else if (check instanceof core.$ZodCheckStringFormat) {
+      const { format, pattern } = check._zod.def
+      bag['format'] = format
+      if (pattern !== undefined) {
+        const patterns = bag['patterns'] instanceof Set ? bag['patterns'] : new Set<RegExp>()
+        bag['patterns'] = patterns.add(pattern)
+      }
+    }
+  }
+  return bag
+}
 
 function numberAt(bag: Bag, key: string): number | undefined {
   const value = bag[key]
@@ -135,7 +209,7 @@ const WHOLE_NUMBER_FORMATS = new Set(['int', 'safeint', 'int32', 'uint32', 'int6
 export function stringAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'string' }>['assertions'] | UnreadableSchema {
-  const bag: Bag = schema._zod.bag
+  const bag = foldOf(schema)
   const minLength = numberAt(bag, 'minimum')
   const maxLength = numberAt(bag, 'maximum')
   const patterns = patternsOf(bag)
@@ -156,7 +230,7 @@ export function stringAssertions(
 export function numberAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'number' }>['assertions'] {
-  const bag: Bag = schema._zod.bag
+  const bag = foldOf(schema)
   const format = bag['format']
   const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', numberAt)
   const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', numberAt)
@@ -166,8 +240,7 @@ export function numberAssertions(
     ...(minimum !== undefined && { minimum }),
     ...(maximum !== undefined && { maximum }),
     ...(multipleOf !== undefined && { multipleOf }),
-    // `z.int()` states a format and holds no check at all, so a reading that walked the checks would
-    // report an unconstrained number for it.
+    // `z.int()` states its format as the schema itself, which the fold reads as its first check.
     ...(typeof format === 'string' && WHOLE_NUMBER_FORMATS.has(format) && { integer: true })
   }
 }
@@ -176,7 +249,7 @@ export function numberAssertions(
 export function bigintAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'bigint' }>['assertions'] {
-  const bag: Bag = schema._zod.bag
+  const bag = foldOf(schema)
   const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', bigintAt)
   const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', bigintAt)
 
@@ -190,7 +263,7 @@ export function bigintAssertions(
 export function dateAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'date' }>['assertions'] {
-  const bag: Bag = schema._zod.bag
+  const bag = foldOf(schema)
   const minimum = boundOf(bag, 'minimum', 'exclusiveMinimum', dateAt)
   const maximum = boundOf(bag, 'maximum', 'exclusiveMaximum', dateAt)
 
@@ -206,7 +279,7 @@ export function listAssertions(schema: core.$ZodType): {
   readonly maxItems?: number
   readonly unique?: boolean
 } {
-  const bag: Bag = schema._zod.bag
+  const bag = foldOf(schema)
   const minItems = numberAt(bag, 'minimum')
   const maxItems = numberAt(bag, 'maximum')
 
