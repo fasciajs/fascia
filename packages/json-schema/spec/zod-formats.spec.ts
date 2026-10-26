@@ -275,7 +275,34 @@ interface Measured {
   readonly narrower: readonly string[]
 }
 
-function measure(schema: z.core.$ZodType, pool: readonly unknown[]): Measured | string {
+function compare(
+  schema: z.core.$ZodType,
+  takes: (value: unknown) => boolean,
+  pool: readonly unknown[]
+): Measured {
+  const wider: string[] = []
+  const narrower: string[] = []
+  for (const value of new Set([...pool, ...VALUES])) {
+    const byDocument = takes(value)
+    const byZod = z.safeParse(schema, value).success
+    if (byDocument && !byZod) {
+      wider.push(JSON.stringify(value))
+    } else if (!byDocument && byZod) {
+      narrower.push(JSON.stringify(value))
+    }
+  }
+  return { wider, narrower }
+}
+
+/**
+ * 2020-12 reads `format` as an annotation unless a validator opts in, so a document is read both
+ * ways. Asserted, the format holds. Annotated, only the other keywords hold.
+ */
+function measure(
+  schema: z.core.$ZodType,
+  pool: readonly unknown[],
+  validateFormats: boolean
+): Measured | string {
   const described = description(schema, zodSource, 'input')
   if (isError(described)) {
     return described.message
@@ -285,22 +312,10 @@ function measure(schema: z.core.$ZodType, pool: readonly unknown[]): Measured | 
     return spelled.message
   }
 
-  const ajv = new Ajv2020({ strict: false, allErrors: false })
+  const ajv = new Ajv2020({ strict: false, allErrors: false, validateFormats })
   formats.default(ajv)
   const document = ajv.compile(spelled.written as object)
-
-  const wider: string[] = []
-  const narrower: string[] = []
-  for (const value of new Set([...pool, ...VALUES])) {
-    const byDocument = document(value) === true
-    const byZod = z.safeParse(schema, value).success
-    if (byDocument && !byZod) {
-      wider.push(JSON.stringify(value))
-    } else if (!byDocument && byZod) {
-      narrower.push(JSON.stringify(value))
-    }
-  }
-  return { wider, narrower }
+  return compare(schema, (value) => document(value) === true, pool)
 }
 
 /**
@@ -341,16 +356,188 @@ const KNOWN: Partial<Record<string, readonly [wider: number, narrower: number]>>
   'uint32().check(float64())': [1, 0]
 }
 
+/**
+ * How often each document differs from zod where `format` is an annotation, when the count is not
+ * the asserted one.
+ */
+const ANNOTATED: Partial<Record<string, readonly [wider: number, narrower: number]>> = {
+  // zod's own pattern holds each of these, and only the keyword refused a value zod takes.
+  'iso.datetime({ local: true })': [0, 0],
+  'iso.datetime({ precision: -1 })': [0, 0],
+  'iso.time()': [0, 0],
+  'iso.time({ precision: -1 })': [0, 0],
+  'iso.duration()': [0, 0],
+
+  // zod states no pattern for a URL, so the document is `type: string` alone.
+  'url()': [42, 0]
+}
+
+/**
+ * The registry of the OpenAPI Initiative, at https://spec.openapis.org/registry/format/.
+ *
+ * ajv-formats asserts the names JSON Schema defines, and `int32` and `byte`. Each other name a zod
+ * format can mean is written here from the text of its entry. `float` and `double` are left out: each
+ * entry names an IEEE 754 width and no set of JSON numbers.
+ */
+const REGISTRY = new Ajv2020({ strict: false })
+formats.default(REGISTRY)
+
+const asserts = (format: string) => REGISTRY.compile({ format })
+const ipv4 = asserts('ipv4')
+const ipv6 = asserts('ipv6')
+const date = asserts('date')
+const isoTime = asserts('iso-time')
+
+/** An address that `ipv4` or `ipv6` takes, then a decimal prefix length up to the width. */
+const cidr =
+  (address: (value: unknown) => boolean, width: number) =>
+  (value: string): boolean => {
+    const [prefix, length, ...rest] = value.split('/')
+    return (
+      rest.length === 0 &&
+      address(prefix) &&
+      length !== undefined &&
+      /^(?:0|[1-9]\d*)$/.test(length) &&
+      Number(length) <= width
+    )
+  }
+
+/** The `partial-time` of RFC 3339: ajv's `iso-time`, which needs seconds, with no offset. */
+const timeLocal = (value: string): boolean => isoTime(value) === true && !/[z+-]/i.test(value)
+
+/** The `full-date`, a `T` that RFC 3339 also takes as `t`, then the `partial-time`. */
+const dateTimeLocal = (value: string): boolean => {
+  const [day, time, ...rest] = value.split(/t/i)
+  return rest.length === 0 && date(day) === true && time !== undefined && timeLocal(time)
+}
+
+const integerIn = (low: number, high: number) => (value: number) =>
+  Number.isInteger(value) && value >= low && value <= high
+
+REGISTRY.addFormat('ipv4-cidr', { type: 'string', validate: cidr(ipv4, 32) })
+REGISTRY.addFormat('ipv6-cidr', { type: 'string', validate: cidr(ipv6, 128) })
+REGISTRY.addFormat('time-local', { type: 'string', validate: timeLocal })
+REGISTRY.addFormat('date-time-local', { type: 'string', validate: dateTimeLocal })
+// The `base64url` alphabet of RFC 4648, section 5, padded as `byte` is.
+REGISTRY.addFormat('base64url', {
+  type: 'string',
+  validate: /^(?:[\w-]{4})*(?:[\w-]{2}==|[\w-]{3}=)?$/
+})
+REGISTRY.addFormat('uint32', { type: 'number', validate: integerIn(0, 2 ** 32 - 1) })
+REGISTRY.addFormat('double-int', {
+  type: 'number',
+  validate: integerIn(-Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+})
+
+type Registered =
+  | 'base64url'
+  | 'byte'
+  | 'date'
+  | 'date-time'
+  | 'date-time-local'
+  | 'double-int'
+  | 'duration'
+  | 'email'
+  | 'hostname'
+  | 'int32'
+  | 'ipv4'
+  | 'ipv4-cidr'
+  | 'ipv6'
+  | 'ipv6-cidr'
+  | 'time'
+  | 'time-local'
+  | 'uint32'
+  | 'uri'
+  | 'uuid'
+
+/**
+ * The registry name that means each zod schema, and how often the name alone differs from zod's
+ * parse, as [wider, narrower]. [0, 0] is a name a target can write for the schema and be exact.
+ *
+ * A schema missing here has no name in the registry.
+ */
+const STANDARD: Partial<
+  Record<string, readonly [format: Registered, wider: number, narrower: number]>
+> = {
+  // Exact: a target can write the name, and needs no pattern beside the name.
+  'base64()': ['byte', 0, 0],
+  'cidrv4()': ['ipv4-cidr', 0, 0],
+  'cidrv6()': ['ipv6-cidr', 0, 0],
+  'guid()': ['uuid', 0, 0],
+  'hostname()': ['hostname', 0, 0],
+  'ipv4()': ['ipv4', 0, 0],
+  'ipv6()': ['ipv6', 0, 0],
+  'iso.date()': ['date', 0, 0],
+  'int()': ['double-int', 0, 0],
+  'int32()': ['int32', 0, 0],
+  'uint32()': ['uint32', 0, 0],
+
+  // zod takes a subset of the name: a lowercase `t` and `z`, an offset unless asked, a version
+  // nibble, a lowercase letter only, and a top-level label of two letters or more.
+  'email()': ['email', 2, 0],
+  'iso.datetime()': ['date-time', 12, 0],
+  'iso.datetime({ offset: true })': ['date-time', 10, 0],
+  'iso.datetime({ precision: 0 })': ['date-time', 14, 0],
+  'uuid()': ['uuid', 3, 0],
+  'uuidv4()': ['uuid', 11, 0],
+  'uuidv7()': ['uuid', 9, 0],
+
+  // zod takes a value the name refuses, so the name alone is unsound. RFC 4648 pads `base64url`, and
+  // zod refuses the pad. `time-local` needs seconds, and zod's time makes them optional or absent.
+  'base64url()': ['base64url', 0, 22],
+  'iso.time()': ['time-local', 1, 1],
+  'iso.time({ precision: -1 })': ['time-local', 4, 1],
+  'iso.datetime({ local: true })': ['date-time-local', 2, 5],
+  'iso.datetime({ precision: -1 })': ['date-time', 16, 1],
+  'iso.duration()': ['duration', 0, 1],
+  'url()': ['uri', 2, 15]
+}
+
 describe("a document from a zod format accepts what zod's parse accepts", () => {
   const schemas = [...Object.values(FORMATS).flat(), ...HASHES, ...NUMBER_SCHEMAS]
 
   for (const [label, schema, pool] of schemas) {
     it(`agrees with z.${label} on values from its standard`, () => {
-      const measured = measure(schema, pool)
+      const measured = measure(schema, pool, true)
       if (typeof measured === 'string') {
         throw new Error(`z.${label} has no document: ${measured}`)
       }
       const known = KNOWN[label] ?? [0, 0]
+      expect(
+        [measured.wider.length, measured.narrower.length],
+        `wider: ${measured.wider.slice(0, 5).join(', ')}; narrower: ${measured.narrower.slice(0, 5).join(', ')}`
+      ).toEqual(known)
+    })
+
+    it(`agrees with z.${label} where the format is an annotation`, () => {
+      const measured = measure(schema, pool, false)
+      if (typeof measured === 'string') {
+        throw new Error(`z.${label} has no document: ${measured}`)
+      }
+      const known = ANNOTATED[label] ?? KNOWN[label] ?? [0, 0]
+      expect(
+        [measured.wider.length, measured.narrower.length],
+        `wider: ${measured.wider.slice(0, 5).join(', ')}; narrower: ${measured.narrower.slice(0, 5).join(', ')}`
+      ).toEqual(known)
+    })
+  }
+})
+
+describe('a name in the OpenAPI format registry states the set zod parses', () => {
+  const schemas = [...Object.values(FORMATS).flat(), ...HASHES, ...NUMBER_SCHEMAS]
+
+  for (const [label, schema, pool] of schemas) {
+    const standard = STANDARD[label]
+    if (standard === undefined) {
+      continue
+    }
+    const [format, ...known] = standard
+    it(`compares z.${label} with the registry name ${format}`, () => {
+      const document = REGISTRY.compile({
+        type: NUMBER_SCHEMAS.some(([other]) => other === label) ? 'number' : 'string',
+        format
+      })
+      const measured = compare(schema, (value) => document(value) === true, pool)
       expect(
         [measured.wider.length, measured.narrower.length],
         `wider: ${measured.wider.slice(0, 5).join(', ')}; narrower: ${measured.narrower.slice(0, 5).join(', ')}`
