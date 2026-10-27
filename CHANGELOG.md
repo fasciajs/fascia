@@ -24,6 +24,13 @@ over an inclusive one on the same side, so `gt(5).min(10)` took 6. The stricter 
 parses against. base64 and base64url read as zod's lax charset, which took `ab`. Each now reads as
 the exact grammar that zod states in its own document.
 
+**`@fasciajs/zod` read three formats narrower, and one integer wider, than zod parses them.**
+`z.iso.time()` read as `time`, which needs an offset, and zod's time has none. `z.iso.datetime()` with
+`local` or `precision: -1` read as `date-time`, which needs an offset and seconds.
+`z.iso.duration()` read as `duration`, which takes no fraction on the seconds. Each now reads as
+zod's pattern alone, as zod writes its own document. `z.int().check(z.float32())` lost the integer
+to the later float format, and the integer now holds, as zod parses it.
+
 ### Changed
 
 **`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before

@@ -334,40 +334,16 @@ const KNOWN: Partial<Record<string, readonly [wider: number, narrower: number]>>
   'ipv6()': [0, 5],
   'cidrv6()': [0, 3],
 
-  // The `date-time` and `time` keywords need an offset and seconds. zod's time never has an offset,
-  // and these options drop the offset or the seconds, so zod writes no keyword for them.
-  'iso.datetime({ local: true })': [0, 4],
-  'iso.datetime({ precision: -1 })': [0, 1],
-  'iso.time()': [0, 4],
-  'iso.time({ precision: -1 })': [0, 1],
-
-  // The `duration` keyword takes a fraction on no unit, and zod takes one on the seconds.
-  'iso.duration()': [0, 1],
-
   // zod parses a URL with `new URL`, and the `uri` keyword reads RFC 3986, which has no IRI.
-  'url()': [2, 15],
-
-  // A later float format replaces the integer format, and zod keeps the integer.
-  'int().check(float32())': [2, 0],
-  'int().check(float64())': [2, 0],
-  'int32().check(float32())': [2, 0],
-  'int32().check(float64())': [2, 0],
-  'uint32().check(float32())': [1, 0],
-  'uint32().check(float64())': [1, 0]
+  'url()': [2, 15]
 }
 
 /**
  * How often each document differs from zod where `format` is an annotation, when the count is not
- * the asserted one.
+ * the asserted one. The reader writes no keyword whose set is narrower than zod's, so only a format
+ * zod states no pattern for differs here.
  */
 const ANNOTATED: Partial<Record<string, readonly [wider: number, narrower: number]>> = {
-  // zod's own pattern holds each of these, and only the keyword refused a value zod takes.
-  'iso.datetime({ local: true })': [0, 0],
-  'iso.datetime({ precision: -1 })': [0, 0],
-  'iso.time()': [0, 0],
-  'iso.time({ precision: -1 })': [0, 0],
-  'iso.duration()': [0, 0],
-
   // zod states no pattern for a URL, so the document is `type: string` alone.
   'url()': [42, 0]
 }
