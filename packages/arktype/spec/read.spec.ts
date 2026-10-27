@@ -153,6 +153,81 @@ describe('one structure node covers four shapes', () => {
     })
   })
 
+  it('reads a union it can tell apart by a key as an exclusive one, naming the key', () => {
+    // arktype states no exclusive union of its own, and it tells the members of any union apart
+    // wherever it can. A tag at one key is the form a document names, so a union carrying one
+    // excludes its members by construction and says which key says so.
+    expect(nodeOf(type({ kind: "'a'" }).or({ kind: "'b'", b: 'number' }))).toEqual({
+      kind: 'combination',
+      law: 'exactlyOne',
+      members: [expect.anything(), expect.anything()],
+      discriminant: 'kind'
+    })
+  })
+
+  it('names no key where the members are told apart by their type', () => {
+    // A `domain` discriminant tells a string from a number and names no key, so this is any of
+    // several and not one of them.
+    expect(nodeOf(type('string').or('number'))).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.anything(), expect.anything()],
+      discriminant: undefined
+    })
+  })
+
+  it('names no key where the tag stands inside a member', () => {
+    // A document states a discriminator as one property name, and this one is two deep.
+    expect(nodeOf(type({ meta: { kind: "'a'" } }).or({ meta: { kind: "'b'" } }))).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.anything(), expect.anything()],
+      discriminant: undefined
+    })
+  })
+
+  it('names no key where two members share a tag, because both can take one value', () => {
+    // arktype starts at the tag and tries each member the case holds. A value carrying both `x` and
+    // `y` with the tag `a` passes both members, so the members do not exclude each other.
+    expect(
+      nodeOf(
+        type({ kind: "'a'", x: 'string' }).or({ kind: "'a'", y: 'number' }).or({ kind: "'b'" })
+      )
+    ).toEqual({
+      kind: 'combination',
+      law: 'any',
+      members: [expect.anything(), expect.anything(), expect.anything()],
+      discriminant: undefined
+    })
+  })
+
+  it('reads an exact length as both bounds of a list', () => {
+    // A length of exactly two admits no shorter list. Read as an upper bound alone, it admitted `[]`.
+    expect(nodeOf(type('unknown[]').exactlyLength(2))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 2, maxItems: 2 }
+    })
+    expect(nodeOf(type('string[]').exactlyLength(2))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 2, maxItems: 2 }
+    })
+  })
+
+  it('reads a bounded array whose element states nothing', () => {
+    // arktype records a constraint and `unknown` is none, so this carries a proto and a length and
+    // no structure node. It was refused as a shape this package reads nothing from.
+    expect(nodeOf(type('unknown[]').atLeastLength(1))).toEqual({
+      kind: 'structural',
+      of: 'list',
+      items: expect.anything(),
+      assertions: { minItems: 1 }
+    })
+  })
+
   it('reads an index signature as a dictionary, keeping the key schema', () => {
     expect(nodeOf(type({ '[string]': 'number' }))).toEqual({
       kind: 'structural',

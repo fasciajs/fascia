@@ -89,7 +89,7 @@ const into = process.env.FASCIA_PACK
 if (into !== undefined) {
   const order = ordered.map((manifest) => {
     // `--json` states the name npm wrote, under the name of the package it wrote it for. Reading
-    // the directory instead would ask which file appeared, and nine packages pack into this one
+    // the directory instead would ask which file appeared, and ten packages pack into this one
     // directory in turn.
     const printed = read('npm', 'pack', '-w', manifest.name, '--pack-destination', into, '--json')
     const filename = JSON.parse(printed)[manifest.name]?.filename

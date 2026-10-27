@@ -9,6 +9,8 @@ import type {
 } from '@fasciajs/core'
 import { faithful, isError, UnsayableTerm, under } from '@fasciajs/core'
 import type { JSONSchema } from 'json-schema-typed/draft-2020-12'
+import { WRITTEN_URI } from './dialect.js'
+import { refTo } from './refs.js'
 
 /**
  * A term, written as JSON Schema 2020-12.
@@ -64,7 +66,7 @@ function body(term: Described): Spelling<JSONSchema> {
     case 'tuple':
       return tuple(term)
     case 'ref':
-      return faithful(orNull({ $ref: `#/$defs/${term.name}` }, term.admitsNull))
+      return faithful(orNull({ $ref: refTo(term.name) }, term.admitsNull))
     case 'untyped':
       // Nothing is stated, and 2020-12 states nothing with an empty schema. A `null` is a value like
       // any other where no type is named, so admitting one needs no keyword.
@@ -117,6 +119,9 @@ function typeOf(name: string, admitsNull: boolean): JSONSchema.TypeValue {
  * Several patterns are the one place this target has fewer words than the term: 2020-12 states one
  * `pattern` per schema and a term may hold several, each of which holds. They are conjoined with
  * `allOf`, which accepts exactly the values the term states.
+ *
+ * A format is the one assertion that holds only where a validator opts in. 2020-12 reads `format` as
+ * an annotation by default, so the document is wider for every validator that does not opt in.
  */
 function string(term: Extract<DescribedOf<'typed'>, { name: 'string' }>): Spelling<JSONSchema> {
   const { minLength, maxLength, patterns, format } = term.assertions
@@ -130,9 +135,21 @@ function string(term: Extract<DescribedOf<'typed'>, { name: 'string' }>): Spelli
     ...(format !== undefined && { format })
   }
 
-  return faithful(
-    rest.length === 0 ? written : { allOf: [written, ...rest.map((one) => ({ pattern: one }))] }
-  )
+  return {
+    written:
+      rest.length === 0 ? written : { allOf: [written, ...rest.map((one) => ({ pattern: one }))] },
+    departures:
+      format === undefined
+        ? []
+        : [
+            {
+              at: [],
+              direction: 'wider',
+              cause: 'noWordForIt',
+              said: `this states the format ${format}, and 2020-12 asserts \`format\` only where a validator opts in. A validator that does not opt in takes a string the format refuses.`
+            }
+          ]
+  }
 }
 
 function number(term: Extract<DescribedOf<'typed'>, { name: 'number' }>): Spelling<JSONSchema> {
@@ -312,7 +329,8 @@ function values(term: DescribedOf<'values'>): Spelling<JSONSchema> {
   // a type list is where this target puts null and a value of null is not of the shared type.
   return faithful({
     ...(shared !== undefined && { type: typeOf(shared, term.admitsNull || admitsNullValue) }),
-    enum: term.admitsNull ? [...admitted, null] : admitted
+    // Null once, where the values already hold it: an `enum` holding a value twice is no schema.
+    enum: term.admitsNull && !admitsNullValue ? [...admitted, null] : admitted
   })
 }
 
@@ -421,7 +439,9 @@ function atLeast(positions: number): { readonly minItems?: number } {
 /**
  * A whole description, written as a 2020-12 document.
  *
- * The definitions go under `$defs`, which is where every `$ref` this target writes points.
+ * The definitions go under `$defs`, which is where every `$ref` this target writes points. The root
+ * names its dialect in `$schema`, so a reader chooses none: a document naming none reads differently
+ * in each.
  */
 export function spellJsonSchemaAll(described: {
   readonly term: Described
@@ -444,10 +464,13 @@ export function spellJsonSchemaAll(described: {
     departures.push(...under(name, spelled.departures))
   }
 
-  const written: JSONSchema =
-    typeof root.written === 'boolean' || described.definitions.size === 0
-      ? root.written
-      : { ...root.written, $defs }
+  // A boolean root has no place for `$schema`, so it is written as the object stating the same.
+  const body = typeof root.written === 'boolean' ? (root.written ? {} : { not: {} }) : root.written
+  const written: JSONSchema = {
+    $schema: WRITTEN_URI,
+    ...body,
+    ...(described.definitions.size > 0 && { $defs })
+  }
 
   return { written, departures }
 }

@@ -38,12 +38,16 @@ function upper(bag: Bag, key: string, value: Ordered): void {
 }
 
 /**
+ * The pattern that states each format exactly, where zod parses against another one.
+ *
  * zod parses base64 against a lax charset and checks the padding in code. The exact grammar is the
- * pattern zod writes in its own document, and a document carries no code.
+ * pattern zod writes in its own document, and a document carries no code. zod parses IPv6 in code
+ * that takes an IPv4 tail its pattern refuses, and the `ipv6` keyword alone states that set.
  */
-const EXACT_PATTERNS: Partial<Record<string, readonly [lax: RegExp, exact: RegExp]>> = {
+const EXACT_PATTERNS: Partial<Record<string, readonly [lax: RegExp, exact: RegExp | undefined]>> = {
   base64: [core.base64Charset, core.regexes.base64],
-  base64url: [core.base64urlCharset, core.regexes.base64url]
+  base64url: [core.base64urlCharset, core.regexes.base64url],
+  ipv6: [core.regexes.ipv6, undefined]
 }
 
 function addPattern(bag: Bag, pattern: RegExp | undefined): void {
@@ -81,6 +85,10 @@ function foldOf(schema: core.$ZodType): Bag {
     } else if (check instanceof core.$ZodCheckNumberFormat) {
       const [minimum, maximum] = core.util.NUMBER_FORMAT_RANGES[check._zod.def.format]
       bag['format'] = check._zod.def.format
+      // A later float format replaces the name, and the value stays whole.
+      if (WHOLE_NUMBER_FORMATS.has(check._zod.def.format)) {
+        bag['integer'] = true
+      }
       lower(bag, 'minimum', minimum)
       upper(bag, 'maximum', maximum)
     } else if (check instanceof core.$ZodCheckBigIntFormat) {
@@ -98,6 +106,13 @@ function foldOf(schema: core.$ZodType): Bag {
     } else if (check instanceof core.$ZodCheckStringFormat) {
       const { format, pattern } = check._zod.def
       bag['format'] = format
+      // `date-time` needs an offset and seconds, and these shapes take a value without one.
+      if (
+        check instanceof core.$ZodISODateTime &&
+        (check._zod.def.local || check._zod.def.precision === -1)
+      ) {
+        bag['laxFormat'] = true
+      }
       // Keyed by the format too: `.regex(core.base64Charset)` parses against the lax charset alone.
       const [lax, exact] = EXACT_PATTERNS[format] ?? []
       addPattern(bag, pattern !== undefined && pattern === lax ? exact : pattern)
@@ -247,6 +262,9 @@ function patternsOf(bag: Bag): readonly string[] | undefined | UnreadableSchema 
  *
  * A map rather than a pass-through. zod's format list is longer than the one a document can spell,
  * and a name that reached a target unread would be a keyword no reader knows.
+ *
+ * `time` and `duration` have no entry. The `time` keyword needs an offset, and zod's time has none.
+ * The `duration` keyword takes no fraction, and zod takes one on the seconds. zod's pattern holds both.
  */
 const FORMAT_NAMES: Partial<Record<string, StringFormat>> = {
   email: 'email',
@@ -255,8 +273,6 @@ const FORMAT_NAMES: Partial<Record<string, StringFormat>> = {
   guid: 'uuid',
   datetime: 'date-time',
   date: 'date',
-  time: 'time',
-  duration: 'duration',
   ipv4: 'ipv4',
   ipv6: 'ipv6',
   hostname: 'hostname'
@@ -264,7 +280,7 @@ const FORMAT_NAMES: Partial<Record<string, StringFormat>> = {
 
 function formatOf(bag: Bag): StringFormat | undefined {
   const format = bag['format']
-  return typeof format === 'string' ? FORMAT_NAMES[format] : undefined
+  return typeof format === 'string' && bag['laxFormat'] !== true ? FORMAT_NAMES[format] : undefined
 }
 
 /** The zod number formats that admit whole numbers only. */
@@ -304,7 +320,6 @@ export function numberAssertions(
   schema: core.$ZodType
 ): Extract<Scalar, { name: 'number' }>['assertions'] | UnreadableSchema {
   const bag = foldOf(schema)
-  const format = bag['format']
   const minimum = boundOf(bag, 'lower', numberAt)
   const maximum = boundOf(bag, 'upper', numberAt)
   const multipleOf = multipleOfIn(schema, bag)
@@ -316,8 +331,7 @@ export function numberAssertions(
     ...(minimum !== undefined && { minimum }),
     ...(maximum !== undefined && { maximum }),
     ...(multipleOf !== undefined && { multipleOf }),
-    // `z.int()` states its format as the schema itself, which the fold reads as its first check.
-    ...(typeof format === 'string' && WHOLE_NUMBER_FORMATS.has(format) && { integer: true })
+    ...(bag['integer'] === true && { integer: true })
   }
 }
 

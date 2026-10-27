@@ -46,7 +46,7 @@ export function toV30(written: JSONSchema): Spelled<JSONSchema> {
  * reference and ignores everything else in the object, so the sentence would reach no document at all.
  *
  * The reference goes under a conjunction of one and what was beside it stays outside, which every
- * reader of 3.0 takes. That is the same move `admittingNull` makes for a flag, for the same reason.
+ * reader of 3.0 takes.
  */
 function besideReference(
   written: Record<string, unknown>,
@@ -79,6 +79,11 @@ function translated(
   departures: Departure[]
 ): Record<string, unknown> | undefined {
   switch (key) {
+    // 3.0 has no `$schema`. The OpenAPI document names its dialect in `openapi`, so a 2020-12 name
+    // carried into a 3.0 Schema Object would name the wrong one.
+    case '$schema':
+      return undefined
+
     // 3.0 names one type and says null with a flag beside it. A fifth spelling of the one fact, and
     // the first that this library reaches by translating rather than by writing.
     case 'type':
@@ -183,10 +188,11 @@ function translated(
 }
 
 /**
- * A disjunction, with a branch admitting only null folded into a flag.
+ * A combination, with a branch admitting only null said in 3.0's words.
  *
- * 2020-12 joins a schema to null where the schema names no type of its own, and 3.0 has no such
- * branch: it says the same thing with `nullable` on the one that is left.
+ * 2020-12 joins a schema to null with a branch of `type: 'null'`, and 3.0 has no null type. Its exact
+ * word for the branch is `enum: [null]`, which 3.0 takes from JSON Schema unchanged. A disjunction
+ * says it on each branch instead, with the flag where the flag is exact.
  */
 function nullJoined(value: unknown, key: string, departures: Departure[]): unknown[] {
   const members = Array.isArray(value) ? value : []
@@ -199,74 +205,63 @@ function nullJoined(value: unknown, key: string, departures: Departure[]): unkno
     return said.written
   })
 
-  return admitsNull ? spelled.map((one) => admittingNull(one, departures)) : spelled
+  if (!admitsNull) {
+    return spelled
+  }
+
+  // A value in any branch is in the disjunction, so null joins each branch. Exactly one branch, or
+  // every branch, would change under that, so there null stays a branch of its own.
+  return key === 'anyOf' ? spelled.map(admittingNull) : [...spelled, NULL_ONLY]
 }
+
+/** The one value null, in a word 3.0 has. */
+const NULL_ONLY = { enum: [null] }
+
+/** Keywords that can refuse null beside a type, so a flag beside them does not admit it. */
+const REFUSING_NULL = ['enum', 'anyOf', 'oneOf', 'allOf', 'not', '$ref']
 
 /**
  * A schema that also admits null, said where 3.0 hears it.
  *
- * `nullable` is a flag on a type, and 3.0 reads it nowhere else. Beside a disjunction it states
- * nothing, so it is pushed onto each branch. Beside a `$ref` it is ignored outright, because 3.0
- * reads no keyword next to one, and a document that lost the null there would refuse a value the
- * schema takes. A reference is wrapped so the flag has somewhere of its own to sit.
+ * OpenAPI 3.0 says `nullable` "only takes effect if `type` is explicitly defined within the same
+ * Schema Object", and every other keyword there keeps its meaning. So the flag is written beside a
+ * type with nothing that could refuse null, and null joins a list of values. Anywhere else the
+ * schema is joined to null as a disjunction, which is exact wherever it stands.
  */
-function admittingNull(written: unknown, departures: Departure[]): unknown {
+function admittingNull(written: unknown): unknown {
   if (typeof written !== 'object' || written === null) {
     return written
   }
 
   const stated = written as Record<string, unknown>
-
-  // A list of admitted values states what it admits, so null is added to the list. The flag goes on
-  // as well wherever a type stands beside the list, because a type refuses null on its own and the
-  // two would then disagree: the list would admit a value the type turned away. Where no type stands
-  // the flag states nothing and is left off.
-  if (Array.isArray(stated['enum'])) {
-    return {
-      ...stated,
-      ...(stated['type'] !== undefined && { nullable: true }),
-      enum: [...stated['enum'], null]
-    }
+  if (Object.keys(stated).length === 0) {
+    // An empty schema states no type, and admits null already.
+    return stated
   }
 
-  // Beside a conjunction the flag is read nowhere either. Pushed onto each member it says the same
-  // thing: a value satisfies every branch, and null satisfies every branch that admits one.
-  // Exactly one of several, admitting null, is a thing 3.0 cannot say. The flag is read nowhere
-  // beside a disjunction, `type: null` is not one of the six types 3.0 names, and null pushed onto
-  // every branch matches every branch, which is what `oneOf` refuses. So the disjunction is written
-  // as any of several instead. For members that exclude each other, which is what `oneOf` is chosen
-  // for, the two accept the same values and only the statement is weaker.
-  const exactlyOne = stated['oneOf']
-  if (Array.isArray(exactlyOne)) {
-    departures.push({
-      at: [],
-      direction: 'wider',
-      cause: 'noShapeForIt',
-      said: 'this admits exactly one of several and admits null, and 3.0 states null nowhere a disjunction can hear it. It is written as any of several, which accepts the same values where the members exclude each other and more where they do not'
-    })
-
-    const { oneOf: _dropped, ...rest } = stated
-    return { ...rest, anyOf: exactlyOne.map((one) => admittingNull(one, departures)) }
+  const listed = stated['enum']
+  const others = REFUSING_NULL.filter((key) => key !== 'enum' && key in stated)
+  if (Array.isArray(listed) && others.length === 0) {
+    return listed.includes(null)
+      ? stated
+      : {
+          ...stated,
+          ...(typeof stated['type'] === 'string' && { nullable: true }),
+          enum: [...listed, null]
+        }
   }
 
-  for (const key of ['anyOf', 'allOf'] as const) {
-    const members = stated[key]
-    if (Array.isArray(members)) {
-      return { ...stated, [key]: members.map((one) => admittingNull(one, departures)) }
-    }
+  if (typeof stated['type'] === 'string' && !REFUSING_NULL.some((key) => key in stated)) {
+    return { ...stated, nullable: true }
   }
 
-  if ('$ref' in stated) {
-    departures.push({
-      at: [],
-      direction: 'neither',
-      cause: 'noShapeForIt',
-      said: 'this refers to a schema and admits null, and 3.0 reads no keyword beside a reference. The reference is wrapped so the flag has somewhere to sit, which every reader of 3.0 takes and the specification does not state'
-    })
-    return { allOf: [stated], nullable: true }
+  // A disjunction alone admits null where any branch does.
+  const branches = stated['anyOf']
+  if (Array.isArray(branches) && Object.keys(stated).length === 1) {
+    return { anyOf: branches.map(admittingNull) }
   }
 
-  return { ...stated, nullable: true }
+  return { anyOf: [stated, NULL_ONLY] }
 }
 
 function isNullOnly(written: unknown): boolean {

@@ -23,8 +23,6 @@ import { pick, type Subject } from './draw.js'
  * - An object stated by an index signature alone. arktype's `object` domain admits an array, and a
  *   document's does not, so every such document refuses a value arktype takes. The spec beside this
  *   file states the divergence rather than leaving it to a comment here.
- * - A scope, which names a schema and is what a recursive type needs. The value pool holds no value
- *   nested more than two deep, so a recursive schema and its first unrolling accept the same values.
  */
 export function arkGrammar(next: () => number, depth: number): Subject<BaseRoot> {
   const schema = schemaOf(next, depth)
@@ -83,7 +81,12 @@ function structure(next: () => number, depth: number): ArkType {
     () => type.raw({ a: inner() }),
     () => type.raw({ a: inner(), 'b?': inner() }),
     () => type.raw([inner()]),
-    () => type.raw([inner(), inner()])
+    () => type.raw([inner(), inner()]),
+    // A schema that holds itself. arktype resolves `this` to the type being parsed and names the
+    // alias itself, so this needs no scope and no name from a caller. `this[]` is not the same
+    // thing: the array operator resolves the alias where it stands, and arktype refuses the cycle.
+    () => type.raw({ name: 'string', 'next?': 'this' }),
+    () => type.raw({ name: 'string', next: 'this|null' })
   ])()
 }
 
@@ -93,6 +96,20 @@ function combination(next: () => number, depth: number): ArkType {
   return pick(next, [
     () => inner().or(inner()),
     () => inner().or('null'),
-    () => type.raw({ a: 'string' }).and({ b: 'number' })
+    // Drawn rather than fixed, because an intersection of two objects was the only one measured.
+    // arktype refuses to build one it can prove uninhabited, and it throws where the other
+    // validators wait for a value, so a draw that lands on one falls back to a pair that stands.
+    () => {
+      const left = inner()
+      const right = inner()
+      try {
+        return left.and(right)
+      } catch {
+        return type.raw({ a: 'string' }).and({ b: 'number' })
+      }
+    },
+    // A union arktype can tell apart by a key. It states no exclusive union of its own, and this is
+    // the one shape where a document says which key the members are told apart by.
+    () => type.raw({ kind: "'a'" }).or({ kind: "'b'", b: 'number' })
   ])()
 }

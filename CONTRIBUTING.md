@@ -57,8 +57,9 @@ Set `private: true` in the manifest. The build skips the package, the publish sk
 the packaging spec skips the package. The package still lives in the workspace, and the suite still
 runs against it.
 
-`packages/dynamodb` is such a package today. Two assertions in `spec/packaging.spec.ts` name it.
-When the package is ready, delete the `private` line, then delete those two assertions.
+`packages/dynamodb` and `packages/aws-filter` are such packages today. Two assertions in
+`spec/packaging.spec.ts` name each one. When a package is ready, delete its `private` line, then
+delete its two assertions.
 
 ## Releasing
 
@@ -121,7 +122,7 @@ every package.
 ## How the workflow authenticates
 
 No secret exists. The workflow publishes through an OIDC token that GitHub mints for it, and npm
-accepts that token only from `publish.yml` in `fasciajs/fascia`. Each of the nine packages names
+accepts that token only from `publish.yml` in `fasciajs/fascia`. Each of the ten packages names
 that pair as its trusted publisher.
 
 ```sh

@@ -9,7 +9,7 @@ name: publish
 #
 # `/alpha` in a comment on a pull request publishes that branch under the `alpha` dist-tag. Both
 # live in this one file because npm registers a trusted publisher against a repository and a
-# workflow file name. A second file would need its own registration on all nine packages.
+# workflow file name. A second file would need its own registration on all ten packages.
 on:
   push:
     branches: [main]
@@ -141,7 +141,7 @@ jobs:
   # Everything the branch decides, and nothing the registry trusts.
   #
   # This job runs the branch's build, the branch's suite, and the branch's copy of the setup action.
-  # It holds no token: no `id-token`, and no `GH_TOKEN` in any step. What it produces is nine
+  # It holds no token: no `id-token`, and no `GH_TOKEN` in any step. What it produces is ten
   # tarballs, which are data. `/usr/local/bin` is writable on a runner, so a step that runs code off
   # a branch reaches every later step in its own job, and that is why the publish is not one of them.
   build:
