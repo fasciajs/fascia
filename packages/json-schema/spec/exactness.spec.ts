@@ -26,6 +26,9 @@ import { describe, expect, it } from 'vitest'
  * (A) a departure names every value the document and the schema disagree about. The reference is the
  * validator, because a departure states what the document does against the schema and a target
  * never sees one.
+ *
+ * Each is asked twice. 2020-12 reads `format` as an annotation unless a validator opts in, and a
+ * departure has to hold for a validator that does not.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -38,8 +41,8 @@ interface Surveyed {
   readonly verdicts: number
 }
 
-function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
-  const ajv = new Ajv2020({ strict: false, allErrors: false })
+function survey<S>(source: Source<S>, grammar: Grammar<S>, validateFormats: boolean): Surveyed {
+  const ajv = new Ajv2020({ strict: false, allErrors: false, validateFormats })
   formats.default(ajv)
 
   const next = numbers(RUN.seed)
@@ -112,12 +115,17 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
   return { inexact, quietlyWider, quietlyNarrower, faithfulRounds, verdicts }
 }
 
-const surveys: ReadonlyMap<string, Surveyed> = new Map([
-  ['zod', survey(zodSource, zodGrammar)],
-  ['arktype', survey(arktypeSource, arkGrammar)],
-  ['effect', survey(effectSource, effectGrammar)],
-  ['valibot', survey(valibotSource, valibotGrammar)]
-])
+const surveys: ReadonlyMap<string, Surveyed> = new Map(
+  [true, false].flatMap((validateFormats) => {
+    const reading = validateFormats ? 'format asserted' : 'format as an annotation'
+    return [
+      [`zod, ${reading}`, survey(zodSource, zodGrammar, validateFormats)],
+      [`arktype, ${reading}`, survey(arktypeSource, arkGrammar, validateFormats)],
+      [`effect, ${reading}`, survey(effectSource, effectGrammar, validateFormats)],
+      [`valibot, ${reading}`, survey(valibotSource, valibotGrammar, validateFormats)]
+    ] as const
+  })
+)
 
 describe('(E) a spelling that gave up nothing accepts exactly what the term accepts', () => {
   for (const [what, surveyed] of surveys) {

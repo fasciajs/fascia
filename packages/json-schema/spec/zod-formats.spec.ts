@@ -326,12 +326,11 @@ function measure(
  */
 const KNOWN: Partial<Record<string, readonly [wider: number, narrower: number]>> = {
   // zod checks these in code and states a pattern that is not the check. The card and the IBAN hold
-  // a checksum, and a JWT has no pattern at all. zod parses IPv6 with a function that takes an
-  // IPv4 tail the pattern refuses, in an address and in a prefix.
+  // a checksum, and a JWT has no pattern at all. zod parses an IPv6 prefix with a function that
+  // takes an IPv4 tail the pattern refuses, and 2020-12 has no keyword for an IPv6 prefix.
   'creditCard()': [22, 0],
   'iban()': [8, 0],
   'jwt()': [19, 0],
-  'ipv6()': [0, 5],
   'cidrv6()': [0, 3],
 
   // zod parses a URL with `new URL`, and the `uri` keyword reads RFC 3986, which has no IRI.
@@ -344,7 +343,9 @@ const KNOWN: Partial<Record<string, readonly [wider: number, narrower: number]>>
  * zod states no pattern for differs here.
  */
 const ANNOTATED: Partial<Record<string, readonly [wider: number, narrower: number]>> = {
-  // zod states no pattern for a URL, so the document is `type: string` alone.
+  // The keyword alone states each of these, so the document is `type: string` and the format. The
+  // target reports a format as wider for this reading.
+  'ipv6()': [68, 0],
   'url()': [42, 0]
 }
 

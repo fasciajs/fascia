@@ -31,6 +31,14 @@ the exact grammar that zod states in its own document.
 zod's pattern alone, as zod writes its own document. `z.int().check(z.float32())` lost the integer
 to the later float format, and the integer now holds, as zod parses it.
 
+**`@fasciajs/zod` read `z.ipv6()` narrower than zod parses it.** zod's pattern refuses an IPv4
+tail, such as `::ffff:192.0.2.1`, and zod's parse takes the tail. The `ipv6` keyword alone states
+the set zod parses, so the reading is now the format without the pattern.
+
+**`@fasciajs/json-schema` wrote a format as faithful.** 2020-12 reads `format` as an annotation
+unless a validator opts in, so a validator that does not opt in takes a string the format refuses.
+A string with a format now reports a departure, wider, that says so.
+
 ### Changed
 
 **`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before

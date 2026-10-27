@@ -69,6 +69,35 @@ describe('a value with no order is written as the nearest thing that has one', (
   })
 })
 
+describe('a format holds only where a validator asserts it', () => {
+  it('writes the format, and says a validator that reads it as an annotation takes more', () => {
+    const spelled = spellJsonSchema(termOf(z.ipv6()))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    // zod's pattern refuses an IPv4 tail that zod takes, so the keyword alone states the set.
+    expect(spelled.written).toEqual({ type: 'string', format: 'ipv6' })
+    expect(spelled.departures).toEqual([
+      {
+        at: [],
+        direction: 'wider',
+        cause: 'noWordForIt',
+        said: 'this states the format ipv6, and 2020-12 asserts `format` only where a validator opts in. A validator that does not opt in takes a string the format refuses.'
+      }
+    ])
+  })
+
+  it('gives up nothing for a string that states no format', () => {
+    const spelled = spellJsonSchema(termOf(z.string().regex(/^a/)))
+    if (isError(spelled)) {
+      throw new Error(spelled.message)
+    }
+
+    expect(spelled).toEqual({ written: { type: 'string', pattern: '^a' }, departures: [] })
+  })
+})
+
 describe('2020-12 has a keyword for every assertion a term carries', () => {
   it('writes every string assertion, where ATD writes none of them', () => {
     expect(writtenOf(z.string().min(2).max(5).regex(/^a/))).toEqual({

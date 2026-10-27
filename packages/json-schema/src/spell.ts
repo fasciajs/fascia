@@ -119,6 +119,9 @@ function typeOf(name: string, admitsNull: boolean): JSONSchema.TypeValue {
  * Several patterns are the one place this target has fewer words than the term: 2020-12 states one
  * `pattern` per schema and a term may hold several, each of which holds. They are conjoined with
  * `allOf`, which accepts exactly the values the term states.
+ *
+ * A format is the one assertion that holds only where a validator opts in. 2020-12 reads `format` as
+ * an annotation by default, so the document is wider for every validator that does not opt in.
  */
 function string(term: Extract<DescribedOf<'typed'>, { name: 'string' }>): Spelling<JSONSchema> {
   const { minLength, maxLength, patterns, format } = term.assertions
@@ -132,9 +135,21 @@ function string(term: Extract<DescribedOf<'typed'>, { name: 'string' }>): Spelli
     ...(format !== undefined && { format })
   }
 
-  return faithful(
-    rest.length === 0 ? written : { allOf: [written, ...rest.map((one) => ({ pattern: one }))] }
-  )
+  return {
+    written:
+      rest.length === 0 ? written : { allOf: [written, ...rest.map((one) => ({ pattern: one }))] },
+    departures:
+      format === undefined
+        ? []
+        : [
+            {
+              at: [],
+              direction: 'wider',
+              cause: 'noWordForIt',
+              said: `this states the format ${format}, and 2020-12 asserts \`format\` only where a validator opts in. A validator that does not opt in takes a string the format refuses.`
+            }
+          ]
+  }
 }
 
 function number(term: Extract<DescribedOf<'typed'>, { name: 'number' }>): Spelling<JSONSchema> {

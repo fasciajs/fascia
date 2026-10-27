@@ -38,12 +38,16 @@ function upper(bag: Bag, key: string, value: Ordered): void {
 }
 
 /**
+ * The pattern that states each format exactly, where zod parses against another one.
+ *
  * zod parses base64 against a lax charset and checks the padding in code. The exact grammar is the
- * pattern zod writes in its own document, and a document carries no code.
+ * pattern zod writes in its own document, and a document carries no code. zod parses IPv6 in code
+ * that takes an IPv4 tail its pattern refuses, and the `ipv6` keyword alone states that set.
  */
-const EXACT_PATTERNS: Partial<Record<string, readonly [lax: RegExp, exact: RegExp]>> = {
+const EXACT_PATTERNS: Partial<Record<string, readonly [lax: RegExp, exact: RegExp | undefined]>> = {
   base64: [core.base64Charset, core.regexes.base64],
-  base64url: [core.base64urlCharset, core.regexes.base64url]
+  base64url: [core.base64urlCharset, core.regexes.base64url],
+  ipv6: [core.regexes.ipv6, undefined]
 }
 
 function addPattern(bag: Bag, pattern: RegExp | undefined): void {
