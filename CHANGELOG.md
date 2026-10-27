@@ -6,8 +6,6 @@ readings of one core have nothing to say by moving apart.
 
 ## 0.5.0
 
-Not published.
-
 ### Fixed
 
 **`@fasciajs/zod` read no constraint from zod 4.6.** zod before 4.6 folded each check into
@@ -38,20 +36,6 @@ the set zod parses, so the reading is now the format without the pattern.
 **`@fasciajs/json-schema` wrote a format as faithful.** 2020-12 reads `format` as an annotation
 unless a validator opts in, so a validator that does not opt in takes a string the format refuses.
 A string with a format now reports a departure, wider, that says so.
-
-### Changed
-
-**`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before
-4.6.6 can exhaust memory while it validates a large collection (GHSA-mrhx-c7xc-m3w5). One reader for
-the patched line replaces two readers, one of them for a line a caller should leave.
-
-The workspace waits one day for a release, as `.npmrc` intended. npm reads `min-release-age` in
-days, and the value was written in minutes, so the workspace waited four years and refused every
-fix `npm audit` named.
-
-## 0.4.1
-
-### Fixed
 
 **An intersection admitted null where one member did.** A null member was taken out of a combination
 and null admitted beside the rest, for every law. That is what a disjunction means. An intersection
@@ -126,7 +110,29 @@ arri is the first library this shows. It states Standard Schema and writes its o
 nothing here ever read an arri schema: `@fasciajs/atd` writes ATD and has no reading of it. It is
 described now by a package that was already here.
 
+**`@fasciajs/aws-filter` writes a term as the filter policy SNS and SQS deliver a message by.** The
+scope is a required argument, because SNS attributes, SNS bodies, SQS bodies and SQS attributes each
+take a different grammar. A tagged union becomes `$or` over the tag, and a union of objects under a
+key becomes `$or` under the key. An optional key gets `exists: false`, an optional object gets `$or`
+with the object that lacks one of its keys, a range becomes a numeric condition, a pattern held to
+one end becomes a prefix or a suffix, and any string in a body becomes `prefix: ""`. A policy is
+never narrower than its schema, and each place it is wider is a departure. A policy that AWS would
+refuse is not written.
+
+AWS answered for this target. lambada measured which policies SNS and Lambda take, and which messages
+each policy delivered, and measured again for each rule the writer needed that no row recorded. A
+matching function and an acceptance model are held to every recorded row,
+and then every policy written from all four validators is held to both.
+
 ### Changed
+
+**`@fasciajs/zod` takes zod `^4.6.6`.** The fold reads the checks zod 4.6 holds, and zod before
+4.6.6 can exhaust memory while it validates a large collection (GHSA-mrhx-c7xc-m3w5). One reader for
+the patched line replaces two readers, one of them for a line a caller should leave.
+
+The workspace waits one day for a release, as `.npmrc` intended. npm reads `min-release-age` in
+days, and the value was written in minutes, so the workspace waited four years and refused every
+fix `npm audit` named.
 
 **A dialect is named, never assumed.** `spellJsonSchemaAll` writes `$schema` at the root of every
 document, because a document naming no dialect reads differently in each and a reader chooses one in
@@ -156,21 +162,6 @@ disjunction it cannot choose by a tag has no ATD form at all. Every one of those
 it accepted before, where it accepted anything.
 
 ### Not published
-
-**`@fasciajs/aws-filter` writes a term as the filter policy SNS and SQS deliver a message by.** The
-scope is a required argument, because SNS attributes, SNS bodies, SQS bodies and SQS attributes each
-take a different grammar. A tagged union becomes `$or` over the tag, and a union of objects under a
-key becomes `$or` under the key. An optional key gets `exists: false`, an optional object gets `$or`
-with the object that lacks one of its keys, a range becomes a numeric condition, a pattern held to
-one end becomes a prefix or a suffix, and any string in a body becomes `prefix: ""`. A policy is
-never narrower than its schema, and each place it is wider is a departure. A policy that AWS would
-refuse is not written.
-
-AWS answered for this target. lambada measured which policies SNS and Lambda take, and which messages
-each policy delivered, and measured again for each rule the writer needed that no row recorded. A
-matching function and an acceptance model are held to every recorded row,
-and then every policy written from all four validators is held to both. The package is private
-until a caller uses it.
 
 The 3.0 checks asked Ajv about a 2020-12 schema recovered from 3.0 by a translation written in the
 specs, because Ajv was taken to have no `nullable`. It has one, and holds it as OpenAPI 3.0 states

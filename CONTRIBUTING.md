@@ -122,7 +122,7 @@ every package.
 ## How the workflow authenticates
 
 No secret exists. The workflow publishes through an OIDC token that GitHub mints for it, and npm
-accepts that token only from `publish.yml` in `fasciajs/fascia`. Each of the nine packages names
+accepts that token only from `publish.yml` in `fasciajs/fascia`. Each of the ten packages names
 that pair as its trusted publisher.
 
 ```sh

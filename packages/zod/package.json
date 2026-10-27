@@ -1,6 +1,6 @@
 {
   "name": "@fasciajs/zod",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "sideEffects": false,
   "description": "A zod schema, read as a Node.",
@@ -37,7 +37,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.4.1"
+    "@fasciajs/core": "0.5.0"
   },
   "peerDependencies": {
     "zod": "^4.6.6"

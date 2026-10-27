@@ -238,7 +238,7 @@ places and a number moving is what a reader watches.
 | `@fasciajs/atd` | a term and a set of procedures, written for arri |
 | `@fasciajs/mcp` | tools, written as Model Context Protocol definitions |
 | `@fasciajs/dynamodb` | a term, written as the AttributeValue members a value may take. Not published yet |
-| `@fasciajs/aws-filter` | a term, written as the filter policy SNS and SQS deliver a message by. Not published yet |
+| `@fasciajs/aws-filter` | a term, written as the filter policy SNS and SQS deliver a message by |
 
 Install the frontend you use and the target you want. Nothing pulls in a validator you do not have.
 

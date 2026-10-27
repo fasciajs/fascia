@@ -1,7 +1,6 @@
 {
   "name": "@fasciajs/aws-filter",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.5.0",
   "type": "module",
   "sideEffects": false,
   "description": "A term, written as the filter policy SNS and SQS deliver a message by.",
@@ -39,6 +38,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@fasciajs/core": "0.4.1"
+    "@fasciajs/core": "0.5.0"
   }
 }
