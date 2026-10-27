@@ -17,16 +17,15 @@ import { spellJsonSchemaAll } from '@fasciajs/json-schema'
 import { toV30 } from '@fasciajs/openapi'
 import { valibotSource } from '@fasciajs/valibot'
 import { zodSource } from '@fasciajs/zod'
-import { Ajv2020 } from 'ajv/dist/2020.js'
+import { default as AjvDraft04 } from 'ajv-draft-04'
 import { default as formats } from 'ajv-formats'
 import { describe, expect, it } from 'vitest'
-import { fromV30 } from './lib/reverse.js'
 
 /**
  * A departure names every value the document and the schema disagree about.
  *
- * Two spellings compose here, so the list a caller reads is both. The document is the 2020-12
- * recovered from 3.0, because Ajv has no word for `nullable`.
+ * Two spellings compose here, so the list a caller reads is both. The 3.0 document is asked of Ajv
+ * for draft-04, which holds `nullable` as OpenAPI 3.0 states it.
  */
 
 const RUN = { seed: 1, rounds: 300, depth: 2 }
@@ -39,7 +38,7 @@ interface Surveyed {
 
 function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
   // Or a `format` keyword is ignored and a measurement of nothing looks like agreement.
-  const ajv = new Ajv2020({ strict: false, allErrors: false })
+  const ajv = new AjvDraft04.default({ strict: false, allErrors: false })
   formats.default(ajv)
   const next = numbers(RUN.seed)
   const quietlyWider: string[] = []
@@ -62,7 +61,7 @@ function survey<S>(source: Source<S>, grammar: Grammar<S>): Surveyed {
 
     let validate: ReturnType<typeof ajv.compile>
     try {
-      validate = ajv.compile(fromV30(v30.written) as object)
+      validate = ajv.compile(v30.written as object)
     } catch {
       continue
     }

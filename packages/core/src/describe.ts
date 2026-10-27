@@ -879,14 +879,37 @@ function combination<S>(
   node: Extract<Node<S>, { kind: 'combination' }>,
   follow: (child: S) => Described | UndescribableSchema
 ): Described | UndescribableSchema {
-  const terms: Described[] = []
-  let admitsNull = false
+  const followed: Described[] = []
 
   for (const member of node.members) {
     const term = follow(member)
     if (isError(term)) {
       return term
     }
+    followed.push(term)
+  }
+
+  // An intersection holds every member at once, so a null member is not a wrapper around the rest:
+  // it is what the whole is held to. Taking it out and admitting null beside the others is what a
+  // disjunction means, and it made `A & null` into `A` admitting null, which admits every A.
+  if (node.law === 'all') {
+    const [first, second, ...rest] = followed
+    if (first === undefined || second === undefined) {
+      return first ?? { kind: 'untyped', admitsNull: false, meta: noMeta }
+    }
+
+    return {
+      kind: 'every',
+      members: [first, second, ...rest],
+      admitsNull: followed.every((term) => term.admitsNull || isOnlyNull(term)),
+      meta: noMeta
+    }
+  }
+
+  const terms: Described[] = []
+  let admitsNull = false
+
+  for (const term of followed) {
     if (isOnlyNull(term)) {
       admitsNull = true
       continue
@@ -920,8 +943,6 @@ function combination<S>(
         admitsNull,
         meta: noMeta
       }
-    case 'all':
-      return { kind: 'every', members, admitsNull, meta: noMeta }
     default:
       node.law satisfies never
       throw new Error('a reading produced a combination of no law')

@@ -10,9 +10,9 @@ import { counts, firstNarrowing, measure } from './lib/measure.js'
  * **Do the two dialects of one target accept the same values?**
  *
  * 3.1 is measured against schemas directly, because a 3.1 schema is a 2020-12 schema and Ajv reads
- * one. 3.0 cannot be handed to a validator at all: `nullable` is not a word JSON Schema has. So the
- * claim measured here is the one the two dialects make about each other, and the answers come from
- * the validator that already measures 3.1.
+ * one. 3.0 is measured against Ajv for draft-04, which holds `nullable` as OpenAPI 3.0 states it.
+ * So the claim measured here is the one the two dialects make about each other, each asked of the
+ * validator for its own dialect.
  *
  * What is wider is what the translation reported: a positional form has no 3.0 keyword, so every
  * tuple widens. What must not happen is narrower, and one such defect was found by reading before

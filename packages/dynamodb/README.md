@@ -3,7 +3,7 @@
 A term, written as the AttributeValue members a value may take.
 
 Part of [fascia](https://github.com/fasciajs/fascia). A schema is described once and written as
-anything: four validators and five targets, and neither side knows the other exists.
+anything: four validators and six targets, and neither side knows the other exists.
 
 ```sh
 npm install @fasciajs/dynamodb

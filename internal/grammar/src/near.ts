@@ -28,7 +28,7 @@ const FORMATTED: Readonly<Record<StringFormat, readonly string[]>> = {
 }
 
 /** A term holds a cycle as a reference, so the bound is on the walk. */
-const DEEPEST = 3
+const DEEPEST = 6
 
 function drawn(
   term: Described,
@@ -156,11 +156,19 @@ function fromTyped(
   }
 }
 
-/** One value to fill a place with. */
+/**
+ * One value to fill a place with, preferring one that carries something.
+ *
+ * The empty list stands first among a list's values, so a place filled with it never nested and a
+ * schema that holds itself drew the same values as its first unrolling.
+ */
 function first(
   term: Described,
   definitions: ReadonlyMap<string, Described>,
   depth: number
 ): unknown {
-  return drawn(term, definitions, depth + 1).find((one) => one !== null) ?? 'a'
+  const values = drawn(term, definitions, depth + 1)
+  const held = (one: unknown): boolean => one !== null && !(Array.isArray(one) && one.length === 0)
+
+  return values.find(held) ?? values.find((one) => one !== null) ?? 'a'
 }

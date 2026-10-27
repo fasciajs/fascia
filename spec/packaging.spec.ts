@@ -177,12 +177,14 @@ packs('a package ships every file it says it has', () => {
 
   it('ships a private package to nobody', () => {
     // `internal/grammar` is a workspace and not a package, so nothing above ever reaches it.
-    // `packages/dynamodb` is a package that is not ready, and `private` is the whole of what holds
-    // it back. A package sitting beside nine that publish is the case where the flag is easy to
-    // drop by accident.
+    // `packages/dynamodb` and `packages/aws-filter` are packages that are not ready, and `private`
+    // is the whole of what holds each back. A package sitting beside nine that publish is the case
+    // where the flag is easy to drop by accident.
     expect(readdirSync('internal')).toContain('grammar')
     expect(readdirSync('packages')).toContain('dynamodb')
+    expect(readdirSync('packages')).toContain('aws-filter')
     expect(packed.map((one) => one.name)).not.toContain('grammar')
     expect(packed.map((one) => one.name)).not.toContain('dynamodb')
+    expect(packed.map((one) => one.name)).not.toContain('aws-filter')
   })
 })

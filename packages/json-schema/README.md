@@ -3,7 +3,7 @@
 A term, written as JSON Schema 2020-12.
 
 Part of [fascia](https://github.com/fasciajs/fascia). A schema is described once and written as
-anything: four validators and five targets, and neither side knows the other exists.
+anything: four validators and six targets, and neither side knows the other exists.
 
 ```sh
 npm install @fasciajs/json-schema
@@ -12,6 +12,29 @@ npm install @fasciajs/json-schema
 2020-12 has a keyword for every assertion a term carries, and it reports no widening at all. What it
 gives up it reports rather than drops: a discriminant tells the members of a disjunction apart, and
 `oneOf` states what the document accepts without one.
+
+It reads one too. A validator that writes its own 2020-12 becomes a frontend through this package,
+so a fifth library is a document rather than a reading of its internals.
+
+```ts
+import { describe, isError } from '@fasciajs/core'
+import { jsonSchemaAt, jsonSchemaSource } from '@fasciajs/json-schema'
+
+// The dialect is named. A `$schema` in the document must agree with it, or the document is refused.
+const at = jsonSchemaAt(document, '2020-12')
+const described = isError(at) ? at : describe(at, jsonSchemaSource, 'input')
+```
+
+A document this package writes names its dialect in `$schema`, so a reader chooses none.
+
+What this library writes, it reads: `spell` then `read` then `spell` is where it started, over every
+document written from every frontend here. A term read from a document admits what the document
+admits, asked of Ajv, over those documents and over the ones arktype, zod, effect and valibot write
+themselves. A document stating draft-04, draft-06, draft-07 or 2019-09 is read as well, so effect
+and valibot need no reading of their own.
+
+A schema is read as every keyword it states at once. A keyword no term states, and an assertion
+stated under no type, are refused with the reason rather than dropped.
 
 ```ts
 import { spellJsonSchema } from '@fasciajs/json-schema'
